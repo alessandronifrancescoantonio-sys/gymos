@@ -1,12 +1,15 @@
 // ═══════════════════════════════════════════════
 //  GymOS — session.js
+//  + Aggiungi serie | Drag & drop ordine | × Rimuovi serie
 // ═══════════════════════════════════════════════
 
 const Session = {
-  sessions: [],       // lista sessioni dal Workout Log
-  activeId: null,     // ID sessione selezionata
-  exercises: [],      // esercizi della sessione attiva
-  prevExercises: [],  // esercizi dell'ultima sessione dello stesso tipo
+  sessions:     [],
+  activeId:     null,
+  exercises:    [],
+  prevExercises:[],
+  exOrder:      [], // ordine esercizi (array di nomi)
+  dragging:     null,
 
   async load() {
     try {
@@ -16,9 +19,7 @@ const Session = {
         this.activeId = this.sessions[0].id;
         await this.loadSession(this.activeId);
       }
-    } catch(e) {
-      console.error("Session.load:", e);
-    }
+    } catch(e) { console.error("Session.load:", e); }
   },
 
   buildSelect() {
@@ -39,15 +40,23 @@ const Session = {
 
     document.getElementById("sess-title").textContent = sess.name.toUpperCase();
     document.getElementById("sess-meta").textContent =
-      `Oggi: ${U.fmtDate(sess.date)} · Tipo: ${sess.type || "—"}`;
+      `${U.fmtDate(sess.date)} · ${sess.type || "—"}`;
 
-    // Carica esercizi sessione corrente
     this.exercises = await API.getSessionExercises(id);
 
-    // Trova ultima sessione dello stesso tipo per confronto
-    const sameType = this.sessions.filter(s =>
-      s.id !== id && s.type === sess.type
-    );
+    // Ordine: usa exOrder salvato per questa sessione, o quello di arrivo da Notion
+    const grouped = this.groupByExercise(this.exercises);
+    const keys = Object.keys(grouped);
+    // Mantieni ordine custom se compatibile, altrimenti usa quello di Notion
+    const savedOrder = JSON.parse(localStorage.getItem(`gymos_order_${id}`) || "null");
+    if (savedOrder && savedOrder.every(n => keys.includes(n))) {
+      this.exOrder = savedOrder;
+    } else {
+      this.exOrder = keys;
+    }
+
+    // Sessione precedente stesso tipo
+    const sameType = this.sessions.filter(s => s.id !== id && s.type === sess.type);
     this.prevExercises = sameType.length > 0
       ? await API.getSessionExercises(sameType[0].id)
       : [];
@@ -56,7 +65,6 @@ const Session = {
     this.updateStats();
   },
 
-  // Raggruppa entries per nome esercizio
   groupByExercise(entries) {
     const map = {};
     entries.forEach(e => {
@@ -67,35 +75,43 @@ const Session = {
     return map;
   },
 
+  saveOrder() {
+    if (this.activeId) {
+      localStorage.setItem(`gymos_order_${this.activeId}`, JSON.stringify(this.exOrder));
+    }
+  },
+
   renderExercises() {
     const container = document.getElementById("exercises-container");
     container.innerHTML = "";
-
     const grouped     = this.groupByExercise(this.exercises);
     const prevGrouped = this.groupByExercise(this.prevExercises);
 
-    let exIdx = 0;
-    Object.entries(grouped).forEach(([exName, sets]) => {
-      exIdx++;
-      const prevSets = prevGrouped[exName] || [];
-      const rrMin = sets[0]?.rrMin || 8;
-      const rrMax = sets[0]?.rrMax || 12;
+    this.exOrder.forEach((exName, exIdx) => {
+      const sets    = grouped[exName] || [];
+      const prevSets= prevGrouped[exName] || [];
+      const rrMin   = sets[0]?.rrMin || 8;
+      const rrMax   = sets[0]?.rrMax || 12;
       const prevMax = prevSets.length > 0 ? Math.max(...prevSets.map(s => s.kg || 0)) : 0;
 
       const block = document.createElement("div");
-      block.className = "ex-block";
+      block.className  = "ex-block";
+      block.dataset.ex = exName;
+      block.draggable  = true;
+
       block.innerHTML = `
-        <div class="ex-hd">
-          <span class="ex-num">${exIdx}</span>
+        <div class="ex-hd" title="Trascina per riordinare">
+          <span class="drag-handle" aria-label="Trascina"><i class="ti ti-grip-vertical"></i></span>
+          <span class="ex-num">${exIdx + 1}</span>
           <span class="ex-name">${exName}</span>
           ${prevMax > 0 ? `<span class="ex-storico">max ${U.fmt(prevMax)} kg</span>` : ""}
           <div class="rr-wrap">
             <span class="rr-lbl">Target</span>
             <input class="rr-in" type="number" value="${rrMin}" min="1" max="40"
-              oninput="Session.updateRR('${exName}', 'min', this.value)" title="Rep minime">
+              oninput="Session.updateRR('${exName}','min',this.value)">
             <span class="rr-sep">–</span>
             <input class="rr-in" type="number" value="${rrMax}" min="1" max="40"
-              oninput="Session.updateRR('${exName}', 'max', this.value)" title="Rep massime">
+              oninput="Session.updateRR('${exName}','max',this.value)">
             <span class="rr-lbl">rep</span>
           </div>
         </div>
@@ -107,18 +123,59 @@ const Session = {
             <span class="cl cl-today">Oggi — rep × kg</span>
             <span class="cl">Progr.</span>
             <span class="cl" style="text-align:left;padding-left:10px">Note</span>
+            <span></span>
           </div>
         </div>
         <div id="sets-${this.sanitize(exName)}"></div>
+        <div class="add-set-row">
+          <button class="add-set-btn" onclick="Session.addSet('${exName}')">
+            <i class="ti ti-plus"></i> Aggiungi serie
+          </button>
+        </div>
       `;
+
+      // Drag & drop
+      block.addEventListener("dragstart", e => {
+        this.dragging = block;
+        block.classList.add("dragging");
+        e.dataTransfer.effectAllowed = "move";
+      });
+      block.addEventListener("dragend", () => {
+        block.classList.remove("dragging");
+        this.dragging = null;
+        // Aggiorna exOrder in base all'ordine DOM attuale
+        this.exOrder = [...container.querySelectorAll(".ex-block")]
+          .map(b => b.dataset.ex);
+        this.saveOrder();
+        this.renumberBlocks();
+      });
+      block.addEventListener("dragover", e => {
+        e.preventDefault();
+        if (!this.dragging || this.dragging === block) return;
+        const rect = block.getBoundingClientRect();
+        const mid  = rect.top + rect.height / 2;
+        if (e.clientY < mid) {
+          container.insertBefore(this.dragging, block);
+        } else {
+          container.insertBefore(this.dragging, block.nextSibling);
+        }
+      });
+
       container.appendChild(block);
 
-      // Render set rows
+      // Set rows
       const setsContainer = document.getElementById(`sets-${this.sanitize(exName)}`);
       sets.forEach((set, si) => {
         const prevSet = prevSets[si] || null;
         setsContainer.appendChild(this.buildSetRow(set, si, prevSet, exName, rrMin, rrMax, prevMax));
       });
+    });
+  },
+
+  renumberBlocks() {
+    document.querySelectorAll(".ex-block").forEach((b, i) => {
+      const num = b.querySelector(".ex-num");
+      if (num) num.textContent = i + 1;
     });
   },
 
@@ -131,11 +188,9 @@ const Session = {
       ? `<span class="pv">${prevSet.reps}r</span><span class="px">×</span><span class="pv">${U.fmt(prevSet.kg)} kg</span>`
       : `<span class="pe">—</span>`;
 
-    const prog = this.getProgression(set, prevSet);
+    const prog   = this.getProgression(set, prevSet);
     const status = this.buildStatusBadge(prog, set, exName, rrMin, rrMax, prevMax);
-
-    const repDisp = set.reps > 0 ? set.reps : "—";
-    const repCls  = set.reps > 0 ? "tv" : "tv empty";
+    const repCls = set.reps > 0 ? "tv" : "tv empty";
 
     row.innerHTML = `
       <div style="display:flex;justify-content:center">
@@ -145,7 +200,7 @@ const Session = {
       <div class="vdiv"><div class="vl"></div></div>
       <div class="today-blk">
         <button class="adj" onclick="Session.adjSet('${set.id}','r',-1,'${exName}')">−</button>
-        <span class="${repCls}" id="rep-${set.id}">${repDisp}</span>
+        <span class="${repCls}" id="rep-${set.id}">${set.reps > 0 ? set.reps : "—"}</span>
         <span class="t-x">r</span>
         <button class="adj" onclick="Session.adjSet('${set.id}','r',1,'${exName}')">+</button>
         <div class="t-dot"></div>
@@ -158,16 +213,108 @@ const Session = {
       <div class="note-cell">
         <input class="note-inp" type="text" value="${set.note || ""}"
           placeholder="forma, sensazione..."
-          onchange="Session.saveNote('${set.id}', this.value)">
+          onchange="Session.saveNote('${set.id}',this.value)">
+      </div>
+      <div style="display:flex;align-items:center;padding-left:8px">
+        <button class="rm-set-btn" onclick="Session.removeSet('${set.id}','${exName}')" title="Rimuovi serie">
+          <i class="ti ti-x"></i>
+        </button>
       </div>
     `;
     return row;
   },
 
+  // ─── AGGIUNGI SERIE ───
+  async addSet(exName) {
+    const grouped  = this.groupByExercise(this.exercises);
+    const existing = grouped[exName] || [];
+    const last     = existing[existing.length - 1];
+    const si       = existing.length;
+    const sess     = this.sessions.find(s => s.id === this.activeId);
+    const date     = sess?.date || U.today();
+
+    // Trova il page ID dell'esercizio in Esercizi Master
+    const masterEntry = this.exercises.find(e =>
+      e.name.split(" – ")[0] === exName
+    );
+
+    // Crea nuova entry in Notion
+    const props = {};
+    props[CONFIG.PROPS.EL_NAME]    = API.prop.title(`${exName} – ${sess?.name || ""} – S${si + 1}`);
+    props[CONFIG.PROPS.EL_SESSION] = API.prop.relation([this.activeId]);
+    props[CONFIG.PROPS.EL_SETS]    = API.prop.number(1);
+    props[CONFIG.PROPS.EL_REPS]    = API.prop.number(0);
+    props[CONFIG.PROPS.EL_KG]      = API.prop.number(last?.kg || 0);
+    props[CONFIG.PROPS.EL_RR_MIN]  = API.prop.number(last?.rrMin || 8);
+    props[CONFIG.PROPS.EL_RR_MAX]  = API.prop.number(last?.rrMax || 12);
+    props[CONFIG.PROPS.EL_DATE]    = API.prop.date(date);
+
+    // Aggiungi relazione esercizio se disponibile
+    if (masterEntry) {
+      // cerca l'ID dell'esercizio master dalla prima entry esistente
+      const firstEntry = this.exercises.find(e => e.name.split(" – ")[0] === exName);
+      // Non possiamo ottenere l'ID master facilmente senza una query aggiuntiva
+      // Omettiamo per ora — la relazione è opzionale per il funzionamento
+    }
+
+    try {
+      const newPage = await API.create(CONFIG.DB.ESERCIZI_LOG, props);
+      const newSet = {
+        id:     newPage.id,
+        name:   `${exName} – ${sess?.name || ""} – S${si + 1}`,
+        sets:   1,
+        reps:   0,
+        kg:     last?.kg || 0,
+        rrMin:  last?.rrMin || 8,
+        rrMax:  last?.rrMax || 12,
+        note:   "",
+        date,
+      };
+      this.exercises.push(newSet);
+
+      // Aggiunge la riga UI senza re-render completo
+      const setsContainer = document.getElementById(`sets-${this.sanitize(exName)}`);
+      const prevGrouped   = this.groupByExercise(this.prevExercises);
+      const prevSets      = prevGrouped[exName] || [];
+      const prevSet       = prevSets[si] || null;
+      const prevMax       = prevSets.length > 0 ? Math.max(...prevSets.map(s => s.kg || 0)) : 0;
+      setsContainer.appendChild(
+        this.buildSetRow(newSet, si, prevSet, exName, newSet.rrMin, newSet.rrMax, prevMax)
+      );
+      this.updateStats();
+    } catch(e) {
+      console.error("addSet error:", e);
+      alert("Errore nell'aggiungere la serie. Controlla la connessione.");
+    }
+  },
+
+  // ─── RIMUOVI SERIE ───
+  async removeSet(id, exName) {
+    if (!confirm("Rimuovere questa serie?")) return;
+    // Rimuovi da UI
+    const row = document.getElementById(`setrow-${id}`);
+    if (row) row.remove();
+    // Rimuovi da array locale
+    this.exercises = this.exercises.filter(e => e.id !== id);
+    // Archivia in Notion (non possiamo cancellare, quindi la segniamo come 0 serie)
+    await API.update(id, {
+      [CONFIG.PROPS.EL_REPS]: API.prop.number(0),
+      [CONFIG.PROPS.EL_SETS]: API.prop.number(0),
+    }).catch(console.error);
+    this.updateStats();
+    // Rinumera le serie
+    const setsContainer = document.getElementById(`sets-${this.sanitize(exName)}`);
+    if (setsContainer) {
+      [...setsContainer.querySelectorAll(".sn")].forEach((sn, i) => {
+        sn.textContent = i + 1;
+      });
+    }
+  },
+
   getProgression(set, prevSet) {
     if (!set.reps || set.reps === 0) return "mt";
     if (!prevSet) return "new";
-    const vOggi  = set.reps  * (set.kg  || 1);
+    const vOggi  = set.reps * (set.kg  || 1);
     const vScors = prevSet.reps * (prevSet.kg || 1);
     if (vOggi > vScors) return "up";
     if (vOggi === vScors) return "eq";
@@ -190,35 +337,27 @@ const Session = {
     if (field === "r") set.reps = Math.max(0, (set.reps || 0) + delta);
     if (field === "k") set.kg   = Math.max(0, Math.round(((set.kg || 0) + delta) * 10) / 10);
 
-    // Aggiorna UI
     const repEl  = document.getElementById(`rep-${id}`);
     const kgEl   = document.getElementById(`kg-${id}`);
     const progEl = document.getElementById(`prog-${id}`);
-
     if (repEl) { repEl.textContent = set.reps || "—"; repEl.className = set.reps > 0 ? "tv" : "tv empty"; }
     if (kgEl)  kgEl.textContent = U.fmt(set.kg);
 
-    // Ricalcola badge progressione
     const grouped  = this.groupByExercise(this.exercises);
     const prevG    = this.groupByExercise(this.prevExercises);
     const prevSets = prevG[exName] || [];
     const setIdx   = grouped[exName]?.findIndex(s => s.id === id) ?? -1;
     const prevSet  = prevSets[setIdx] || null;
     const prevMax  = prevSets.length > 0 ? Math.max(...prevSets.map(s => s.kg || 0)) : 0;
-    const rrMin    = set.rrMin || 8;
-    const rrMax    = set.rrMax || 12;
-
     if (progEl) progEl.innerHTML = this.buildStatusBadge(
-      this.getProgression(set, prevSet), set, exName, rrMin, rrMax, prevMax
+      this.getProgression(set, prevSet), set, exName, set.rrMin || 8, set.rrMax || 12, prevMax
     );
-
     this.updateStats();
   },
 
   updateRR(exName, field, val) {
     const grouped = this.groupByExercise(this.exercises);
-    const sets = grouped[exName] || [];
-    sets.forEach(s => {
+    (grouped[exName] || []).forEach(s => {
       if (field === "min") s.rrMin = parseInt(val) || 0;
       if (field === "max") s.rrMax = parseInt(val) || 0;
     });
@@ -227,44 +366,34 @@ const Session = {
   updateStats() {
     let vol = 0, prevVol = 0, done = 0, ups = 0;
     const prevG = this.groupByExercise(this.prevExercises);
-
     this.exercises.forEach(s => {
-      if (s.reps > 0) {
-        vol += s.reps * (s.kg || 0);
-        done++;
-      }
+      if (s.reps > 0) { vol += s.reps * (s.kg || 0); done++; }
     });
-
     this.prevExercises.forEach(s => {
       if (s.reps > 0) prevVol += s.reps * (s.kg || 0);
     });
-
     this.exercises.forEach(s => {
-      const exName  = s.name.split(" – ")[0];
+      const exName   = s.name.split(" – ")[0];
       const prevSets = prevG[exName] || [];
       const si       = this.exercises.filter(e => e.name.split(" – ")[0] === exName).indexOf(s);
-      const prev     = prevSets[si] || null;
-      if (this.getProgression(s, prev) === "up") ups++;
+      if (this.getProgression(s, prevSets[si] || null) === "up") ups++;
     });
-
     const d    = Math.round((vol - prevVol) * 10) / 10;
     const pct  = prevVol > 0 ? Math.round(d / prevVol * 100) : 0;
     const dStr = (d > 0 ? "+" : "") + U.fmtV(d) + (prevVol > 0 ? ` (${d > 0 ? "+" : ""}${pct}%)` : "");
-
-    document.getElementById("ss-vol").textContent   = U.fmtV(vol);
+    document.getElementById("ss-vol").textContent  = U.fmtV(vol);
     const de = document.getElementById("ss-delta");
-    de.textContent  = dStr;
-    de.style.color  = d > 0 ? "var(--green)" : d < 0 ? "var(--red)" : "var(--dim)";
-    document.getElementById("ss-done").textContent  = done;
+    de.textContent = dStr;
+    de.style.color = d > 0 ? "var(--green)" : d < 0 ? "var(--red)" : "var(--dim)";
+    document.getElementById("ss-done").textContent = done;
     const ue = document.getElementById("ss-up");
-    ue.textContent  = ups;
-    ue.style.color  = ups > 0 ? "var(--green)" : "var(--dim)";
+    ue.textContent = ups;
+    ue.style.color = ups > 0 ? "var(--green)" : "var(--dim)";
   },
 
   async saveNote(id, note) {
     const set = this.exercises.find(e => e.id === id);
-    if (!set) return;
-    set.note = note;
+    if (set) set.note = note;
     await API.update(id, { [CONFIG.PROPS.EL_NOTE]: API.prop.rich_text(note) }).catch(console.error);
   },
 
@@ -272,20 +401,16 @@ const Session = {
     const btn = document.querySelector(".btn-primary");
     btn.disabled = true;
     btn.innerHTML = '<i class="ti ti-loader"></i>Salvataggio...';
-
     try {
       const updates = this.exercises
         .filter(s => s.reps > 0)
         .map(s => API.updateExerciseEntry(s.id, s.sets || 1, s.reps, s.kg, s.note));
       await Promise.all(updates);
-
-      // Segna sessione come completata
       if (this.activeId) {
         await API.update(this.activeId, {
           [CONFIG.PROPS.WL_DONE]: API.prop.checkbox(true)
         });
       }
-
       btn.innerHTML = '<i class="ti ti-circle-check"></i>Salvato!';
       btn.style.background = "var(--green)";
       setTimeout(() => {
@@ -303,6 +428,5 @@ const Session = {
   sanitize: str => str.replace(/[^a-z0-9]/gi, "_").toLowerCase(),
 };
 
-// Wrappers globali per onclick inline
-function switchSession(id)  { Session.loadSession(id); }
-function saveSession()      { Session.saveSession();   }
+function switchSession(id) { Session.loadSession(id); }
+function saveSession()     { Session.saveSession();   }
