@@ -120,9 +120,28 @@
       </div>
       <div class="header-actions">
         <select class="select-dark" id="sess-select" onchange="switchSession(this.value)"></select>
+        <button class="btn-secondary" onclick="Session.openNewModal()">
+          <i class="ti ti-plus"></i>Nuova sessione
+        </button>
         <button class="btn-primary" onclick="saveSession()">
           <i class="ti ti-device-floppy"></i>Salva sessione
         </button>
+      </div>
+    </div>
+
+    <!-- MODAL NUOVA SESSIONE -->
+    <div class="modal-overlay" id="new-sess-modal" style="display:none" onclick="Session.closeNewModal(event)">
+      <div class="modal-box">
+        <div class="modal-title"><i class="ti ti-barbell"></i>Nuova sessione oggi</div>
+        <div class="modal-sub" id="modal-date"></div>
+        <div class="modal-schede" id="modal-schede"></div>
+        <div class="modal-actions">
+          <button class="btn-primary" id="modal-confirm-btn" onclick="Session.createNewSession()">
+            <i class="ti ti-plus"></i>Crea e inizia
+          </button>
+          <button class="btn-cancel" onclick="Session.closeNewModal()">Annulla</button>
+        </div>
+        <div class="modal-msg" id="modal-msg"></div>
       </div>
     </div>
 
