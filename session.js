@@ -430,3 +430,104 @@ const Session = {
 
 function switchSession(id) { Session.loadSession(id); }
 function saveSession()     { Session.saveSession();   }
+
+// ─── MODAL NUOVA SESSIONE ───
+Session.selectedScheda = null;
+
+Session.openNewModal = function() {
+  const modal = document.getElementById("new-sess-modal");
+  const today = new Date();
+  const months = ["Gen","Feb","Mar","Apr","Mag","Giu","Lug","Ago","Set","Ott","Nov","Dic"];
+  document.getElementById("modal-date").textContent =
+    `${today.getDate()} ${months[today.getMonth()]} ${today.getFullYear()}`;
+
+  // Popola le schede
+  const wrap = document.getElementById("modal-schede");
+  wrap.innerHTML = "";
+  Session.selectedScheda = null;
+  Object.entries(CONFIG.SCHEDE).forEach(([name, cfg]) => {
+    const btn = document.createElement("button");
+    btn.className = "scheda-pill";
+    btn.textContent = name;
+    btn.style.setProperty("--sc", cfg.color);
+    btn.onclick = () => {
+      wrap.querySelectorAll(".scheda-pill").forEach(b => b.classList.remove("on"));
+      btn.classList.add("on");
+      Session.selectedScheda = name;
+    };
+    wrap.appendChild(btn);
+  });
+
+  document.getElementById("modal-msg").textContent = "";
+  modal.style.display = "flex";
+};
+
+Session.closeNewModal = function(e) {
+  if (!e || e.target.id === "new-sess-modal" || e.currentTarget === document.getElementById("new-sess-modal")) {
+    document.getElementById("new-sess-modal").style.display = "none";
+  }
+};
+
+Session.createNewSession = async function() {
+  if (!Session.selectedScheda) {
+    document.getElementById("modal-msg").textContent = "Scegli il tipo di sessione!";
+    return;
+  }
+  const btn = document.getElementById("modal-confirm-btn");
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ti ti-loader"></i>Creazione...';
+  const msg = document.getElementById("modal-msg");
+  msg.textContent = "";
+
+  try {
+    const today = new Date().toISOString().split("T")[0];
+    const name  = Session.selectedScheda;
+
+    // 1. Crea sessione nel Workout Log
+    const sessProps = {};
+    sessProps[CONFIG.PROPS.WL_NAME]  = API.prop.title(name);
+    sessProps[CONFIG.PROPS.WL_DATE]  = API.prop.date(today);
+    sessProps[CONFIG.PROPS.WL_TYPE]  = API.prop.select(name);
+    sessProps[CONFIG.PROPS.WL_DONE]  = API.prop.checkbox(false);
+    sessProps[CONFIG.PROPS.WL_SPLIT] = API.prop.select("Full Body");
+
+    const newSess = await API.create(CONFIG.DB.WORKOUT_LOG, sessProps);
+    const sessId  = newSess.id;
+
+    // 2. Crea una entry per ogni esercizio della scheda (1 serie placeholder)
+    const exercises = CONFIG.SCHEDE[name].exercises;
+    const creates   = exercises.map((exName, i) => {
+      const props = {};
+      props[CONFIG.PROPS.EL_NAME]    = API.prop.title(`${exName} – ${name} – S1`);
+      props[CONFIG.PROPS.EL_SESSION] = API.prop.relation([sessId]);
+      props[CONFIG.PROPS.EL_SETS]    = API.prop.number(1);
+      props[CONFIG.PROPS.EL_REPS]    = API.prop.number(0);
+      props[CONFIG.PROPS.EL_KG]      = API.prop.number(0);
+      props[CONFIG.PROPS.EL_RR_MIN]  = API.prop.number(8);
+      props[CONFIG.PROPS.EL_RR_MAX]  = API.prop.number(12);
+      props[CONFIG.PROPS.EL_DATE]    = API.prop.date(today);
+      return API.create(CONFIG.DB.ESERCIZI_LOG, props);
+    });
+    await Promise.all(creates);
+
+    // 3. Aggiorna la lista sessioni e carica la nuova
+    Session.sessions = await API.getWorkoutSessions(20);
+    Session.buildSelect();
+
+    // Seleziona la nuova sessione nel dropdown
+    const sel = document.getElementById("sess-select");
+    sel.value = sessId;
+
+    // Chiudi modal e carica
+    document.getElementById("new-sess-modal").style.display = "none";
+    await Session.loadSession(sessId);
+
+  } catch(e) {
+    console.error(e);
+    msg.textContent = "Errore durante la creazione. Riprova.";
+    msg.style.color = "var(--red)";
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="ti ti-plus"></i>Crea e inizia';
+  }
+};
