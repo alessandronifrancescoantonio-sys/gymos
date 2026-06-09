@@ -1,15 +1,11 @@
 // ═══════════════════════════════════════════════
-//  GymOS — config.js  [GIÀ CONFIGURATO]
-//  Database e Worker già compilati.
-//  Devi solo: adattare SCHEDE/MISURE se vuoi.
+//  GymOS — config.js  [CONFIGURATO]
 // ═══════════════════════════════════════════════
 
 const CONFIG = {
 
-  // ─── URL del tuo Cloudflare Worker ───
   WORKER_URL: "https://gymos-api.alessandronifrancescoantonio.workers.dev/api",
 
-  // ─── DATABASE IDs (dagli URL Notion) ───
   DB: {
     WORKOUT_LOG:     "8015f38fdf534c47957689203673012d",
     ESERCIZI_LOG:    "f9873bbbf029429bbe8eafd7d0b48da9",
@@ -20,25 +16,63 @@ const CONFIG = {
     DAILY_HABITS:    "0fb83772a017497b84c644b211b00bfa",
   },
 
-  // ─── SCHEDE ───
-  // Adatta gli esercizi alle TUE schede reali.
-  // I nomi devono corrispondere esattamente a quelli in Esercizi Master.
   SCHEDE: {
-    "Push": {
+    "Full Body 1": {
       color: "#FF3B2F",
-      exercises: ["Panca piana", "Military press"]
+      exercises: [
+        "Adduttori",
+        "Overhead Ext",
+        "RDL Bilanciere",
+        "Pec Back",
+        "Belt Squat",
+        "Shoulder Press",
+        "Circular Upper Back",
+        "Curl Martello Panca 50",
+      ]
     },
-    "Pull": {
+    "Full Body 2": {
       color: "#3B82F6",
-      exercises: ["Trazioni", "Lat Machine", "Curl bilanciere"]
+      exercises: [
+        "Polpacci in Piedi",
+        "Alz Lat Cavo Basso",
+        "Pendulum",
+        "Illiac",
+        "Leg Curl Seduto",
+        "Smith 32",
+        "Bayesan Curl",
+        "Push Down Triangolo",
+      ]
     },
-    "Legs": {
+    "Full Body 3": {
       color: "#22C55E",
-      exercises: ["Squat", "Stacco", "Leg press"]
+      exercises: [
+        "Adduttori",
+        "Polpacci Seduto",
+        "Alz Lat Macchinario",
+        "Dist 0 Macchinario",
+        "Leg Ext",
+        "Low Row",
+        "Leg Curl",
+        "Skull Crash",
+        "Panca Scott Macchinario",
+      ]
+    },
+    "Full Body 4": {
+      color: "#F59E0B",
+      exercises: [
+        "Polpacci Seduto",
+        "Alz Lat Macchinario",
+        "Leg Curl Seduto",
+        "Pressa",
+        "Chest Press Inclined",
+        "Macchinario Tric Overhead",
+        "Pulley Triangolo",
+        "Curl Martello al Cavo",
+        "Spalle Posteriori",
+      ]
     },
   },
 
-  // ─── MISURE CORPOREE ───
   MISURE: [
     { key: "vita",    label: "Vita",     unit: "cm", color: "#FF6B6B", downGood: true  },
     { key: "petto",   label: "Petto",    unit: "cm", color: "#60A5FA", downGood: false },
@@ -48,17 +82,12 @@ const CONFIG = {
     { key: "bf",      label: "% Grasso", unit: "%",  color: "#F472B6", downGood: true  },
   ],
 
-  // ─── NOMI PROPRIETÀ NOTION ───
-  // Corrispondono ai database creati. Non modificare salvo rinomine.
   PROPS: {
-    // Workout Log
     WL_NAME:   "Nome sessione",
     WL_DATE:   "Data",
     WL_TYPE:   "Tipo sessione",
     WL_DONE:   "Completata",
     WL_SPLIT:  "Split",
-
-    // Esercizi Log
     EL_NAME:     "Nome",
     EL_EXERCISE: "Esercizio",
     EL_SESSION:  "Sessione",
@@ -69,8 +98,6 @@ const CONFIG = {
     EL_RR_MAX:   "Rep range max",
     EL_NOTE:     "Note tecnica",
     EL_DATE:     "Data",
-
-    // Body Metrics
     BM_DATE:    "Data",
     BM_PESO:    "Peso (kg)",
     BM_VITA:    "Vita (cm)",
@@ -81,18 +108,12 @@ const CONFIG = {
     BM_BF:      "% Grasso",
     BM_FASE:    "Fase",
     BM_NOTE:    "Note",
-
-    // Weekly Planner
     WP_NAME: "Attività",
     WP_DATE: "Data",
     WP_TYPE: "Tipo",
     WP_DONE: "Completata",
-
-    // Daily Habits
     DH_DATE:  "Data",
     DH_SCORE: "Habit score",
-
-    // Sleep Log
     SL_DATE:    "Data",
     SL_ORE:     "Ore dormite",
     SL_QUALITA: "Qualità (1-5)",
