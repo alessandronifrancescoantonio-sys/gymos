@@ -450,11 +450,17 @@ Session.openNewModal = function() {
     btn.className = "scheda-pill";
     btn.textContent = name;
     btn.style.setProperty("--sc", cfg.color);
-    btn.onclick = () => {
-      wrap.querySelectorAll(".scheda-pill").forEach(b => b.classList.remove("on"));
-      btn.classList.add("on");
-      Session.selectedScheda = name;
-    };
+    btn.onclick = (function(n, b) {
+      return function() {
+        wrap.querySelectorAll(".scheda-pill").forEach(x => x.classList.remove("on"));
+        b.classList.add("on");
+        b.style.background = CONFIG.SCHEDE[n].color + "33";
+        b.style.borderColor = CONFIG.SCHEDE[n].color;
+        b.style.color = CONFIG.SCHEDE[n].color;
+        Session.selectedScheda = n;
+        console.log("Scheda selezionata:", n);
+      };
+    })(name, btn);
     wrap.appendChild(btn);
   });
 
