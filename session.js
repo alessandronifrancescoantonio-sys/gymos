@@ -8,8 +8,9 @@ const Session = {
   activeId:     null,
   exercises:    [],
   prevExercises:[],
-  exOrder:      [], // ordine esercizi (array di nomi)
+  exOrder:      [],
   dragging:     null,
+  selectedScheda: null,
 
   async load() {
     try {
@@ -432,8 +433,6 @@ function switchSession(id) { Session.loadSession(id); }
 function saveSession()     { Session.saveSession();   }
 
 // ─── MODAL NUOVA SESSIONE ───
-Session.selectedScheda = null;
-
 Session.openNewModal = function() {
   const modal = document.getElementById("new-sess-modal");
   const today = new Date();
