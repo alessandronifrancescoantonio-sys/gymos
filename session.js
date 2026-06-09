@@ -433,70 +433,67 @@ function switchSession(id) { Session.loadSession(id); }
 function saveSession()     { Session.saveSession();   }
 
 // ─── MODAL NUOVA SESSIONE ───
-Session.openNewModal = function() {
-  const modal = document.getElementById("new-sess-modal");
-  const today = new Date();
-  const months = ["Gen","Feb","Mar","Apr","Mag","Giu","Lug","Ago","Set","Ott","Nov","Dic"];
-  document.getElementById("modal-date").textContent =
-    `${today.getDate()} ${months[today.getMonth()]} ${today.getFullYear()}`;
+(function() {
+  let _scheda = null;
 
-  // Popola le schede
-  const wrap = document.getElementById("modal-schede");
-  wrap.innerHTML = "";
-  Session.selectedScheda = null;
-  Object.entries(CONFIG.SCHEDE).forEach(([name, cfg]) => {
-    const btn = document.createElement("button");
-    btn.className = "scheda-pill";
-    btn.textContent = name;
-    btn.style.setProperty("--sc", cfg.color);
-    btn.onclick = (function(n, b) {
-      return function() {
-        wrap.querySelectorAll(".scheda-pill").forEach(x => x.classList.remove("on"));
-        b.classList.add("on");
-        b.style.background = CONFIG.SCHEDE[n].color + "33";
-        b.style.borderColor = CONFIG.SCHEDE[n].color;
-        b.style.color = CONFIG.SCHEDE[n].color;
-        Session.selectedScheda = n;
-        console.log("Scheda selezionata:", n);
+  Session.openNewModal = function() {
+    _scheda = null;
+    const modal = document.getElementById("new-sess-modal");
+    const today = new Date();
+    const months = ["Gen","Feb","Mar","Apr","Mag","Giu","Lug","Ago","Set","Ott","Nov","Dic"];
+    document.getElementById("modal-date").textContent =
+      today.getDate() + " " + months[today.getMonth()] + " " + today.getFullYear();
+
+    const wrap = document.getElementById("modal-schede");
+    wrap.innerHTML = "";
+    Object.entries(CONFIG.SCHEDE).forEach(function(entry) {
+      var name = entry[0];
+      var cfg  = entry[1];
+      var btn  = document.createElement("button");
+      btn.className   = "scheda-pill";
+      btn.textContent = name;
+      btn.type        = "button";
+      btn.onclick     = function() {
+        wrap.querySelectorAll(".scheda-pill").forEach(function(b) {
+          b.style.background  = "";
+          b.style.borderColor = "";
+          b.style.color       = "";
+        });
+        btn.style.background  = cfg.color + "33";
+        btn.style.borderColor = cfg.color;
+        btn.style.color       = cfg.color;
+        _scheda = name;
+        document.getElementById("modal-msg").textContent = "Selezionato: " + name;
       };
-    })(name, btn);
-    wrap.appendChild(btn);
-  });
+      wrap.appendChild(btn);
+    });
 
-  document.getElementById("modal-msg").textContent = "";
-  modal.style.display = "flex";
+    document.getElementById("modal-msg").textContent = "";
+    document.getElementById("modal-confirm-btn").onclick = function() {
+      if (!_scheda) {
+        document.getElementById("modal-msg").textContent = "Scegli una sessione!";
+        return;
+      }
+      Session._doCreateSession(_scheda);
+    };
+    modal.style.display = "flex";
+  };
 
-  // Aggancia bottone confirm con addEventListener (più affidabile di onclick inline)
-  const confirmBtn = document.getElementById("modal-confirm-btn");
-  const newBtn = confirmBtn.cloneNode(true);
-  confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
-  newBtn.addEventListener("click", function() {
-    Session.createNewSession();
-  });
-};
+  Session.closeNewModal = function(e) {
+    if (!e || e.target.id === "new-sess-modal") {
+      document.getElementById("new-sess-modal").style.display = "none";
+    }
+  };
+})();
 
-Session.closeNewModal = function(e) {
-  if (!e || e.target.id === "new-sess-modal" || e.currentTarget === document.getElementById("new-sess-modal")) {
-    document.getElementById("new-sess-modal").style.display = "none";
-  }
-};
-
-Session.createNewSession = async function() {
-  if (!Session.selectedScheda) {
-    document.getElementById("modal-msg").textContent = "Scegli il tipo di sessione!";
-    return;
-  }
+Session._doCreateSession = async function(name) {
   const btn = document.getElementById("modal-confirm-btn");
-  btn.disabled = true;
-  btn.innerHTML = '<i class="ti ti-loader"></i>Creazione...';
   const msg = document.getElementById("modal-msg");
-  msg.textContent = "";
+  btn.disabled = true;
+  btn.textContent = "Creazione...";
 
   try {
     const today = new Date().toISOString().split("T")[0];
-    const name  = Session.selectedScheda;
-
-    // 1. Crea sessione nel Workout Log
     const sessProps = {};
     sessProps[CONFIG.PROPS.WL_NAME]  = API.prop.title(name);
     sessProps[CONFIG.PROPS.WL_DATE]  = API.prop.date(today);
@@ -507,11 +504,10 @@ Session.createNewSession = async function() {
     const newSess = await API.create(CONFIG.DB.WORKOUT_LOG, sessProps);
     const sessId  = newSess.id;
 
-    // 2. Crea una entry per ogni esercizio della scheda (1 serie placeholder)
     const exercises = CONFIG.SCHEDE[name].exercises;
-    const creates   = exercises.map((exName, i) => {
-      const props = {};
-      props[CONFIG.PROPS.EL_NAME]    = API.prop.title(`${exName} – ${name} – S1`);
+    const creates   = exercises.map(function(exName) {
+      var props = {};
+      props[CONFIG.PROPS.EL_NAME]    = API.prop.title(exName + " – " + name + " – S1");
       props[CONFIG.PROPS.EL_SESSION] = API.prop.relation([sessId]);
       props[CONFIG.PROPS.EL_SETS]    = API.prop.number(1);
       props[CONFIG.PROPS.EL_REPS]    = API.prop.number(0);
@@ -523,24 +519,19 @@ Session.createNewSession = async function() {
     });
     await Promise.all(creates);
 
-    // 3. Aggiorna la lista sessioni e carica la nuova
     Session.sessions = await API.getWorkoutSessions(20);
     Session.buildSelect();
-
-    // Seleziona la nuova sessione nel dropdown
     const sel = document.getElementById("sess-select");
-    sel.value = sessId;
+    if (sel) sel.value = sessId;
 
-    // Chiudi modal e carica
     document.getElementById("new-sess-modal").style.display = "none";
     await Session.loadSession(sessId);
 
   } catch(e) {
     console.error(e);
-    msg.textContent = "Errore durante la creazione. Riprova.";
+    msg.textContent = "Errore: " + e.message;
     msg.style.color = "var(--red)";
-  } finally {
     btn.disabled = false;
-    btn.innerHTML = '<i class="ti ti-plus"></i>Crea e inizia';
+    btn.textContent = "Crea e inizia";
   }
 };
