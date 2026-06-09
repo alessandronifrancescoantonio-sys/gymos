@@ -465,6 +465,14 @@ Session.openNewModal = function() {
 
   document.getElementById("modal-msg").textContent = "";
   modal.style.display = "flex";
+
+  // Aggancia bottone confirm con addEventListener (più affidabile di onclick inline)
+  const confirmBtn = document.getElementById("modal-confirm-btn");
+  const newBtn = confirmBtn.cloneNode(true);
+  confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
+  newBtn.addEventListener("click", function() {
+    Session.createNewSession();
+  });
 };
 
 Session.closeNewModal = function(e) {
