@@ -671,9 +671,9 @@ input  { font-family: inherit; }
 }
 .scheda-pill:hover { border-color: var(--sc, var(--accent)); color: var(--sc, var(--accent)); }
 .scheda-pill.on {
-  background: color-mix(in srgb, var(--sc, var(--accent)) 15%, transparent);
-  border-color: var(--sc, var(--accent));
-  color: var(--sc, var(--accent));
+  background: rgba(255,59,47,.15);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 .modal-actions { display: flex; align-items: center; gap: 10px; }
 .btn-cancel {
