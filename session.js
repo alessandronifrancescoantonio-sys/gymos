@@ -346,14 +346,62 @@ const Session = {
       this.getProgression(set, prevSet), set, exName, set.rrMin || 8, set.rrMax || 12, prevMax
     );
     this.updateStats();
+    this.autosave(set);   // salvataggio automatico
+  },
+
+  // ─── AUTOSAVE con debounce ───
+  // Salva in Notion 800ms dopo l'ultima modifica (evita di sovraccaricare ad ogni +/−)
+  _saveTimers: {},
+  autosave(set) {
+    this.setSyncState("saving");
+    clearTimeout(this._saveTimers[set.id]);
+    this._saveTimers[set.id] = setTimeout(async () => {
+      try {
+        await API.updateExerciseEntry(set.id, set.sets || 1, set.reps, set.kg, set.note);
+        this.setSyncState("saved");
+      } catch(e) {
+        console.error("autosave fail:", e);
+        this.setSyncState("error");
+      }
+    }, 800);
+  },
+
+  setSyncState(state) {
+    const el = document.getElementById("sync-indicator");
+    if (!el) return;
+    if (state === "saving") {
+      el.innerHTML = '<i class="ti ti-loader-2"></i> Salvataggio...';
+      el.style.color = "var(--dim)";
+    } else if (state === "saved") {
+      el.innerHTML = '<i class="ti ti-cloud-check"></i> Salvato';
+      el.style.color = "var(--green)";
+    } else {
+      el.innerHTML = '<i class="ti ti-cloud-x"></i> Errore salvataggio';
+      el.style.color = "var(--red)";
+    }
   },
 
   updateRR(exName, field, val) {
     const grouped = this.groupByExercise(this.exercises);
-    (grouped[exName] || []).forEach(s => {
+    const sets = grouped[exName] || [];
+    sets.forEach(s => {
       if (field === "min") s.rrMin = parseInt(val) || 0;
       if (field === "max") s.rrMax = parseInt(val) || 0;
     });
+    // Salva il range su tutte le serie dell'esercizio
+    if (sets[0]) {
+      clearTimeout(this._saveTimers["rr_" + exName]);
+      this._saveTimers["rr_" + exName] = setTimeout(async () => {
+        this.setSyncState("saving");
+        try {
+          await Promise.all(sets.map(s => API.update(s.id, {
+            [CONFIG.PROPS.EL_RR_MIN]: API.prop.number(s.rrMin),
+            [CONFIG.PROPS.EL_RR_MAX]: API.prop.number(s.rrMax),
+          })));
+          this.setSyncState("saved");
+        } catch(e) { this.setSyncState("error"); }
+      }, 800);
+    }
   },
 
   updateStats() {
@@ -387,7 +435,14 @@ const Session = {
   async saveNote(id, note) {
     const set = this.exercises.find(e => e.id === id);
     if (set) set.note = note;
-    await API.update(id, { [CONFIG.PROPS.EL_NOTE]: API.prop.rich_text(note) }).catch(console.error);
+    this.setSyncState("saving");
+    try {
+      await API.update(id, { [CONFIG.PROPS.EL_NOTE]: API.prop.rich_text(note) });
+      this.setSyncState("saved");
+    } catch(e) {
+      console.error(e);
+      this.setSyncState("error");
+    }
   },
 
   async saveSession() {
