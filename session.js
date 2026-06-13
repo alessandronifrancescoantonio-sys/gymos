@@ -102,7 +102,7 @@ const Session = {
 
       block.innerHTML = `
         <div class="ex-hd" onclick="Session.toggleEx(this, event)">
-          <span class="drag-handle" aria-label="Trascina" draggable="true"><i class="ti ti-grip-vertical"></i></span>
+          <span class="drag-handle" aria-label="Trascina"><i class="ti ti-grip-vertical"></i></span>
           <span class="ex-num">${exIdx + 1}</span>
           <div class="ex-hd-main">
             <div class="ex-name">${exName}</div>
@@ -129,28 +129,9 @@ const Session = {
         </div>
       `;
 
-      // Drag & drop (solo dalla maniglia)
+      // ─── DRAG: long-press (mobile) + mouse (desktop) ───
       const handle = block.querySelector(".drag-handle");
-      handle.addEventListener("dragstart", e => {
-        this.dragging = block;
-        block.classList.add("dragging");
-        e.dataTransfer.effectAllowed = "move";
-      });
-      handle.addEventListener("dragend", () => {
-        block.classList.remove("dragging");
-        this.dragging = null;
-        this.exOrder = [...container.querySelectorAll(".ex-block")].map(b => b.dataset.ex);
-        this.saveOrder();
-        this.renumberBlocks();
-      });
-      block.addEventListener("dragover", e => {
-        e.preventDefault();
-        if (!this.dragging || this.dragging === block) return;
-        const rect = block.getBoundingClientRect();
-        const mid  = rect.top + rect.height / 2;
-        if (e.clientY < mid) container.insertBefore(this.dragging, block);
-        else container.insertBefore(this.dragging, block.nextSibling);
-      });
+      this.attachDrag(block, handle, container);
 
       container.appendChild(block);
 
@@ -171,6 +152,103 @@ const Session = {
     document.querySelectorAll(".ex-block").forEach((b, i) => {
       const num = b.querySelector(".ex-num");
       if (num) num.textContent = i + 1;
+    });
+  },
+
+  // ─── DRAG con long-press (touch) e mouse (desktop) ───
+  attachDrag(block, handle, container) {
+    const self = this;
+    let pressTimer = null;
+    let active = false;
+    let startY = 0;
+    let placeholder = null;
+
+    function getEvY(e) {
+      return e.touches ? e.touches[0].clientY : e.clientY;
+    }
+
+    function begin(e) {
+      active = true;
+      block.classList.add("dragging");
+      if (navigator.vibrate) navigator.vibrate(30); // feedback aptico
+      // segnaposto
+      placeholder = document.createElement("div");
+      placeholder.className = "drag-placeholder";
+      placeholder.style.height = block.offsetHeight + "px";
+      block.parentNode.insertBefore(placeholder, block.nextSibling);
+      block.style.position = "relative";
+      block.style.zIndex = "100";
+    }
+
+    function move(e) {
+      if (!active) return;
+      if (e.cancelable) e.preventDefault();
+      const y = getEvY(e);
+      const dy = y - startY;
+      block.style.transform = `translateY(${dy}px) scale(1.02)`;
+
+      // Trova su quale blocco sta passando
+      const blocks = [...container.querySelectorAll(".ex-block")].filter(b => b !== block);
+      const cy = y;
+      for (const other of blocks) {
+        const rect = other.getBoundingClientRect();
+        const mid = rect.top + rect.height / 2;
+        if (cy > rect.top && cy < rect.bottom) {
+          if (cy < mid && placeholder.nextSibling !== other) {
+            container.insertBefore(placeholder, other);
+          } else if (cy >= mid && other.nextSibling !== placeholder) {
+            container.insertBefore(placeholder, other.nextSibling);
+          }
+          break;
+        }
+      }
+    }
+
+    function end() {
+      clearTimeout(pressTimer);
+      if (!active) return;
+      active = false;
+      block.classList.remove("dragging");
+      block.style.transform = "";
+      block.style.position = "";
+      block.style.zIndex = "";
+      // posiziona il blocco dove c'è il placeholder
+      if (placeholder) {
+        container.insertBefore(block, placeholder);
+        placeholder.remove();
+        placeholder = null;
+      }
+      self.exOrder = [...container.querySelectorAll(".ex-block")].map(b => b.dataset.ex);
+      self.saveOrder();
+      self.renumberBlocks();
+      document.removeEventListener("mousemove", move);
+      document.removeEventListener("mouseup", end);
+      document.removeEventListener("touchmove", move);
+      document.removeEventListener("touchend", end);
+    }
+
+    // TOUCH (mobile) — long press 250ms
+    handle.addEventListener("touchstart", e => {
+      startY = getEvY(e);
+      pressTimer = setTimeout(() => {
+        begin(e);
+        document.addEventListener("touchmove", move, { passive: false });
+        document.addEventListener("touchend", end);
+      }, 250);
+    });
+    handle.addEventListener("touchend", () => clearTimeout(pressTimer));
+    handle.addEventListener("touchmove", e => {
+      // se muove prima del long-press, annulla (è uno scroll)
+      if (!active) clearTimeout(pressTimer);
+    });
+
+    // MOUSE (desktop) — press immediato sulla maniglia
+    handle.addEventListener("mousedown", e => {
+      e.preventDefault();
+      startY = getEvY(e);
+      begin(e);
+      document.addEventListener("mousemove", move);
+      document.addEventListener("mouseup", end);
     });
   },
 
