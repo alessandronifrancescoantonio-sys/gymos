@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GymOS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <span class="logo-text">GYM<span>OS</span></span>
+  </div>
+  <ul class="nav-links">
+    <li><a href="#" class="nav-link active" data-page="dashboard">
+      <i class="ti ti-layout-dashboard"></i><span>Dashboard</span>
+    </a></li>
+    <li><a href="#" class="nav-link" data-page="session">
+      <i class="ti ti-barbell"></i><span>Sessione</span>
+    </a></li>
+    <li><a href="#" class="nav-link" data-page="progression">
+      <i class="ti ti-chart-line"></i><span>Progressioni</span>
+    </a></li>
+    <li><a href="#" class="nav-link" data-page="body">
+      <i class="ti ti-ruler-measure"></i><span>Misurazioni</span>
+    </a></li>
+  </ul>
+  <div class="sidebar-footer">
+    <div class="conn-status" id="conn-status">
+      <span class="conn-dot" id="conn-dot"></span>
+      <span id="conn-label">Connessione...</span>
+    </div>
+  </div>
+</nav>
+
+<!-- MAIN -->
+<main class="main" id="main">
+
+  <!-- ═══ DASHBOARD ═══ -->
+  <section class="page active" id="page-dashboard">
+    <div class="page-header">
+      <div>
+        <div class="eyebrow">Overview</div>
+        <h1 class="page-title" id="dash-greeting">Buongiorno</h1>
+      </div>
+      <div class="header-meta" id="dash-date"></div>
+    </div>
+
+    <div class="dash-grid">
+      <!-- Semaforo recovery -->
+      <div class="semaforo-card" id="semaforo-card">
+        <div class="sem-icon" id="sem-icon"><i class="ti ti-circle-check"></i></div>
+        <div>
+          <div class="sem-title" id="sem-title">Recovery: Verde</div>
+          <div class="sem-sub" id="sem-sub">Puoi spingere oggi</div>
+        </div>
+      </div>
+
+      <!-- Stat cards -->
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-label"><i class="ti ti-barbell"></i>Sessioni settimana</div>
+          <div class="stat-val" id="d-sessions">—</div>
+          <div class="stat-sub" id="d-sessions-sub"></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label"><i class="ti ti-scale"></i>Peso attuale</div>
+          <div class="stat-val" id="d-peso">—</div>
+          <div class="stat-sub" id="d-peso-sub"></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label"><i class="ti ti-moon"></i>Sonno medio</div>
+          <div class="stat-val" id="d-sleep">—</div>
+          <div class="stat-sub">ultimi 7 giorni</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label"><i class="ti ti-checkbox"></i>Habit score</div>
+          <div class="stat-val" id="d-habit">—</div>
+          <div class="stat-sub">oggi</div>
+        </div>
+      </div>
+
+      <!-- Weekly split -->
+      <div class="card">
+        <div class="card-title"><i class="ti ti-calendar-week"></i>Split settimanale</div>
+        <div class="week-split" id="week-split"></div>
+      </div>
+
+      <!-- Today checklist -->
+      <div class="card">
+        <div class="card-title"><i class="ti ti-list-check"></i>Da fare oggi</div>
+        <div class="checklist" id="today-checklist"></div>
+        <div class="checklist-progress">
+          <span id="cl-done">0</span>/<span id="cl-total">0</span>
+          <div class="progress-bar"><div class="progress-fill" id="cl-bar"></div></div>
+        </div>
+      </div>
+
+      <!-- PR recenti -->
+      <div class="card">
+        <div class="card-title"><i class="ti ti-trophy"></i>PR recenti</div>
+        <div id="recent-prs"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ SESSIONE ═══ -->
+  <section class="page" id="page-session">
+    <div class="page-header">
+      <div>
+        <div class="eyebrow">Allenamento</div>
+        <h1 class="page-title" id="sess-title">UPPER B</h1>
+        <div class="page-meta" id="sess-meta"></div>
+        <div class="sync-indicator" id="sync-indicator"></div>
+      </div>
+      <div class="header-actions">
+        <select class="select-dark" id="sess-select" onchange="switchSession(this.value)"></select>
+        <button class="btn-secondary" onclick="Session.openNewModal()">
+          <i class="ti ti-plus"></i>Nuova sessione
+        </button>
+        <button class="btn-primary" onclick="saveSession()">
+          <i class="ti ti-device-floppy"></i>Salva sessione
+        </button>
+      </div>
+    </div>
+
+    <!-- MODAL NUOVA SESSIONE -->
+    <div class="modal-overlay" id="new-sess-modal" style="display:none" onclick="Session.closeNewModal(event)">
+      <div class="modal-box">
+        <div class="modal-title"><i class="ti ti-barbell"></i>Nuova sessione oggi</div>
+        <div class="modal-sub" id="modal-date"></div>
+        <div class="modal-schede" id="modal-schede"></div>
+        <div class="modal-actions">
+          <button class="btn-primary" id="modal-confirm-btn">
+            <i class="ti ti-plus"></i>Crea e inizia
+          </button>
+          <button class="btn-cancel" onclick="Session.closeNewModal()">Annulla</button>
+        </div>
+        <div class="modal-msg" id="modal-msg"></div>
+      </div>
+    </div>
+
+    <!-- Stat strip -->
+    <div class="sess-stats" id="sess-stats">
+      <div class="sess-stat"><div class="ss-v" id="ss-vol">—</div><div class="ss-l">Volume</div></div>
+      <div class="sess-stat"><div class="ss-v" id="ss-delta" style="color:var(--green)">—</div><div class="ss-l">Δ vs scorsa</div></div>
+      <div class="sess-stat"><div class="ss-v" id="ss-done">0</div><div class="ss-l">Serie fatte</div></div>
+      <div class="sess-stat"><div class="ss-v" id="ss-up" style="color:var(--green)">0</div><div class="ss-l">In aumento</div></div>
+    </div>
+
+    <!-- Exercises -->
+    <div id="exercises-container"></div>
+  </section>
+
+  <!-- ═══ PROGRESSIONI ═══ -->
+  <section class="page" id="page-progression">
+    <div class="page-header">
+      <div>
+        <div class="eyebrow">Tracker</div>
+        <h1 class="page-title">Le tue progressioni</h1>
+      </div>
+    </div>
+
+    <div class="scheda-row">
+      <span class="row-lbl">Scheda:</span>
+      <div class="pill-group" id="prog-scheda-btns"></div>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <div class="ex-lbl">Esercizi in questa scheda</div>
+      <div class="pill-group" id="prog-ex-tabs" style="margin-bottom:0"></div>
+    </div>
+
+    <div class="card">
+      <div class="chart-container" style="height:210px;position:relative">
+        <canvas id="prog-chart" role="img" aria-label="Grafico progressione carico nel tempo"></canvas>
+      </div>
+      <div class="chart-tooltip" id="prog-tt"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><i class="ti ti-table"></i>Storico sessioni — <span id="prog-ex-name" style="color:var(--accent)"></span></div>
+      <div class="table-wrap">
+        <table class="data-table" id="prog-table">
+          <thead><tr>
+            <th>Data</th><th>Wk</th><th>Schema</th><th>Carico</th><th>Volume</th><th>Δ</th><th>Note</th>
+          </tr></thead>
+          <tbody id="prog-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ BODY METRICS ═══ -->
+  <section class="page" id="page-body">
+    <div class="page-header">
+      <div>
+        <div class="eyebrow">Body metrics</div>
+        <h1 class="page-title">Misurazioni corporee</h1>
+      </div>
+      <div class="fase-badge" id="fase-badge-hd"></div>
+    </div>
+
+    <!-- Stat strip -->
+    <div class="body-stats" id="body-stats"></div>
+
+    <!-- Peso chart -->
+    <div class="card">
+      <div class="card-title"><i class="ti ti-chart-line"></i>Andamento peso</div>
+      <div class="chart-container" style="height:180px;position:relative">
+        <canvas id="peso-chart" role="img" aria-label="Grafico peso corporeo nel tempo"></canvas>
+      </div>
+      <div class="chart-tooltip" id="peso-tt"></div>
+    </div>
+
+    <!-- Misure grid + chart -->
+    <div class="card">
+      <div class="card-title"><i class="ti ti-ruler-measure"></i>Misure corporee</div>
+      <div class="misure-grid" id="misure-grid"></div>
+      <div class="chart-container" style="height:160px;position:relative;margin-top:14px">
+        <canvas id="misura-chart" role="img" aria-label="Grafico misura corporea nel tempo"></canvas>
+      </div>
+      <div class="chart-tooltip" id="misura-tt"></div>
+    </div>
+
+    <!-- Check-in form -->
+    <div class="card">
+      <div class="card-title"><i class="ti ti-plus-circle" style="color:var(--accent)"></i>Nuovo check-in</div>
+      <div class="fase-row" id="fase-row"></div>
+      <div class="form-grid">
+        <div class="field"><label class="field-lbl">Peso (kg)</label><input class="field-inp" type="number" step="0.1" placeholder="78.5" id="inp-peso"></div>
+        <div class="field"><label class="field-lbl">Vita (cm)</label><input class="field-inp" type="number" step="0.5" placeholder="82" id="inp-vita"></div>
+        <div class="field"><label class="field-lbl">Petto (cm)</label><input class="field-inp" type="number" step="0.5" placeholder="98" id="inp-petto"></div>
+        <div class="field"><label class="field-lbl">Fianchi (cm)</label><input class="field-inp" type="number" step="0.5" placeholder="95" id="inp-fianchi"></div>
+        <div class="field"><label class="field-lbl">Coscia (cm)</label><input class="field-inp" type="number" step="0.5" placeholder="56" id="inp-coscia"></div>
+        <div class="field"><label class="field-lbl">Braccio (cm)</label><input class="field-inp" type="number" step="0.5" placeholder="36" id="inp-braccio"></div>
+        <div class="field"><label class="field-lbl">% Grasso</label><input class="field-inp" type="number" step="0.1" placeholder="15" id="inp-bf"></div>
+        <div class="field"><label class="field-lbl">Note</label><input class="field-inp" type="text" placeholder="mattina a digiuno" id="inp-note-body"></div>
+      </div>
+      <div class="form-actions">
+        <button class="btn-primary" onclick="addCheckin()"><i class="ti ti-device-floppy"></i>Salva check-in</button>
+        <span class="save-confirm" id="body-save-msg"><i class="ti ti-circle-check"></i>Salvato!</span>
+      </div>
+    </div>
+
+    <!-- Storico -->
+    <div class="card">
+      <div class="card-title"><i class="ti ti-calendar"></i>Storico check-in</div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr>
+            <th>Data</th><th>Fase</th><th>Peso</th><th>Δ peso</th>
+            <th>Vita</th><th>Petto</th><th>Coscia</th><th>Braccio</th><th>% Grasso</th><th>Note</th>
+          </tr></thead>
+          <tbody id="body-hist-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+
+<!-- BOTTOM NAV (mobile) -->
+<nav class="bottom-nav" id="bottom-nav">
+  <div class="bn-links">
+    <a href="#" class="bn-link active" data-page="dashboard"><i class="ti ti-layout-dashboard"></i><span>Home</span></a>
+    <a href="#" class="bn-link" data-page="session"><i class="ti ti-barbell"></i><span>Sessione</span></a>
+    <a href="#" class="bn-link" data-page="progression"><i class="ti ti-chart-line"></i><span>Progr.</span></a>
+    <a href="#" class="bn-link" data-page="body"><i class="ti ti-ruler-measure"></i><span>Misure</span></a>
+  </div>
+  <button class="bn-save" id="bn-save" onclick="saveSession()"><i class="ti ti-device-floppy"></i>Salva</button>
+</nav>
+
+<!-- LOADING OVERLAY -->
+<div class="loading-overlay" id="loading">
+  <div class="loading-inner">
+    <div class="loading-logo">GYMOS</div>
+    <div class="loading-bar"><div class="loading-fill" id="loading-fill"></div></div>
+    <div class="loading-msg" id="loading-msg">Connessione a Notion...</div>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="api.js"></script>
+<script src="session.js"></script>
+<script src="modules.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
