@@ -258,3 +258,15 @@ input { font-family:inherit; }
 /* ─── SYNC INDICATOR ─── */
 .sync-indicator { font-size:11px; color:var(--dim); margin-top:5px; display:flex; align-items:center; gap:5px; min-height:16px; transition:color .2s; }
 .sync-indicator i { font-size:13px; }
+
+/* ─── DRAG long-press ─── */
+.ex-block.dragging {
+  opacity:.95; box-shadow:0 12px 32px rgba(0,0,0,.5);
+  border-color:var(--accent); cursor:grabbing;
+}
+.drag-placeholder {
+  background:rgba(255,59,47,.06);
+  border:2px dashed rgba(255,59,47,.3);
+  border-radius:var(--radius-lg); margin-bottom:12px;
+}
+.drag-handle { padding:4px; touch-action:none; user-select:none; -webkit-user-select:none; }
