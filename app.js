@@ -133,11 +133,25 @@ const U = {
     ttEl.innerHTML = buildContent(idx);
     const wrap = document.querySelector(wrapSelector);
     if (!wrap) return;
-    let left = ctx2.tooltip.caretX + 14;
-    if (left + 160 > wrap.offsetWidth) left = ctx2.tooltip.caretX - 170;
-    ttEl.style.left    = left + "px";
-    ttEl.style.top     = Math.max(0, ctx2.tooltip.caretY - 15) + "px";
+
+    // Mostra (display block) per misurare la larghezza reale
     ttEl.style.display = "block";
+    const ttW = ttEl.offsetWidth;
+    const ttH = ttEl.offsetHeight;
+    const wrapW = wrap.offsetWidth;
+
+    // Centrato orizzontalmente sopra il punto
+    let left = ctx2.tooltip.caretX - ttW / 2;
+    // Clamp: non esce dai bordi (8px di margine)
+    if (left < 8) left = 8;
+    if (left + ttW > wrapW - 8) left = wrapW - ttW - 8;
+
+    // Sopra il punto; se non c'è spazio sopra, sotto
+    let top = ctx2.tooltip.caretY - ttH - 14;
+    if (top < 0) top = ctx2.tooltip.caretY + 14;
+
+    ttEl.style.left = left + "px";
+    ttEl.style.top  = top + "px";
   },
 
   baseChartOptions(ttEl, buildContent, wrapSelector) {
