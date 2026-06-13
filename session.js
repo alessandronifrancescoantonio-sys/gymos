@@ -94,59 +94,52 @@ const Session = {
       const rrMin   = sets[0]?.rrMin || 8;
       const rrMax   = sets[0]?.rrMax || 12;
       const prevMax = prevSets.length > 0 ? Math.max(...prevSets.map(s => s.kg || 0)) : 0;
+      const sid     = this.sanitize(exName);
 
       const block = document.createElement("div");
       block.className  = "ex-block";
       block.dataset.ex = exName;
-      block.draggable  = true;
 
       block.innerHTML = `
-        <div class="ex-hd" title="Trascina per riordinare">
-          <span class="drag-handle" aria-label="Trascina"><i class="ti ti-grip-vertical"></i></span>
+        <div class="ex-hd" onclick="Session.toggleEx(this, event)">
+          <span class="drag-handle" aria-label="Trascina" draggable="true"><i class="ti ti-grip-vertical"></i></span>
           <span class="ex-num">${exIdx + 1}</span>
-          <span class="ex-name">${exName}</span>
-          ${prevMax > 0 ? `<span class="ex-storico">max ${U.fmt(prevMax)} kg</span>` : ""}
-          <div class="rr-wrap">
-            <span class="rr-lbl">Target</span>
-            <input class="rr-in" type="number" value="${rrMin}" min="1" max="40"
-              oninput="Session.updateRR('${exName}','min',this.value)">
-            <span class="rr-sep">–</span>
-            <input class="rr-in" type="number" value="${rrMax}" min="1" max="40"
-              oninput="Session.updateRR('${exName}','max',this.value)">
-            <span class="rr-lbl">rep</span>
+          <div class="ex-hd-main">
+            <div class="ex-name">${exName}</div>
+            <div class="ex-sub">
+              <span class="ex-target-inline">Target
+                <input class="rr-in-sm" type="number" value="${rrMin}" min="1" max="40"
+                  onclick="event.stopPropagation()"
+                  oninput="Session.updateRR('${exName}','min',this.value)">–<input class="rr-in-sm" type="number" value="${rrMax}" min="1" max="40"
+                  onclick="event.stopPropagation()"
+                  oninput="Session.updateRR('${exName}','max',this.value)"> rep
+              </span>
+              ${prevMax > 0 ? `<span>· max ${U.fmt(prevMax)} kg</span>` : ""}
+            </div>
           </div>
+          <i class="ti ti-chevron-down ex-chevron"></i>
         </div>
-        <div class="col-lbl">
-          <div class="col-lbl-inner">
-            <span></span>
-            <span class="cl cl-prev">Scorsa volta</span>
-            <span></span>
-            <span class="cl cl-today">Oggi — rep × kg</span>
-            <span class="cl">Progr.</span>
-            <span class="cl" style="text-align:left;padding-left:10px">Note</span>
-            <span></span>
+        <div class="ex-body">
+          <div id="sets-${sid}"></div>
+          <div class="add-set-row">
+            <button class="add-set-btn" onclick="Session.addSet('${exName}')">
+              <i class="ti ti-plus"></i> Aggiungi serie
+            </button>
           </div>
-        </div>
-        <div id="sets-${this.sanitize(exName)}"></div>
-        <div class="add-set-row">
-          <button class="add-set-btn" onclick="Session.addSet('${exName}')">
-            <i class="ti ti-plus"></i> Aggiungi serie
-          </button>
         </div>
       `;
 
-      // Drag & drop
-      block.addEventListener("dragstart", e => {
+      // Drag & drop (solo dalla maniglia)
+      const handle = block.querySelector(".drag-handle");
+      handle.addEventListener("dragstart", e => {
         this.dragging = block;
         block.classList.add("dragging");
         e.dataTransfer.effectAllowed = "move";
       });
-      block.addEventListener("dragend", () => {
+      handle.addEventListener("dragend", () => {
         block.classList.remove("dragging");
         this.dragging = null;
-        // Aggiorna exOrder in base all'ordine DOM attuale
-        this.exOrder = [...container.querySelectorAll(".ex-block")]
-          .map(b => b.dataset.ex);
+        this.exOrder = [...container.querySelectorAll(".ex-block")].map(b => b.dataset.ex);
         this.saveOrder();
         this.renumberBlocks();
       });
@@ -155,22 +148,23 @@ const Session = {
         if (!this.dragging || this.dragging === block) return;
         const rect = block.getBoundingClientRect();
         const mid  = rect.top + rect.height / 2;
-        if (e.clientY < mid) {
-          container.insertBefore(this.dragging, block);
-        } else {
-          container.insertBefore(this.dragging, block.nextSibling);
-        }
+        if (e.clientY < mid) container.insertBefore(this.dragging, block);
+        else container.insertBefore(this.dragging, block.nextSibling);
       });
 
       container.appendChild(block);
 
-      // Set rows
-      const setsContainer = document.getElementById(`sets-${this.sanitize(exName)}`);
+      const setsContainer = document.getElementById(`sets-${sid}`);
       sets.forEach((set, si) => {
         const prevSet = prevSets[si] || null;
         setsContainer.appendChild(this.buildSetRow(set, si, prevSet, exName, rrMin, rrMax, prevMax));
       });
     });
+  },
+
+  toggleEx(hd, event) {
+    if (event && (event.target.closest(".drag-handle") || event.target.closest("input"))) return;
+    hd.parentElement.classList.toggle("collapsed");
   },
 
   renumberBlocks() {
@@ -182,45 +176,43 @@ const Session = {
 
   buildSetRow(set, si, prevSet, exName, rrMin, rrMax, prevMax) {
     const row = document.createElement("div");
-    row.className = "set-row";
+    row.className = "set-card";
     row.id = `setrow-${set.id}`;
 
     const prevHTML = prevSet
-      ? `<span class="pv">${prevSet.reps}r</span><span class="px">×</span><span class="pv">${U.fmt(prevSet.kg)} kg</span>`
-      : `<span class="pe">—</span>`;
+      ? `<span class="pv">${U.fmt(prevSet.kg)}kg</span><span class="px">×</span><span class="pv">${prevSet.reps}r</span><span class="plbl">scorsa</span>`
+      : `<span class="pe">prima volta</span>`;
 
     const prog   = this.getProgression(set, prevSet);
     const status = this.buildStatusBadge(prog, set, exName, rrMin, rrMax, prevMax);
-    const repCls = set.reps > 0 ? "tv" : "tv empty";
+    const repCls = set.reps > 0 ? "stepper-val" : "stepper-val empty";
 
     row.innerHTML = `
-      <div style="display:flex;justify-content:center">
-        <div class="sn">${si + 1}</div>
-      </div>
-      <div class="prev-blk">${prevHTML}</div>
-      <div class="vdiv"><div class="vl"></div></div>
-      <div class="today-blk">
-        <button class="adj" onclick="Session.adjSet('${set.id}','r',-1,'${exName}')">−</button>
-        <span class="${repCls}" id="rep-${set.id}">${set.reps > 0 ? set.reps : "—"}</span>
-        <span class="t-x">r</span>
-        <button class="adj" onclick="Session.adjSet('${set.id}','r',1,'${exName}')">+</button>
-        <div class="t-dot"></div>
-        <button class="adj" onclick="Session.adjSet('${set.id}','k',-2.5,'${exName}')">−</button>
-        <span class="tv" id="kg-${set.id}">${U.fmt(set.kg)}</span>
-        <span class="t-unit">kg</span>
-        <button class="adj" onclick="Session.adjSet('${set.id}','k',2.5,'${exName}')">+</button>
-      </div>
-      <div class="prog-cell" id="prog-${set.id}">${status}</div>
-      <div class="note-cell">
-        <input class="note-inp" type="text" value="${set.note || ""}"
-          placeholder="forma, sensazione..."
-          onchange="Session.saveNote('${set.id}',this.value)">
-      </div>
-      <div style="display:flex;align-items:center;padding-left:8px">
-        <button class="rm-set-btn" onclick="Session.removeSet('${set.id}','${exName}')" title="Rimuovi serie">
+      <div class="set-card-top">
+        <div class="set-num">${si + 1}</div>
+        <div class="set-prev">${prevHTML}</div>
+        <button class="rm-set-btn" onclick="Session.removeSet('${set.id}','${exName}')" aria-label="Rimuovi serie">
           <i class="ti ti-x"></i>
         </button>
       </div>
+      <div class="stepper-row">
+        <span class="stepper-lbl">Kg</span>
+        <button class="adj" onclick="Session.adjSet('${set.id}','k',-2.5,'${exName}')">−</button>
+        <span class="${repCls}" id="kg-${set.id}">${U.fmt(set.kg)}</span>
+        <button class="adj" onclick="Session.adjSet('${set.id}','k',2.5,'${exName}')">+</button>
+      </div>
+      <div class="stepper-row">
+        <span class="stepper-lbl">Rep</span>
+        <button class="adj" onclick="Session.adjSet('${set.id}','r',-1,'${exName}')">−</button>
+        <span class="${repCls}" id="rep-${set.id}">${set.reps > 0 ? set.reps : "0"}</span>
+        <button class="adj" onclick="Session.adjSet('${set.id}','r',1,'${exName}')">+</button>
+      </div>
+      <div class="set-meta-row">
+        <div id="prog-${set.id}">${status}</div>
+      </div>
+      <input class="note-inp" type="text" value="${set.note || ""}"
+        placeholder="Note: forma, sensazione..."
+        onchange="Session.saveNote('${set.id}',this.value)">
     `;
     return row;
   },
@@ -341,8 +333,8 @@ const Session = {
     const repEl  = document.getElementById(`rep-${id}`);
     const kgEl   = document.getElementById(`kg-${id}`);
     const progEl = document.getElementById(`prog-${id}`);
-    if (repEl) { repEl.textContent = set.reps || "—"; repEl.className = set.reps > 0 ? "tv" : "tv empty"; }
-    if (kgEl)  kgEl.textContent = U.fmt(set.kg);
+    if (repEl) { repEl.textContent = set.reps > 0 ? set.reps : "0"; repEl.className = set.reps > 0 ? "stepper-val" : "stepper-val empty"; }
+    if (kgEl)  { kgEl.textContent = U.fmt(set.kg); kgEl.className = set.kg > 0 ? "stepper-val" : "stepper-val empty"; }
 
     const grouped  = this.groupByExercise(this.exercises);
     const prevG    = this.groupByExercise(this.prevExercises);
