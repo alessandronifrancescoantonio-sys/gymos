@@ -12,25 +12,34 @@ const App = {
   },
 
   setupNav() {
-    document.querySelectorAll(".nav-link").forEach(link => {
+    // Sidebar + bottom-nav usano entrambi data-page
+    document.querySelectorAll(".nav-link, .bn-link").forEach(link => {
       link.addEventListener("click", e => {
         e.preventDefault();
-        const page = link.dataset.page;
-        this.navigate(page);
+        this.navigate(link.dataset.page);
       });
     });
   },
 
   navigate(page) {
-    // Aggiorna nav
-    document.querySelectorAll(".nav-link").forEach(l => l.classList.remove("active"));
-    document.querySelector(`[data-page="${page}"]`)?.classList.add("active");
+    // Aggiorna entrambe le nav (sidebar + bottom)
+    document.querySelectorAll(".nav-link, .bn-link").forEach(l => l.classList.remove("active"));
+    document.querySelectorAll(`[data-page="${page}"]`).forEach(l => l.classList.add("active"));
 
     // Aggiorna pagine
     document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
     document.getElementById(`page-${page}`)?.classList.add("active");
 
     this.currentPage = page;
+
+    // Mostra il bottone Salva mobile solo sulla pagina Sessione
+    const bnSave = document.getElementById("bn-save");
+    if (bnSave) bnSave.classList.toggle("show", page === "session");
+
+    // Scroll in cima quando cambi pagina (utile su mobile)
+    const main = document.getElementById("main");
+    if (main) main.scrollTop = 0;
+    window.scrollTo(0, 0);
 
     // Carica dati pagina
     switch(page) {
