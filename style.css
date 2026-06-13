@@ -254,3 +254,7 @@ input { font-family:inherit; }
   .conn-status span:last-child { display:none; }
   .main { margin-left:64px; }
 }
+
+/* ─── SYNC INDICATOR ─── */
+.sync-indicator { font-size:11px; color:var(--dim); margin-top:5px; display:flex; align-items:center; gap:5px; min-height:16px; transition:color .2s; }
+.sync-indicator i { font-size:13px; }
