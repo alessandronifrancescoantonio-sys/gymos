@@ -270,3 +270,37 @@ input { font-family:inherit; }
   border-radius:var(--radius-lg); margin-bottom:12px;
 }
 .drag-handle { padding:4px; touch-action:none; user-select:none; -webkit-user-select:none; }
+
+/* ─── TIMER DURATA ─── */
+.duration-timer { display:inline-flex; align-items:center; gap:6px; margin-top:8px; font-family:'DM Mono',monospace; font-size:15px; font-weight:500; color:var(--text); background:var(--ink3); border:1px solid var(--ink4); padding:5px 12px; border-radius:100px; }
+.duration-timer i { font-size:15px; color:var(--accent); }
+
+/* ─── TIMER RECUPERO FAB ─── */
+.rest-fab { position:fixed; right:16px; bottom:calc(var(--bottombar-h) + 16px); z-index:180; background:var(--accent); color:#fff; border-radius:100px; padding:13px 18px; display:flex; align-items:center; gap:8px; font-size:13px; font-weight:700; box-shadow:0 8px 24px rgba(255,59,47,.35); transition:transform .12s; }
+.rest-fab:active { transform:scale(.94); }
+.rest-fab i { font-size:18px; }
+@media (min-width:761px) { .rest-fab { bottom:24px; } }
+
+/* Picker */
+.rest-picker { position:fixed; inset:0; z-index:400; background:rgba(0,0,0,.7); display:flex; align-items:flex-end; justify-content:center; backdrop-filter:blur(3px); padding:0 0 calc(var(--bottombar-h) + 20px); }
+@media (min-width:761px) { .rest-picker { align-items:center; padding:0; } }
+.rest-picker-box { background:var(--ink2); border:1px solid var(--ink4); border-radius:var(--radius-lg); padding:22px; width:90%; max-width:340px; }
+.rest-picker-title { font-family:'Bebas Neue',sans-serif; font-size:22px; letter-spacing:.03em; color:var(--text); margin-bottom:16px; text-align:center; }
+.rest-picker-btns { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-bottom:14px; }
+.rest-picker-btns button { background:var(--ink3); border:1px solid var(--ink4); border-radius:12px; padding:18px; font-family:'Bebas Neue',sans-serif; font-size:26px; letter-spacing:.03em; color:var(--text); transition:all .15s; }
+.rest-picker-btns button:active { background:rgba(255,59,47,.15); border-color:var(--accent); color:var(--accent); }
+.rest-picker-cancel { width:100%; background:transparent; color:var(--muted); font-size:13px; padding:10px; }
+
+/* Running countdown */
+.rest-running { position:fixed; inset:0; z-index:410; background:rgba(13,13,15,.96); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:32px; }
+.rest-circle { position:relative; width:220px; height:220px; display:flex; align-items:center; justify-content:center; }
+.rest-ring { position:absolute; width:220px; height:220px; transform:rotate(-90deg); }
+.rest-ring-bg { fill:none; stroke:var(--ink3); stroke-width:8; }
+.rest-ring-fg { fill:none; stroke:var(--green); stroke-width:8; stroke-linecap:round; transition:stroke-dashoffset 1s linear, stroke .4s; }
+.rest-count { font-family:'Bebas Neue',sans-serif; font-size:64px; letter-spacing:.03em; color:var(--text); }
+.rest-actions { display:flex; gap:12px; }
+.rest-actions button { background:var(--ink3); border:1px solid var(--ink4); border-radius:12px; padding:14px 28px; font-size:14px; font-weight:700; color:var(--text); transition:all .15s; }
+.rest-actions button:active { transform:scale(.95); }
+.rest-stop { background:var(--accent) !important; border-color:var(--accent) !important; color:#fff !important; }
+.rest-done-flash { animation:restFlash .35s ease 2; }
+@keyframes restFlash { 0%,100%{background:rgba(13,13,15,.96)} 50%{background:rgba(39,209,127,.4)} }
