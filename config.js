@@ -14,6 +14,7 @@ const CONFIG = {
     WEEKLY_PLANNER:  "4c02333d73b641bea8c3a53667575ec0",
     SLEEP_LOG:       "010da90871e64f6bab0b7929a27d3d27",
     DAILY_HABITS:    "0fb83772a017497b84c644b211b00bfa",
+    CARDIO_LOG:      "cee200aa0ce34d1785522c9f2c90bb38",
   },
 
   SCHEDE: {
@@ -118,5 +119,17 @@ const CONFIG = {
     SL_ORE:     "Ore dormite",
     SL_QUALITA: "Qualità (1-5)",
     SL_HRV:     "HRV (ms)",
+
+    // Cardio Log
+    CA_NAME:    "Nome",
+    CA_DATE:    "Data",
+    CA_TIPO:    "Tipo",
+    CA_DURATA:  "Durata (min)",
+    CA_DIST:    "Distanza (km)",
+    CA_KCAL:    "Calorie",
+    CA_INCL:    "Inclinazione (%)",
+    CA_VEL:     "Velocità (km/h)",
+    CA_FATTO:   "Fatto",
+    CA_NOTE:    "Note",
   },
 };
