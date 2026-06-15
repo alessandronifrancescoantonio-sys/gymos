@@ -164,91 +164,181 @@ const Session = {
     let pressTimer = null;
     let active = false;
     let startY = 0;
+    let blockStartTop = 0;
     let placeholder = null;
+    let scrollEl = null;
+    let rafScroll = null;
+    let lastClientY = 0;
 
-    function getEvY(e) {
-      return e.touches ? e.touches[0].clientY : e.clientY;
+    const getEvY = e => e.touches ? e.touches[0].clientY : e.clientY;
+
+    // Trova l'elemento scrollabile (main su desktop, window su mobile)
+    function getScroller() {
+      const main = document.getElementById("main");
+      if (main && main.scrollHeight > main.clientHeight) return main;
+      return document.scrollingElement || document.documentElement;
     }
 
     function begin(e) {
       active = true;
+      scrollEl = getScroller();
+      const rect = block.getBoundingClientRect();
+      blockStartTop = rect.top;
+
       block.classList.add("dragging");
-      if (navigator.vibrate) navigator.vibrate(30); // feedback aptico
-      // segnaposto
+      if (navigator.vibrate) navigator.vibrate(25);
+
+      // Placeholder che occupa lo spazio
       placeholder = document.createElement("div");
       placeholder.className = "drag-placeholder";
       placeholder.style.height = block.offsetHeight + "px";
       block.parentNode.insertBefore(placeholder, block.nextSibling);
-      block.style.position = "relative";
-      block.style.zIndex = "100";
+
+      // Blocco "staccato" che segue il dito
+      block.style.position = "fixed";
+      block.style.left = rect.left + "px";
+      block.style.top = rect.top + "px";
+      block.style.width = rect.width + "px";
+      block.style.zIndex = "1000";
+      block.style.pointerEvents = "none";
+
+      startAutoScroll();
     }
 
     function move(e) {
       if (!active) return;
       if (e.cancelable) e.preventDefault();
       const y = getEvY(e);
+      lastClientY = y;
       const dy = y - startY;
-      block.style.transform = `translateY(${dy}px) scale(1.02)`;
+      block.style.top = (blockStartTop + dy) + "px";
+      reorder(y);
+    }
 
-      // Trova su quale blocco sta passando
-      const blocks = [...container.querySelectorAll(".ex-block")].filter(b => b !== block);
-      const cy = y;
-      for (const other of blocks) {
+    function reorder(y) {
+      const siblings = [...container.querySelectorAll(".ex-block:not(.dragging)")];
+      const blockMidY = y; // usiamo il dito come riferimento
+
+      let placed = false;
+      for (const other of siblings) {
         const rect = other.getBoundingClientRect();
         const mid = rect.top + rect.height / 2;
-        if (cy > rect.top && cy < rect.bottom) {
-          if (cy < mid && placeholder.nextSibling !== other) {
-            container.insertBefore(placeholder, other);
-          } else if (cy >= mid && other.nextSibling !== placeholder) {
-            container.insertBefore(placeholder, other.nextSibling);
+        if (blockMidY < mid) {
+          if (placeholder.nextSibling !== other || placeholder.previousSibling === other) {
+            animateReposition(() => container.insertBefore(placeholder, other));
           }
+          placed = true;
           break;
+        }
+      }
+      if (!placed) {
+        // va in fondo
+        if (container.lastElementChild !== placeholder) {
+          animateReposition(() => container.appendChild(placeholder));
         }
       }
     }
 
+    // FLIP animation: anima lo spostamento dei fratelli
+    function animateReposition(mutate) {
+      const movers = [...container.querySelectorAll(".ex-block:not(.dragging)")];
+      const first = new Map();
+      movers.forEach(m => first.set(m, m.getBoundingClientRect().top));
+      mutate();
+      movers.forEach(m => {
+        const last = m.getBoundingClientRect().top;
+        const delta = first.get(m) - last;
+        if (delta) {
+          m.style.transition = "none";
+          m.style.transform = `translateY(${delta}px)`;
+          requestAnimationFrame(() => {
+            m.style.transition = "transform .18s ease";
+            m.style.transform = "";
+          });
+        }
+      });
+    }
+
+    // Auto-scroll quando il dito è vicino ai bordi
+    function startAutoScroll() {
+      cancelAnimationFrame(rafScroll);
+      const step = () => {
+        if (!active) return;
+        const margin = 90;
+        const vh = window.innerHeight;
+        let speed = 0;
+        if (lastClientY < margin) speed = -Math.ceil((margin - lastClientY) / 8);
+        else if (lastClientY > vh - margin) speed = Math.ceil((lastClientY - (vh - margin)) / 8);
+        if (speed !== 0 && scrollEl) {
+          scrollEl.scrollBy(0, speed);
+          blockStartTop -= speed; // compensa così il blocco resta sotto il dito
+          block.style.top = (blockStartTop + (lastClientY - startY)) + "px";
+          reorder(lastClientY);
+        }
+        rafScroll = requestAnimationFrame(step);
+      };
+      rafScroll = requestAnimationFrame(step);
+    }
+
     function end() {
       clearTimeout(pressTimer);
-      if (!active) return;
+      cancelAnimationFrame(rafScroll);
+      if (!active) { cleanupListeners(); return; }
       active = false;
+
+      // Pulisci stile dei movers
+      container.querySelectorAll(".ex-block").forEach(m => { m.style.transition = ""; m.style.transform = ""; });
+
+      // Rimetti il blocco nel flusso, dove c'è il placeholder
       block.classList.remove("dragging");
-      block.style.transform = "";
       block.style.position = "";
+      block.style.left = "";
+      block.style.top = "";
+      block.style.width = "";
       block.style.zIndex = "";
-      // posiziona il blocco dove c'è il placeholder
+      block.style.pointerEvents = "";
+      block.style.transform = "";
+
       if (placeholder) {
         container.insertBefore(block, placeholder);
         placeholder.remove();
         placeholder = null;
       }
+
       self.exOrder = [...container.querySelectorAll(".ex-block")].map(b => b.dataset.ex);
       self.saveOrder();
       self.renumberBlocks();
+      if (navigator.vibrate) navigator.vibrate(12);
+      cleanupListeners();
+    }
+
+    function cleanupListeners() {
       document.removeEventListener("mousemove", move);
       document.removeEventListener("mouseup", end);
       document.removeEventListener("touchmove", move);
       document.removeEventListener("touchend", end);
+      document.removeEventListener("touchcancel", end);
     }
 
-    // TOUCH (mobile) — long press 250ms
+    // TOUCH — long press 180ms
     handle.addEventListener("touchstart", e => {
       startY = getEvY(e);
+      lastClientY = startY;
       pressTimer = setTimeout(() => {
         begin(e);
         document.addEventListener("touchmove", move, { passive: false });
         document.addEventListener("touchend", end);
-      }, 250);
-    });
+        document.addEventListener("touchcancel", end);
+      }, 180);
+    }, { passive: true });
     handle.addEventListener("touchend", () => clearTimeout(pressTimer));
-    handle.addEventListener("touchmove", e => {
-      // se muove prima del long-press, annulla (è uno scroll)
-      if (!active) clearTimeout(pressTimer);
-    });
+    handle.addEventListener("touchmove", () => { if (!active) clearTimeout(pressTimer); }, { passive: true });
 
-    // MOUSE (desktop) — press immediato sulla maniglia
+    // MOUSE — press immediato
     handle.addEventListener("mousedown", e => {
       e.preventDefault();
       startY = getEvY(e);
+      lastClientY = startY;
       begin(e);
       document.addEventListener("mousemove", move);
       document.addEventListener("mouseup", end);
