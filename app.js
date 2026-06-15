@@ -45,6 +45,7 @@ const App = {
     switch(page) {
       case "dashboard":   Dashboard.load(); break;
       case "session":     Session.load();   break;
+      case "cardio":      Cardio.load();    break;
       case "progression": Progression.load(); break;
       case "body":        Body.load();      break;
     }
