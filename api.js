@@ -253,6 +253,49 @@ const API = {
     return this.update(pageId, props);
   },
 
+  // ─── CARDIO ───
+  async getCardioSessions(n = 50) {
+    const pages = await this.query(
+      CONFIG.DB.CARDIO_LOG,
+      null,
+      [{ property: CONFIG.PROPS.CA_DATE, direction: "descending" }],
+      n
+    );
+    return pages.map(p => ({
+      id:     p.id,
+      name:   this.read.title(p, CONFIG.PROPS.CA_NAME),
+      date:   this.read.date(p, CONFIG.PROPS.CA_DATE),
+      tipo:   this.read.rich_text(p, CONFIG.PROPS.CA_TIPO),
+      durata: this.read.number(p, CONFIG.PROPS.CA_DURATA),
+      dist:   this.read.number(p, CONFIG.PROPS.CA_DIST),
+      kcal:   this.read.number(p, CONFIG.PROPS.CA_KCAL),
+      incl:   this.read.number(p, CONFIG.PROPS.CA_INCL),
+      vel:    this.read.number(p, CONFIG.PROPS.CA_VEL),
+      fatto:  this.read.checkbox(p, CONFIG.PROPS.CA_FATTO),
+      note:   this.read.rich_text(p, CONFIG.PROPS.CA_NOTE),
+    })).filter(c => c.date);
+  },
+
+  async saveCardio(data) {
+    const props = {};
+    const d = data.date || new Date().toISOString().split("T")[0];
+    props[CONFIG.PROPS.CA_NAME] = API.prop.title((data.tipo || "Cardio") + " " + d);
+    props[CONFIG.PROPS.CA_DATE] = API.prop.date(d);
+    if (data.tipo)            props[CONFIG.PROPS.CA_TIPO]   = API.prop.rich_text(data.tipo);
+    if (data.durata != null)  props[CONFIG.PROPS.CA_DURATA] = API.prop.number(data.durata);
+    if (data.dist   != null)  props[CONFIG.PROPS.CA_DIST]   = API.prop.number(data.dist);
+    if (data.kcal   != null)  props[CONFIG.PROPS.CA_KCAL]   = API.prop.number(data.kcal);
+    if (data.incl   != null)  props[CONFIG.PROPS.CA_INCL]   = API.prop.number(data.incl);
+    if (data.vel    != null)  props[CONFIG.PROPS.CA_VEL]    = API.prop.number(data.vel);
+    props[CONFIG.PROPS.CA_FATTO] = API.prop.checkbox(!!data.fatto);
+    if (data.note)            props[CONFIG.PROPS.CA_NOTE]   = API.prop.rich_text(data.note);
+    return this.create(CONFIG.DB.CARDIO_LOG, props);
+  },
+
+  async updateCardioDone(id, done) {
+    return this.update(id, { [CONFIG.PROPS.CA_FATTO]: API.prop.checkbox(done) });
+  },
+
   // Test connessione
   async testConnection() {
     try {
