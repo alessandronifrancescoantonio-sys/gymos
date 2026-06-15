@@ -304,3 +304,12 @@ input { font-family:inherit; }
 .rest-stop { background:var(--accent) !important; border-color:var(--accent) !important; color:#fff !important; }
 .rest-done-flash { animation:restFlash .35s ease 2; }
 @keyframes restFlash { 0%,100%{background:rgba(13,13,15,.96)} 50%{background:rgba(39,209,127,.4)} }
+
+/* ─── BOTTONE AVVIA TIMER DURATA ─── */
+.duration-btn { display:inline-flex; align-items:center; gap:5px; background:var(--accent); color:#fff; border-radius:100px; padding:4px 12px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; margin-left:4px; transition:opacity .15s,transform .1s; }
+.duration-btn:active { transform:scale(.94); }
+.duration-btn i { font-size:12px; }
+.duration-timer.running { border-color:rgba(255,59,47,.4); }
+.duration-timer.running #duration-display { color:var(--accent); }
+.duration-timer.running i.ti-clock { animation:pulseClock 2s ease-in-out infinite; }
+@keyframes pulseClock { 0%,100%{opacity:1} 50%{opacity:.4} }
