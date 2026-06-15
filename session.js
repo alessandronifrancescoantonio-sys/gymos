@@ -148,6 +148,8 @@ const Session = {
 
   toggleEx(hd, event) {
     if (event && (event.target.closest(".drag-handle") || event.target.closest("input"))) return;
+    // Se è appena avvenuto un drag, non fare il toggle
+    if (this._justDragged) { this._justDragged = false; return; }
     hd.parentElement.classList.toggle("collapsed");
   },
 
@@ -308,6 +310,8 @@ const Session = {
       self.exOrder = [...container.querySelectorAll(".ex-block")].map(b => b.dataset.ex);
       self.saveOrder();
       self.renumberBlocks();
+      self._justDragged = true;
+      setTimeout(() => { self._justDragged = false; }, 50);
       if (navigator.vibrate) navigator.vibrate(12);
       cleanupListeners();
     }
@@ -320,28 +324,58 @@ const Session = {
       document.removeEventListener("touchcancel", end);
     }
 
-    // TOUCH — long press 180ms
-    handle.addEventListener("touchstart", e => {
+    // Verifica se il punto toccato è un controllo interattivo (allora NON parte il drag)
+    function isInteractive(target) {
+      return target.closest("button, input, textarea, select, a, .adj, .rm-set-btn, .add-set-btn, .note-inp, .rr-in-sm");
+    }
+
+    let touchStartX = 0;
+
+    // TOUCH — long press 200ms su QUALSIASI punto della card (tranne controlli)
+    block.addEventListener("touchstart", e => {
+      if (isInteractive(e.target)) return; // lascia funzionare bottoni/input
       startY = getEvY(e);
+      touchStartX = e.touches[0].clientX;
       lastClientY = startY;
       pressTimer = setTimeout(() => {
         begin(e);
         document.addEventListener("touchmove", move, { passive: false });
         document.addEventListener("touchend", end);
         document.addEventListener("touchcancel", end);
-      }, 180);
+      }, 200);
     }, { passive: true });
-    handle.addEventListener("touchend", () => clearTimeout(pressTimer));
-    handle.addEventListener("touchmove", () => { if (!active) clearTimeout(pressTimer); }, { passive: true });
 
-    // MOUSE — press immediato
+    block.addEventListener("touchend", () => clearTimeout(pressTimer));
+    block.addEventListener("touchmove", e => {
+      if (active) return;
+      // Se muove il dito prima del long-press → sta scrollando, annulla
+      const dx = Math.abs(e.touches[0].clientX - touchStartX);
+      const dy = Math.abs(getEvY(e) - startY);
+      if (dx > 10 || dy > 10) clearTimeout(pressTimer);
+    }, { passive: true });
+
+    // MOUSE (desktop) — sulla manina parte subito; sul resto della card serve long-press 200ms
     handle.addEventListener("mousedown", e => {
       e.preventDefault();
+      e.stopPropagation();
       startY = getEvY(e);
       lastClientY = startY;
       begin(e);
       document.addEventListener("mousemove", move);
       document.addEventListener("mouseup", end);
+    });
+
+    block.addEventListener("mousedown", e => {
+      if (isInteractive(e.target) || e.target.closest(".drag-handle")) return;
+      startY = getEvY(e);
+      lastClientY = startY;
+      pressTimer = setTimeout(() => {
+        begin(e);
+        document.addEventListener("mousemove", move);
+        document.addEventListener("mouseup", end);
+      }, 200);
+      const cancelPress = () => { clearTimeout(pressTimer); document.removeEventListener("mouseup", cancelPress); };
+      document.addEventListener("mouseup", cancelPress);
     });
   },
 
