@@ -70,16 +70,15 @@ const DurationTimer = {
   },
 
   setBtnState(state) {
-    const wrap = document.getElementById("duration-timer");
-    const btn  = document.getElementById("duration-btn");
-    if (!wrap || !btn) return;
+    const bar = document.querySelector(".sess-timer-bar");
+    const btn = document.getElementById("duration-btn");
+    if (!btn) return;
     if (state === "running") {
-      wrap.classList.add("running");
-      btn.innerHTML = '<i class="ti ti-player-play-filled"></i>';
+      if (bar) bar.classList.add("running");
       btn.style.display = "none"; // mentre gira, niente bottone (si ferma solo al salvataggio)
     } else {
-      wrap.classList.remove("running");
-      btn.innerHTML = '<i class="ti ti-player-play-filled"></i> Avvia';
+      if (bar) bar.classList.remove("running");
+      btn.innerHTML = '<i class="ti ti-player-play"></i> Avvia';
       btn.style.display = "inline-flex";
     }
   },
