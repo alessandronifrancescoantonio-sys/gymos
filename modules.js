@@ -344,22 +344,23 @@ const Dashboard = {
       new Date().toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" });
 
     try {
-      const [sessions, checkins, tasks, sleepData] = await Promise.all([
+      const [sessions, checkins, sleepData, habits, todayHabit] = await Promise.all([
         API.getWorkoutSessions(14).catch(() => []),
         API.getBodyMetrics(5).catch(() => []),
-        API.getTodayTasks().catch(() => []),
         API.getRecentSleep(7).catch(() => []),
+        API.getRecentHabits(7).catch(() => []),
+        API.getTodayHabit().catch(() => null),
       ]);
 
-      this.buildStats(sessions, checkins, sleepData);
+      this.buildStats(sessions, checkins, sleepData, habits, todayHabit);
       this.buildWeekSplit(sessions);
-      this.buildChecklist(tasks);
+      this.buildRecentSessions(sessions);
       this.buildPRs(sessions);
       this.buildSemaforo(sleepData);
     } catch(e) { console.error("Dashboard.load:", e); }
   },
 
-  buildStats(sessions, checkins, sleepData) {
+  buildStats(sessions, checkins, sleepData, habits, todayHabit) {
     const thisWeek = sessions.filter(s => {
       if (!s.date) return false;
       const d = new Date(s.date);
@@ -377,16 +378,57 @@ const Dashboard = {
       document.getElementById("d-peso").textContent = U.fmt(last.peso) + " kg";
       if (checkins.length > 1) {
         const d = Math.round((last.peso - checkins[checkins.length - 2].peso) * 10) / 10;
-        document.getElementById("d-peso-sub").textContent = (d > 0 ? "+" : "") + U.fmt(d) + " kg vs check-in prec.";
+        document.getElementById("d-peso-sub").textContent = (d > 0 ? "+" : "") + U.fmt(d) + " kg vs prec.";
       }
+    } else {
+      document.getElementById("d-peso").textContent = "—";
     }
 
     if (sleepData.length) {
       const avg = sleepData.reduce((a, s) => a + (s.ore || 0), 0) / sleepData.length;
       document.getElementById("d-sleep").textContent = avg.toFixed(1) + "h";
+    } else {
+      document.getElementById("d-sleep").textContent = "—";
     }
 
-    document.getElementById("d-habit").textContent = "—";
+    // Habit score: oggi se c'è, altrimenti media settimana
+    const hEl = document.getElementById("d-habit");
+    if (todayHabit && todayHabit.score != null) {
+      hEl.textContent = todayHabit.score + "%";
+    } else if (habits.length) {
+      const avg = Math.round(habits.reduce((a, h) => a + (h.score || 0), 0) / habits.length);
+      hEl.textContent = avg + "%";
+    } else {
+      hEl.textContent = "—";
+    }
+  },
+
+  buildRecentSessions(sessions) {
+    const list = document.getElementById("today-checklist");
+    if (!list) return;
+    list.innerHTML = "";
+    const done = sessions.filter(s => s.done).slice(0, 5);
+    if (!done.length) {
+      list.innerHTML = '<div class="empty-state">Nessuna sessione registrata. Vai su Sessione per iniziare!</div>';
+      const prog = document.querySelector(".checklist-progress");
+      if (prog) prog.style.display = "none";
+      return;
+    }
+    const prog = document.querySelector(".checklist-progress");
+    if (prog) prog.style.display = "none";
+    done.forEach(s => {
+      const item = document.createElement("div");
+      item.className = "recent-sess-item";
+      item.innerHTML = `
+        <div class="rs-icon"><i class="ti ti-barbell"></i></div>
+        <div class="rs-main">
+          <div class="rs-name">${s.name}</div>
+          <div class="rs-date">${U.fmtDate(s.date)}</div>
+        </div>
+        <i class="ti ti-circle-check rs-check"></i>
+      `;
+      list.appendChild(item);
+    });
   },
 
   buildWeekSplit(sessions) {
@@ -577,5 +619,154 @@ const Cardio = {
       console.error(e);
       alert("Errore nel salvataggio del cardio.");
     }
+  },
+};
+
+// ═══════════════════════════════════════════════
+//  GymOS — Diary module (sonno + abitudini)
+// ═══════════════════════════════════════════════
+const Diary = {
+  qualita: null,
+  energia: null,
+  umore:   null,
+  habitId: null,
+  habitState: { allen:false, prot:false, integ:false, mobil:false, pesoReg:false },
+
+  HABITS: [
+    { key:"allen",   label:"Allenamento",     icon:"ti-barbell" },
+    { key:"prot",    label:"Proteine ok",     icon:"ti-meat" },
+    { key:"integ",   label:"Integratori",     icon:"ti-pill" },
+    { key:"mobil",   label:"Mobilità",        icon:"ti-stretching" },
+    { key:"pesoReg", label:"Peso registrato", icon:"ti-scale" },
+  ],
+
+  async load() {
+    document.getElementById("diary-date").textContent =
+      new Date().toLocaleDateString("it-IT", { weekday:"long", day:"numeric", month:"long" });
+    this.qualita = null; this.energia = null; this.umore = null;
+    this.buildRatings();
+    this.buildEnergia();
+    this.buildHabitChecks();
+    // Carica habit di oggi se esiste
+    try {
+      const h = await API.getTodayHabit();
+      if (h) {
+        this.habitId = h.id;
+        this.habitState = { allen:h.allen, prot:h.prot, integ:h.integ, mobil:h.mobil, pesoReg:h.pesoReg };
+        if (h.acqua != null) document.getElementById("dh-acqua").value = h.acqua;
+        if (h.passi != null) document.getElementById("dh-passi").value = h.passi;
+        this.umore = h.umore ? parseInt(h.umore) : null;
+        this.buildHabitChecks();
+        this.buildUmore();
+        this.updateScoreBadge();
+      }
+    } catch(e) { console.error(e); }
+  },
+
+  buildRatings() {
+    const row = document.getElementById("sl-qualita-row");
+    if (!row) return;
+    row.innerHTML = "";
+    for (let i = 1; i <= 5; i++) {
+      const b = document.createElement("button");
+      b.className = "rating-dot" + (this.qualita === i ? " on" : "");
+      b.textContent = i;
+      b.onclick = () => { this.qualita = i; this.buildRatings(); };
+      row.appendChild(b);
+    }
+  },
+
+  buildUmore() {
+    const row = document.getElementById("dh-umore-row");
+    if (!row) return;
+    row.innerHTML = "";
+    const faces = ["😞","😕","😐","🙂","😄"];
+    for (let i = 1; i <= 5; i++) {
+      const b = document.createElement("button");
+      b.className = "rating-dot" + (this.umore === i ? " on" : "");
+      b.textContent = i;
+      b.onclick = () => { this.umore = i; this.buildUmore(); };
+      row.appendChild(b);
+    }
+  },
+
+  buildEnergia() {
+    const row = document.getElementById("sl-energia-row");
+    if (!row) return;
+    row.innerHTML = "";
+    const opts = [
+      { v:"Stanco",      c:"#EF4444" },
+      { v:"Nella norma", c:"#F5A623" },
+      { v:"Riposato",    c:"#27D17F" },
+    ];
+    opts.forEach(o => {
+      const b = document.createElement("button");
+      b.className = "energia-btn" + (this.energia === o.v ? " on" : "");
+      b.textContent = o.v;
+      if (this.energia === o.v) { b.style.borderColor = o.c; b.style.color = o.c; }
+      b.onclick = () => { this.energia = o.v; this.buildEnergia(); };
+      row.appendChild(b);
+    });
+  },
+
+  buildHabitChecks() {
+    const wrap = document.getElementById("habit-checks");
+    if (!wrap) return;
+    wrap.innerHTML = "";
+    this.HABITS.forEach(h => {
+      const on = this.habitState[h.key];
+      const item = document.createElement("button");
+      item.className = "habit-check" + (on ? " on" : "");
+      item.innerHTML = `<i class="ti ${h.icon}"></i><span>${h.label}</span><i class="ti ti-check habit-tick"></i>`;
+      item.onclick = () => {
+        this.habitState[h.key] = !this.habitState[h.key];
+        this.buildHabitChecks();
+        this.updateScoreBadge();
+      };
+      wrap.appendChild(item);
+    });
+  },
+
+  updateScoreBadge() {
+    const vals = Object.values(this.habitState);
+    const score = Math.round(vals.filter(Boolean).length / vals.length * 100);
+    const badge = document.getElementById("habit-score-badge");
+    if (badge) badge.textContent = score + "%";
+  },
+
+  async saveSleep() {
+    const get = id => { const v = document.getElementById(id)?.value; return v ? parseFloat(v) : null; };
+    const data = {
+      ore: get("sl-ore"),
+      hrv: get("sl-hrv"),
+      qualita: this.qualita,
+      energia: this.energia,
+      note: document.getElementById("sl-note")?.value || "",
+    };
+    if (data.ore == null) { alert("Inserisci almeno le ore dormite"); return; }
+    try {
+      await API.saveSleep(data);
+      ["sl-ore","sl-hrv","sl-note"].forEach(id => { const e=document.getElementById(id); if(e) e.value=""; });
+      this.qualita = null; this.energia = null;
+      this.buildRatings(); this.buildEnergia();
+      const msg = document.getElementById("sleep-save-msg");
+      if (msg) { msg.style.display="flex"; setTimeout(()=>msg.style.display="none",2500); }
+    } catch(e) { console.error(e); alert("Errore salvataggio sonno."); }
+  },
+
+  async saveHabit() {
+    const get = id => { const v = document.getElementById(id)?.value; return v ? parseFloat(v) : null; };
+    const data = {
+      ...this.habitState,
+      acqua: get("dh-acqua"),
+      passi: get("dh-passi"),
+      umore: this.umore,
+    };
+    try {
+      const res = await API.saveHabit(data, this.habitId);
+      if (res && res.id) this.habitId = res.id;
+      const msg = document.getElementById("habit-save-msg");
+      if (msg) { msg.style.display="flex"; setTimeout(()=>msg.style.display="none",2500); }
+    } catch(e) { console.error(e); alert("Errore salvataggio abitudini."); }
   },
 };
