@@ -261,8 +261,9 @@ input { font-family:inherit; }
 
 /* ─── DRAG long-press ─── */
 .ex-block.dragging {
-  opacity:.95; box-shadow:0 12px 32px rgba(0,0,0,.5);
+  opacity:.97; box-shadow:0 18px 44px rgba(0,0,0,.6);
   border-color:var(--accent); cursor:grabbing;
+  transform:scale(1.03); transition:transform .12s ease, box-shadow .12s ease;
 }
 .drag-placeholder {
   background:rgba(255,59,47,.06);
