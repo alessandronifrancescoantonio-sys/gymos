@@ -1,35 +1,87 @@
 // ═══════════════════════════════════════════════
 //  GymOS — timers.js
-//  Timer durata sessione + timer recupero
+//  Timer durata sessione (manuale) + timer recupero
 // ═══════════════════════════════════════════════
 
 // ─── TIMER DURATA SESSIONE ───
+// Parte SOLO con bottone Start. Persiste se chiudi il sito (salva timestamp).
+// Si ferma SOLO al salvataggio sessione.
 const DurationTimer = {
   startTime: null,
   interval:  null,
+  sessionId: null,
 
-  start(sessionId) {
-    // Recupera start salvato per questa sessione, o inizia ora
+  // Chiamato quando si carica una sessione: NON parte, controlla solo se era già avviato
+  init(sessionId) {
+    this.sessionId = sessionId;
+    this.stopTicking();
     const saved = localStorage.getItem(`gymos_start_${sessionId}`);
     if (saved) {
+      // Timer già avviato in precedenza → riprende
       this.startTime = parseInt(saved);
+      this.startTicking();
+      this.setBtnState("running");
     } else {
-      this.startTime = Date.now();
-      localStorage.setItem(`gymos_start_${sessionId}`, this.startTime);
+      // Non avviato
+      this.startTime = null;
+      this.renderIdle();
+      this.setBtnState("idle");
     }
+  },
+
+  // Avvio manuale col bottone
+  start() {
+    if (!this.sessionId) return;
+    this.startTime = Date.now();
+    localStorage.setItem(`gymos_start_${this.sessionId}`, this.startTime);
+    this.startTicking();
+    this.setBtnState("running");
+    if (navigator.vibrate) navigator.vibrate(20);
+  },
+
+  startTicking() {
     this.tick();
     clearInterval(this.interval);
     this.interval = setInterval(() => this.tick(), 1000);
   },
 
+  stopTicking() {
+    clearInterval(this.interval);
+    this.interval = null;
+  },
+
   tick() {
     if (!this.startTime) return;
     const elapsed = Math.floor((Date.now() - this.startTime) / 1000);
-    const m = Math.floor(elapsed / 60);
+    const h = Math.floor(elapsed / 3600);
+    const m = Math.floor((elapsed % 3600) / 60);
     const s = elapsed % 60;
     const disp = document.getElementById("duration-display");
-    if (disp) disp.textContent =
-      `${m.toString().padStart(2,"0")}:${s.toString().padStart(2,"0")}`;
+    if (disp) {
+      disp.textContent = h > 0
+        ? `${h}:${m.toString().padStart(2,"0")}:${s.toString().padStart(2,"0")}`
+        : `${m.toString().padStart(2,"0")}:${s.toString().padStart(2,"0")}`;
+    }
+  },
+
+  renderIdle() {
+    const disp = document.getElementById("duration-display");
+    if (disp) disp.textContent = "00:00";
+  },
+
+  setBtnState(state) {
+    const wrap = document.getElementById("duration-timer");
+    const btn  = document.getElementById("duration-btn");
+    if (!wrap || !btn) return;
+    if (state === "running") {
+      wrap.classList.add("running");
+      btn.innerHTML = '<i class="ti ti-player-play-filled"></i>';
+      btn.style.display = "none"; // mentre gira, niente bottone (si ferma solo al salvataggio)
+    } else {
+      wrap.classList.remove("running");
+      btn.innerHTML = '<i class="ti ti-player-play-filled"></i> Avvia';
+      btn.style.display = "inline-flex";
+    }
   },
 
   getMinutes() {
@@ -37,16 +89,19 @@ const DurationTimer = {
     return Math.round((Date.now() - this.startTime) / 60000);
   },
 
-  stop() {
-    clearInterval(this.interval);
-    this.interval = null;
-  },
-
-  reset(sessionId) {
-    localStorage.removeItem(`gymos_start_${sessionId}`);
+  // Chiamato al salvataggio: ferma e azzera
+  finishAndReset() {
+    const mins = this.getMinutes();
+    this.stopTicking();
+    if (this.sessionId) localStorage.removeItem(`gymos_start_${this.sessionId}`);
     this.startTime = null;
+    this.renderIdle();
+    this.setBtnState("idle");
+    return mins;
   },
 };
+
+function startDurationTimer() { DurationTimer.start(); }
 
 // ─── TIMER RECUPERO ───
 const RestTimer = {
@@ -89,14 +144,12 @@ const RestTimer = {
       ? `${m}:${s.toString().padStart(2,"0")}`
       : this.remaining;
 
-    // Anello progressivo
     const ring = document.getElementById("rest-ring-fg");
     if (ring) {
       const circ = 2 * Math.PI * 54;
       const pct = this.remaining / this.total;
       ring.style.strokeDasharray = circ;
       ring.style.strokeDashoffset = circ * (1 - pct);
-      // colore: verde → ambra → rosso man mano che scende
       if (pct > 0.5) ring.style.stroke = "#27D17F";
       else if (pct > 0.2) ring.style.stroke = "#F5A623";
       else ring.style.stroke = "#FF3B2F";
@@ -106,9 +159,7 @@ const RestTimer = {
   finish() {
     clearInterval(this.interval);
     this.interval = null;
-    // Vibrazione breve
     if (navigator.vibrate) navigator.vibrate([120, 60, 120]);
-    // Flash visivo veloce
     const overlay = document.getElementById("rest-running");
     overlay.classList.add("rest-done-flash");
     setTimeout(() => {
