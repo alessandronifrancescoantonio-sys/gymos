@@ -43,8 +43,8 @@ const Session = {
     document.getElementById("sess-meta").textContent =
       `${U.fmtDate(sess.date)} · ${sess.type || "—"}`;
 
-    // Avvia il timer durata per questa sessione
-    if (typeof DurationTimer !== "undefined") DurationTimer.start(id);
+    // Inizializza il timer durata (NON parte da solo, lo avvia l'utente col bottone)
+    if (typeof DurationTimer !== "undefined") DurationTimer.init(id);
 
     this.exercises = await API.getSessionExercises(id);
 
@@ -537,17 +537,12 @@ const Session = {
       await Promise.all(updates);
       if (this.activeId) {
         const props = { [CONFIG.PROPS.WL_DONE]: API.prop.checkbox(true) };
-        // Salva la durata in minuti
+        // Ferma il timer durata e salva i minuti
         if (typeof DurationTimer !== "undefined") {
-          const mins = DurationTimer.getMinutes();
+          const mins = DurationTimer.finishAndReset();
           if (mins > 0) props["Durata (min)"] = API.prop.number(mins);
         }
         await API.update(this.activeId, props);
-      }
-      // Ferma il timer durata
-      if (typeof DurationTimer !== "undefined") {
-        DurationTimer.stop();
-        DurationTimer.reset(this.activeId);
       }
       btn.innerHTML = '<i class="ti ti-circle-check"></i>Salvato!';
       btn.style.background = "var(--green)";
