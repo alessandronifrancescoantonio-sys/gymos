@@ -52,6 +52,7 @@ const App = {
       case "cardio":      Cardio.load();    break;
       case "progression": Progression.load(); break;
       case "body":        Body.load();      break;
+      case "diary":       Diary.load();     break;
     }
   },
 
