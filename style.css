@@ -272,10 +272,6 @@ input { font-family:inherit; }
 }
 .drag-handle { padding:4px; touch-action:none; user-select:none; -webkit-user-select:none; }
 
-/* ─── TIMER DURATA ─── */
-.duration-timer { display:inline-flex; align-items:center; gap:6px; margin-top:8px; font-family:'DM Mono',monospace; font-size:15px; font-weight:500; color:var(--text); background:var(--ink3); border:1px solid var(--ink4); padding:5px 12px; border-radius:100px; }
-.duration-timer i { font-size:15px; color:var(--accent); }
-
 /* ─── TIMER RECUPERO FAB ─── */
 .rest-fab { position:fixed; right:16px; bottom:calc(var(--bottombar-h) + 16px); z-index:180; background:var(--accent); color:#fff; border-radius:100px; padding:13px 18px; display:flex; align-items:center; gap:8px; font-size:13px; font-weight:700; box-shadow:0 8px 24px rgba(255,59,47,.35); transition:transform .12s; }
 .rest-fab:active { transform:scale(.94); }
@@ -306,11 +302,50 @@ input { font-family:inherit; }
 .rest-done-flash { animation:restFlash .35s ease 2; }
 @keyframes restFlash { 0%,100%{background:rgba(13,13,15,.96)} 50%{background:rgba(39,209,127,.4)} }
 
-/* ─── BOTTONE AVVIA TIMER DURATA ─── */
-.duration-btn { display:inline-flex; align-items:center; gap:5px; background:var(--accent); color:#fff; border-radius:100px; padding:4px 12px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; margin-left:4px; transition:opacity .15s,transform .1s; }
+/* ═══════════ HEADER SESSIONE (ridisegnato) ═══════════ */
+.sess-header { padding:20px 24px 0; }
+.sess-header-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; min-height:18px; }
+.sess-header-top .eyebrow { margin-bottom:0; }
+
+.sess-title-row { display:flex; align-items:center; gap:12px; margin-bottom:18px; }
+.sess-accent-bar { width:4px; align-self:stretch; min-height:38px; background:var(--accent); border-radius:100px; flex-shrink:0; }
+.sess-title-main { flex:1; min-width:0; }
+.sess-title-main .page-title { font-size:34px; margin:0; }
+.sess-title-main .page-meta { margin-top:4px; }
+
+.sess-controls { display:flex; gap:10px; align-items:stretch; margin-bottom:14px; }
+.sess-select-wrap { flex:1; position:relative; }
+.sess-select { width:100%; height:46px; background:var(--ink2); border:1px solid var(--ink3); border-radius:12px; color:var(--text); font-size:14px; font-weight:500; padding:0 38px 0 14px; outline:none; appearance:none; -webkit-appearance:none; cursor:pointer; transition:border-color .15s; font-family:inherit; }
+.sess-select:focus { border-color:var(--accent); }
+.sess-select-icon { position:absolute; right:12px; top:50%; transform:translateY(-50%); color:var(--dim); font-size:18px; pointer-events:none; }
+.sess-new-btn { width:46px; height:46px; border-radius:12px; background:var(--ink2); border:1px solid var(--ink3); color:var(--accent); display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:all .15s; }
+.sess-new-btn:hover { border-color:var(--accent); background:rgba(255,59,47,.08); }
+.sess-new-btn:active { transform:scale(.94); }
+.sess-new-btn i { font-size:22px; }
+
+.sess-timer-bar { display:flex; align-items:center; justify-content:space-between; background:var(--ink2); border:1px solid var(--ink3); border-radius:14px; padding:12px 14px; margin-bottom:6px; transition:border-color .3s; }
+.sess-timer-bar.running { border-color:rgba(255,59,47,.35); }
+.sess-timer-info { display:flex; align-items:center; gap:10px; }
+.sess-timer-icon { width:34px; height:34px; border-radius:9px; background:rgba(255,59,47,.1); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.sess-timer-icon i { font-size:17px; color:var(--accent); }
+.sess-timer-bar.running .sess-timer-icon i { animation:pulseClock 2s ease-in-out infinite; }
+.sess-timer-value { font-family:'DM Mono',monospace; font-size:19px; font-weight:500; color:var(--text); line-height:1; }
+.sess-timer-bar.running .sess-timer-value { color:var(--accent); }
+.sess-timer-label { font-size:9px; color:var(--dim); text-transform:uppercase; letter-spacing:.07em; margin-top:2px; }
+.sess-timer-actions { display:flex; align-items:center; gap:8px; }
+.duration-btn { display:inline-flex; align-items:center; gap:6px; background:rgba(255,59,47,.1); border:1px solid rgba(255,59,47,.3); border-radius:100px; padding:9px 16px; color:var(--accent); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; transition:all .12s; }
+.duration-btn:hover { background:rgba(255,59,47,.18); }
 .duration-btn:active { transform:scale(.94); }
-.duration-btn i { font-size:12px; }
-.duration-timer.running { border-color:rgba(255,59,47,.4); }
-.duration-timer.running #duration-display { color:var(--accent); }
-.duration-timer.running i.ti-clock { animation:pulseClock 2s ease-in-out infinite; }
-@keyframes pulseClock { 0%,100%{opacity:1} 50%{opacity:.4} }
+.duration-btn i { font-size:13px; }
+.sess-save-desktop { display:inline-flex; align-items:center; gap:6px; background:var(--accent); color:#fff; border-radius:100px; padding:9px 18px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; transition:all .12s; }
+.sess-save-desktop:hover { opacity:.88; }
+.sess-save-desktop:active { transform:scale(.94); }
+.sess-save-desktop i { font-size:14px; }
+@keyframes pulseClock { 0%,100%{opacity:1} 50%{opacity:.35} }
+
+/* Mobile: header sticky e padding ridotto */
+@media (max-width:760px) {
+  .sess-header { position:sticky; top:0; z-index:40; background:var(--ink); padding:14px 16px 0; border-bottom:1px solid var(--ink3); padding-bottom:14px; }
+  .sess-title-main .page-title { font-size:28px; }
+  .sess-save-desktop { display:none; } /* su mobile c'è il bottone in basso */
+}
