@@ -237,10 +237,23 @@ const API = {
     );
     return pages.map(p => ({
       date:    this.read.date(p, CONFIG.PROPS.SL_DATE),
-      ore:     this.read.formula_number(p, CONFIG.PROPS.SL_ORE) || this.read.number(p, CONFIG.PROPS.SL_ORE),
-      qualita: this.read.number(p, CONFIG.PROPS.SL_QUALITA),
+      ore:     this.read.number(p, CONFIG.PROPS.SL_ORE),
+      qualita: parseInt(this.read.select(p, CONFIG.PROPS.SL_QUALITA)) || null,
       hrv:     this.read.number(p, CONFIG.PROPS.SL_HRV),
     })).filter(s => s.date);
+  },
+
+  async getRecentHabits(n = 7) {
+    const pages = await this.query(
+      CONFIG.DB.DAILY_HABITS,
+      null,
+      [{ property: CONFIG.PROPS.DH_DATE, direction: "descending" }],
+      n
+    );
+    return pages.map(p => ({
+      date:  this.read.date(p, CONFIG.PROPS.DH_DATE),
+      score: this.read.formula_number(p, CONFIG.PROPS.DH_SCORE),
+    })).filter(h => h.date);
   },
 
   // Aggiorna entry esercizio esistente
@@ -294,6 +307,63 @@ const API = {
 
   async updateCardioDone(id, done) {
     return this.update(id, { [CONFIG.PROPS.CA_FATTO]: API.prop.checkbox(done) });
+  },
+
+  // ─── SONNO ───
+  async saveSleep(data) {
+    const props = {};
+    const d = data.date || new Date().toISOString().split("T")[0];
+    props[CONFIG.PROPS.SL_NAME] = API.prop.title("Notte " + d);
+    props[CONFIG.PROPS.SL_DATE] = API.prop.date(d);
+    if (data.ore != null)     props[CONFIG.PROPS.SL_ORE]     = API.prop.number(data.ore);
+    if (data.qualita)         props[CONFIG.PROPS.SL_QUALITA] = API.prop.select(String(data.qualita));
+    if (data.hrv != null)     props[CONFIG.PROPS.SL_HRV]     = API.prop.number(data.hrv);
+    if (data.energia)         props[CONFIG.PROPS.SL_ENERGIA] = API.prop.select(data.energia);
+    if (data.note)            props[CONFIG.PROPS.SL_NOTE]    = API.prop.rich_text(data.note);
+    return this.create(CONFIG.DB.SLEEP_LOG, props);
+  },
+
+  // ─── HABITS ───
+  async getTodayHabit() {
+    const today = new Date().toISOString().split("T")[0];
+    const pages = await this.query(
+      CONFIG.DB.DAILY_HABITS,
+      { property: CONFIG.PROPS.DH_DATE, date: { equals: today } },
+      null, 1
+    );
+    if (!pages.length) return null;
+    const p = pages[0];
+    return {
+      id:     p.id,
+      acqua:  this.read.number(p, CONFIG.PROPS.DH_ACQUA),
+      passi:  this.read.number(p, CONFIG.PROPS.DH_PASSI),
+      allen:  this.read.checkbox(p, CONFIG.PROPS.DH_ALLEN),
+      prot:   this.read.checkbox(p, CONFIG.PROPS.DH_PROT),
+      integ:  this.read.checkbox(p, CONFIG.PROPS.DH_INTEG),
+      mobil:  this.read.checkbox(p, CONFIG.PROPS.DH_MOBIL),
+      pesoReg:this.read.checkbox(p, CONFIG.PROPS.DH_PESO),
+      umore:  this.read.select(p, CONFIG.PROPS.DH_UMORE),
+      score:  this.read.formula_number(p, CONFIG.PROPS.DH_SCORE),
+      note:   this.read.rich_text(p, CONFIG.PROPS.DH_NOTE),
+    };
+  },
+
+  async saveHabit(data, existingId) {
+    const today = new Date().toISOString().split("T")[0];
+    const props = {};
+    props[CONFIG.PROPS.DH_NAME]  = API.prop.title("Giorno " + today);
+    props[CONFIG.PROPS.DH_DATE]  = API.prop.date(today);
+    if (data.acqua != null) props[CONFIG.PROPS.DH_ACQUA] = API.prop.number(data.acqua);
+    if (data.passi != null) props[CONFIG.PROPS.DH_PASSI] = API.prop.number(data.passi);
+    props[CONFIG.PROPS.DH_ALLEN] = API.prop.checkbox(!!data.allen);
+    props[CONFIG.PROPS.DH_PROT]  = API.prop.checkbox(!!data.prot);
+    props[CONFIG.PROPS.DH_INTEG] = API.prop.checkbox(!!data.integ);
+    props[CONFIG.PROPS.DH_MOBIL] = API.prop.checkbox(!!data.mobil);
+    props[CONFIG.PROPS.DH_PESO]  = API.prop.checkbox(!!data.pesoReg);
+    if (data.umore)  props[CONFIG.PROPS.DH_UMORE] = API.prop.select(String(data.umore));
+    if (data.note)   props[CONFIG.PROPS.DH_NOTE]  = API.prop.rich_text(data.note);
+    if (existingId) return this.update(existingId, props);
+    return this.create(CONFIG.DB.DAILY_HABITS, props);
   },
 
   // Test connessione
