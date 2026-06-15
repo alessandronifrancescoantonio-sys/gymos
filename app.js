@@ -36,6 +36,10 @@ const App = {
     const bnSave = document.getElementById("bn-save");
     if (bnSave) bnSave.classList.toggle("show", page === "session");
 
+    // Mostra il timer recupero (FAB) solo nella pagina Sessione
+    const restFab = document.getElementById("rest-fab");
+    if (restFab) restFab.style.display = (page === "session") ? "flex" : "none";
+
     // Scroll in cima quando cambi pagina (utile su mobile)
     const main = document.getElementById("main");
     if (main) main.scrollTop = 0;
