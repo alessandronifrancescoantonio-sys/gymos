@@ -100,7 +100,7 @@ const Session = {
       const sid     = this.sanitize(exName);
 
       const block = document.createElement("div");
-      block.className  = "ex-block";
+      block.className  = "ex-block collapsed";
       block.dataset.ex = exName;
 
       block.innerHTML = `
