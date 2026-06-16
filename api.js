@@ -366,6 +366,63 @@ const API = {
     return this.create(CONFIG.DB.DAILY_HABITS, props);
   },
 
+  // ─── SCHEDE (gestione dall'app) ───
+  COLOR_MAP: {
+    "Rosso":"#FF3B2F", "Blu":"#3B82F6", "Verde":"#27D17F",
+    "Arancione":"#F5A623", "Viola":"#A78BFA", "Rosa":"#F472B6", "Giallo":"#EAB308"
+  },
+  COLOR_REV: {
+    "#FF3B2F":"Rosso", "#3B82F6":"Blu", "#27D17F":"Verde",
+    "#F5A623":"Arancione", "#A78BFA":"Viola", "#F472B6":"Rosa", "#EAB308":"Giallo"
+  },
+
+  async getSchede() {
+    const pages = await this.query(
+      CONFIG.DB.SCHEDE_DB,
+      null,
+      [{ property: CONFIG.PROPS.SC_ORDINE, direction: "ascending" }],
+      50
+    );
+    return pages.map(p => {
+      let exercises = [];
+      try { exercises = JSON.parse(this.read.rich_text(p, CONFIG.PROPS.SC_ESERCIZI) || "[]"); } catch {}
+      const colorName = this.read.select(p, CONFIG.PROPS.SC_COLORE);
+      return {
+        id:      p.id,
+        nome:    this.read.title(p, CONFIG.PROPS.SC_NOME),
+        colore:  this.COLOR_MAP[colorName] || "#FF3B2F",
+        coloreName: colorName,
+        ordine:  this.read.number(p, CONFIG.PROPS.SC_ORDINE) || 0,
+        exercises,
+        attiva:  this.read.checkbox(p, CONFIG.PROPS.SC_ATTIVA),
+      };
+    }).filter(s => s.attiva !== false);
+  },
+
+  async createScheda(nome, colorName, exercises, ordine) {
+    const props = {};
+    props[CONFIG.PROPS.SC_NOME]     = API.prop.title(nome);
+    props[CONFIG.PROPS.SC_COLORE]   = API.prop.select(colorName || "Rosso");
+    props[CONFIG.PROPS.SC_ORDINE]   = API.prop.number(ordine || 0);
+    props[CONFIG.PROPS.SC_ESERCIZI] = API.prop.rich_text(JSON.stringify(exercises || []));
+    props[CONFIG.PROPS.SC_ATTIVA]   = API.prop.checkbox(true);
+    return this.create(CONFIG.DB.SCHEDE_DB, props);
+  },
+
+  async updateScheda(id, fields) {
+    const props = {};
+    if (fields.nome      != null) props[CONFIG.PROPS.SC_NOME]     = API.prop.title(fields.nome);
+    if (fields.colorName != null) props[CONFIG.PROPS.SC_COLORE]   = API.prop.select(fields.colorName);
+    if (fields.ordine    != null) props[CONFIG.PROPS.SC_ORDINE]   = API.prop.number(fields.ordine);
+    if (fields.exercises != null) props[CONFIG.PROPS.SC_ESERCIZI] = API.prop.rich_text(JSON.stringify(fields.exercises));
+    return this.update(id, props);
+  },
+
+  async deleteScheda(id) {
+    // Notion non cancella via API: archivia (Attiva = false)
+    return this.update(id, { [CONFIG.PROPS.SC_ATTIVA]: API.prop.checkbox(false) });
+  },
+
   // Test connessione
   async testConnection() {
     try {
