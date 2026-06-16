@@ -53,6 +53,7 @@ const App = {
       case "progression": Progression.load(); break;
       case "body":        Body.load();      break;
       case "diary":       Diary.load();     break;
+      case "schede":      Schede.load();    break;
     }
   },
 
@@ -73,9 +74,14 @@ const App = {
     }
 
     setConnStatus(true);
-    setProgress(60, "Caricamento dati...");
+    setProgress(50, "Caricamento schede...");
 
-    // Step 2 — carica dashboard
+    // Step 2 — carica le schede da Notion in CONFIG.SCHEDE
+    await App.loadSchede().catch(console.error);
+
+    setProgress(70, "Caricamento dati...");
+
+    // Step 3 — carica dashboard
     await Dashboard.load().catch(console.error);
     setProgress(100, "Pronto!");
 
@@ -90,6 +96,22 @@ const App = {
       msg.textContent  = text;
     }
   },
+
+  // Carica le schede da Notion e popola CONFIG.SCHEDE (formato usato ovunque)
+  async loadSchede() {
+    try {
+      const schede = await API.getSchede();
+      App.schede = schede; // lista completa con id, per la sezione gestione
+      const map = {};
+      schede.forEach(s => {
+        map[s.nome] = { color: s.colore, exercises: s.exercises, _id: s.id };
+      });
+      CONFIG.SCHEDE = map;
+    } catch(e) {
+      console.error("loadSchede:", e);
+    }
+  },
+  schede: [],
 };
 
 function setConnStatus(ok) {
