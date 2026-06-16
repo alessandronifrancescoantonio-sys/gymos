@@ -692,7 +692,7 @@ function saveSession()     { Session.saveSession();   }
 (function() {
   let _scheda = null;
 
-  Session.openNewModal = function() {
+  Session.openNewModal = async function() {
     _scheda = null;
     const modal = document.getElementById("new-sess-modal");
     const today = new Date();
@@ -701,6 +701,15 @@ function saveSession()     { Session.saveSession();   }
       today.getDate() + " " + months[today.getMonth()] + " " + today.getFullYear();
 
     const wrap = document.getElementById("modal-schede");
+    wrap.innerHTML = '<div style="font-size:12px;color:var(--dim)">Caricamento schede...</div>';
+    document.getElementById("modal-msg").textContent = "";
+    modal.style.display = "flex";
+
+    // Ricarica le schede da Notion così riflette le modifiche
+    if (typeof App !== "undefined" && App.loadSchede) {
+      await App.loadSchede();
+    }
+
     wrap.innerHTML = "";
     Object.entries(CONFIG.SCHEDE).forEach(function(entry) {
       var name = entry[0];
@@ -723,8 +732,10 @@ function saveSession()     { Session.saveSession();   }
       };
       wrap.appendChild(btn);
     });
+    if (!Object.keys(CONFIG.SCHEDE).length) {
+      wrap.innerHTML = '<div style="font-size:12px;color:var(--dim)">Nessuna scheda. Creane una nella sezione Schede.</div>';
+    }
 
-    document.getElementById("modal-msg").textContent = "";
     document.getElementById("modal-confirm-btn").onclick = function() {
       if (!_scheda) {
         document.getElementById("modal-msg").textContent = "Scegli una sessione!";
