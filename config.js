@@ -15,6 +15,7 @@ const CONFIG = {
     SLEEP_LOG:       "010da90871e64f6bab0b7929a27d3d27",
     DAILY_HABITS:    "0fb83772a017497b84c644b211b00bfa",
     CARDIO_LOG:      "cee200aa0ce34d1785522c9f2c90bb38",
+    SCHEDE_DB:       "f53798e7cb2b4b0cb1de4fe9df24bd67",
   },
 
   SCHEDE: {
@@ -144,5 +145,13 @@ const CONFIG = {
     CA_VEL:     "Velocità (km/h)",
     CA_FATTO:   "Fatto",
     CA_NOTE:    "Note",
+
+    // Schede
+    SC_NOME:     "Nome",
+    SC_COLORE:   "Colore",
+    SC_ORDINE:   "Ordine",
+    SC_ESERCIZI: "Esercizi",
+    SC_ATTIVA:   "Attiva",
+    SC_NOTE:     "Note",
   },
 };
