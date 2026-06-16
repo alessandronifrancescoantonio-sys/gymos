@@ -770,3 +770,160 @@ const Diary = {
     } catch(e) { console.error(e); alert("Errore salvataggio abitudini."); }
   },
 };
+
+// ═══════════════════════════════════════════════
+//  GymOS — Schede module (gestione schede)
+// ═══════════════════════════════════════════════
+const Schede = {
+  editing:   null,   // id scheda in modifica, null = nuova
+  draftEx:   [],     // esercizi in editing
+  draftColor:"Rosso",
+  dragIdx:   null,
+
+  COLORS: ["Rosso","Blu","Verde","Arancione","Viola","Rosa","Giallo"],
+
+  async load() {
+    await App.loadSchede();
+    this.render();
+  },
+
+  render() {
+    const wrap = document.getElementById("schede-list");
+    if (!wrap) return;
+    wrap.innerHTML = "";
+    if (!App.schede.length) {
+      wrap.innerHTML = '<div class="empty-state">Nessuna scheda. Creane una con "Nuova scheda"!</div>';
+      return;
+    }
+    App.schede.forEach((s, idx) => {
+      const card = document.createElement("div");
+      card.className = "scheda-card";
+      card.style.setProperty("--sc-color", s.colore);
+      card.innerHTML = `
+        <div class="scheda-card-head">
+          <div class="scheda-color-dot" style="background:${s.colore}"></div>
+          <div class="scheda-card-name">${s.nome}</div>
+          <div class="scheda-card-count">${s.exercises.length} es.</div>
+          <button class="scheda-edit-btn" onclick="Schede.openEditor('${s.id}')"><i class="ti ti-pencil"></i></button>
+          <button class="scheda-del-btn" onclick="Schede.remove('${s.id}','${s.nome.replace(/'/g,"")}')"><i class="ti ti-trash"></i></button>
+        </div>
+        <div class="scheda-card-ex">${s.exercises.map(e => `<span class="scheda-ex-chip">${e}</span>`).join("")}</div>
+      `;
+      wrap.appendChild(card);
+    });
+  },
+
+  openEditor(id) {
+    this.editing = id || null;
+    const titleEl = document.getElementById("scheda-editor-title");
+    if (id) {
+      const s = App.schede.find(x => x.id === id);
+      this.draftEx = [...(s.exercises || [])];
+      this.draftColor = API.COLOR_REV[s.colore] || "Rosso";
+      document.getElementById("sc-nome").value = s.nome;
+      titleEl.innerHTML = '<i class="ti ti-pencil"></i>Modifica scheda';
+    } else {
+      this.draftEx = [];
+      this.draftColor = "Rosso";
+      document.getElementById("sc-nome").value = "";
+      titleEl.innerHTML = '<i class="ti ti-clipboard-list"></i>Nuova scheda';
+    }
+    document.getElementById("scheda-editor-msg").textContent = "";
+    this.buildColorPicker();
+    this.buildExList();
+    document.getElementById("scheda-editor").style.display = "flex";
+  },
+
+  closeEditor(e) {
+    if (!e || e.target.id === "scheda-editor") {
+      document.getElementById("scheda-editor").style.display = "none";
+    }
+  },
+
+  buildColorPicker() {
+    const wrap = document.getElementById("sc-color-picker");
+    wrap.innerHTML = "";
+    this.COLORS.forEach(c => {
+      const hex = API.COLOR_MAP[c];
+      const b = document.createElement("button");
+      b.className = "color-swatch" + (this.draftColor === c ? " on" : "");
+      b.style.background = hex;
+      b.onclick = () => { this.draftColor = c; this.buildColorPicker(); };
+      wrap.appendChild(b);
+    });
+  },
+
+  buildExList() {
+    const wrap = document.getElementById("sc-ex-list");
+    wrap.innerHTML = "";
+    if (!this.draftEx.length) {
+      wrap.innerHTML = '<div class="ex-editor-empty">Nessun esercizio. Aggiungine sotto.</div>';
+      return;
+    }
+    this.draftEx.forEach((ex, i) => {
+      const row = document.createElement("div");
+      row.className = "ex-editor-item";
+      row.draggable = true;
+      row.innerHTML = `
+        <i class="ti ti-grip-vertical ex-editor-grip"></i>
+        <span class="ex-editor-name">${ex}</span>
+        <button class="ex-editor-del" onclick="Schede.removeExercise(${i})"><i class="ti ti-x"></i></button>
+      `;
+      row.addEventListener("dragstart", () => this.dragIdx = i);
+      row.addEventListener("dragover", e => e.preventDefault());
+      row.addEventListener("drop", e => {
+        e.preventDefault();
+        if (this.dragIdx === null || this.dragIdx === i) return;
+        const moved = this.draftEx.splice(this.dragIdx, 1)[0];
+        this.draftEx.splice(i, 0, moved);
+        this.dragIdx = null;
+        this.buildExList();
+      });
+      wrap.appendChild(row);
+    });
+  },
+
+  addExercise() {
+    const inp = document.getElementById("sc-new-ex");
+    const val = inp.value.trim();
+    if (!val) return;
+    this.draftEx.push(val);
+    inp.value = "";
+    inp.focus();
+    this.buildExList();
+  },
+
+  removeExercise(i) {
+    this.draftEx.splice(i, 1);
+    this.buildExList();
+  },
+
+  async save() {
+    const nome = document.getElementById("sc-nome").value.trim();
+    const msg  = document.getElementById("scheda-editor-msg");
+    if (!nome) { msg.textContent = "Inserisci un nome"; return; }
+    if (!this.draftEx.length) { msg.textContent = "Aggiungi almeno un esercizio"; return; }
+    msg.textContent = "Salvataggio...";
+    try {
+      if (this.editing) {
+        await API.updateScheda(this.editing, { nome, colorName: this.draftColor, exercises: this.draftEx });
+      } else {
+        const ordine = App.schede.length + 1;
+        await API.createScheda(nome, this.draftColor, this.draftEx, ordine);
+      }
+      document.getElementById("scheda-editor").style.display = "none";
+      await this.load();
+    } catch(e) {
+      console.error(e);
+      msg.textContent = "Errore nel salvataggio";
+    }
+  },
+
+  async remove(id, nome) {
+    if (!confirm(`Eliminare la scheda "${nome}"? Le sessioni già salvate restano.`)) return;
+    try {
+      await API.deleteScheda(id);
+      await this.load();
+    } catch(e) { console.error(e); alert("Errore eliminazione"); }
+  },
+};
