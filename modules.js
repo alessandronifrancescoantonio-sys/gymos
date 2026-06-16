@@ -8,6 +8,11 @@ const Progression = {
   chart:        null,
 
   async load() {
+    // Protezione: se la scheda attiva non esiste più (es. rinominata su Notion),
+    // riparti dalla prima scheda disponibile. Non cambia nulla nel caso normale.
+    const keys = Object.keys(CONFIG.SCHEDE);
+    if (!keys.length) return;
+    if (!CONFIG.SCHEDE[this.activeScheda]) this.activeScheda = keys[0];
     this.activeEx = CONFIG.SCHEDE[this.activeScheda].exercises[0];
     this.buildSchedaBtns();
     this.buildExTabs();

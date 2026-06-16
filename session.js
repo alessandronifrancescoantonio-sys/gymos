@@ -503,7 +503,7 @@ const Session = {
     // Rinumera le serie
     const setsContainer = document.getElementById(`sets-${this.sanitize(exName)}`);
     if (setsContainer) {
-      [...setsContainer.querySelectorAll(".sn")].forEach((sn, i) => {
+      [...setsContainer.querySelectorAll(".set-num")].forEach((sn, i) => {
         sn.textContent = i + 1;
       });
     }

@@ -196,8 +196,8 @@ const API = {
     if (data.braccio != null) props[CONFIG.PROPS.BM_BRACCIO] = API.prop.number(data.braccio);
     if (data.bf      != null) props[CONFIG.PROPS.BM_BF]      = API.prop.number(data.bf);
     if (data.note)             props[CONFIG.PROPS.BM_NOTE]   = API.prop.rich_text(data.note);
-    // Title = data per semplicità
-    props[CONFIG.PROPS.WL_NAME] = API.prop.title(`Check-in ${d}`);
+    // Title = proprietà "Check-in" del DB Body Metrics (non "Nome sessione")
+    props[CONFIG.PROPS.BM_NAME] = API.prop.title(`Check-in ${d}`);
     return this.create(CONFIG.DB.BODY_METRICS, props);
   },
 

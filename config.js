@@ -100,6 +100,7 @@ const CONFIG = {
     EL_RR_MAX:   "Rep range max",
     EL_NOTE:     "Note tecnica",
     EL_DATE:     "Data",
+    BM_NAME:    "Check-in",
     BM_DATE:    "Data",
     BM_PESO:    "Peso (kg)",
     BM_VITA:    "Vita (cm)",

@@ -1,0 +1,14 @@
+{
+  "name": "GymOS",
+  "short_name": "GymOS",
+  "description": "Tracker allenamenti, progressioni e misurazioni",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0D0D0F",
+  "theme_color": "#0D0D0F",
+  "icons": [
+    { "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
