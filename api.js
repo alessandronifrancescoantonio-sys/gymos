@@ -144,6 +144,7 @@ const API = {
       cadenza:  this.read.rich_text(p, CONFIG.PROPS.EL_CADENZA),
       gruppo:   this.read.select(p, CONFIG.PROPS.EL_GRUPPO),
       recupero: this.read.number(p, CONFIG.PROPS.EL_RECUPERO),
+      info:     this.read.rich_text(p, CONFIG.PROPS.EL_INFO),
     }));
   },
 
@@ -154,6 +155,7 @@ const API = {
     if (tech.cadenza  !== undefined) props[CONFIG.PROPS.EL_CADENZA]  = API.prop.rich_text(tech.cadenza);
     if (tech.gruppo   !== undefined) props[CONFIG.PROPS.EL_GRUPPO]   = API.prop.select(tech.gruppo);
     if (tech.recupero !== undefined) props[CONFIG.PROPS.EL_RECUPERO] = API.prop.number(tech.recupero);
+    if (tech.info     !== undefined) props[CONFIG.PROPS.EL_INFO]     = API.prop.rich_text(tech.info);
     return this.update(pageId, props);
   },
 

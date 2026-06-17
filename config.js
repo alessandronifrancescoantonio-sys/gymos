@@ -118,6 +118,7 @@ const CONFIG = {
     EL_CADENZA:  "Cadenza",
     EL_GRUPPO:   "Gruppo",
     EL_RECUPERO: "Recupero (s)",
+    EL_INFO:     "Info tecnica",
     BM_NAME:    "Check-in",
     BM_DATE:    "Data",
     BM_PESO:    "Peso (kg)",

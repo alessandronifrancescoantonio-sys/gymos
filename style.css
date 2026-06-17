@@ -473,6 +473,7 @@ input { font-family:inherit; }
   background:var(--ink2); border:1px solid var(--ink4); color:var(--text); font-family:"DM Mono",monospace; font-size:13px; }
 .tech-in:focus { outline:none; border-color:var(--accent); }
 .tech-sel { cursor:pointer; appearance:none; }
+.tg-info { width:100%; font-family:"Outfit",sans-serif; font-size:13px; line-height:1.45; resize:vertical; min-height:42px; }
 
 /* Evidenzia gli esercizi raggruppati (superset) con una banda a sinistra */
 .ex-block[data-group] { border-left:3px solid var(--accent); }

@@ -92,7 +92,6 @@ const Session = {
     container.innerHTML = "";
     const grouped     = this.groupByExercise(this.exercises);
     const prevGrouped = this.groupByExercise(this.prevExercises);
-    const groupCounts = this.groupCounts();
 
     this.exOrder.forEach((exName, exIdx) => {
       const sets    = grouped[exName] || [];
@@ -106,8 +105,6 @@ const Session = {
       const block = document.createElement("div");
       block.className  = "ex-block collapsed";
       block.dataset.ex = exName;
-      // La banda "SUPERSET" appare solo se il gruppo ha 2+ esercizi
-      if (ex.gruppo && groupCounts[ex.gruppo] > 1) block.dataset.group = ex.gruppo;
 
       block.innerHTML = `
         <div class="ex-hd" onclick="Session.toggleEx(this, event)">
@@ -124,7 +121,6 @@ const Session = {
                   oninput="Session.updateRR('${exName}','max',this.value)"> rep
               </span>
               ${prevMax > 0 ? `<span>· max ${U.fmt(prevMax)} kg</span>` : ""}
-              <span class="ex-tech-badges" id="badges-${sid}">${this.techBadgesHTML(ex)}</span>
             </div>
           </div>
           <i class="ti ti-chevron-down ex-chevron"></i>
@@ -153,19 +149,6 @@ const Session = {
     });
   },
 
-  // ─── TECNICHE DI INTENSITÀ (a livello esercizio) ───
-
-  // Badge mostrati nell'header (visibili anche a card chiusa)
-  techBadgesHTML(ex) {
-    const tags = (ex.tecnica || []).map(t => {
-      const c = (CONFIG.TECNICHE.find(x => x.name === t) || {}).color || "#7A7A8A";
-      return `<span class="tech-badge" style="color:${c};border-color:${c}55;background:${c}1a">${t}</span>`;
-    }).join("");
-    const cad = ex.cadenza ? `<span class="tech-badge cad"><i class="ti ti-clock-bolt"></i>${ex.cadenza}</span>` : "";
-    const grp = ex.gruppo ? `<span class="grp-badge">Gruppo ${ex.gruppo}${ex.recupero ? ` · ${ex.recupero}s` : ""}</span>` : "";
-    return tags + cad + grp;
-  },
-
   // Applica un patch a TUTTE le serie dell'esercizio (la tecnica vive su ogni serie)
   applyTechToSets(exName, patch) {
     const sets = this.groupByExercise(this.exercises)[exName] || [];
@@ -173,18 +156,8 @@ const Session = {
     return sets;
   },
 
-  // Quanti esercizi ci sono in ciascun gruppo (per banda superset)
-  groupCounts() {
-    const grouped = this.groupByExercise(this.exercises);
-    const counts = {};
-    Object.keys(grouped).forEach(n => {
-      const g = (grouped[n][0] || {}).gruppo;
-      if (g) counts[g] = (counts[g] || 0) + 1;
-    });
-    return counts;
-  },
-
   // ═══ PANNELLO TECNICHE (in alto, fuori dagli esercizi) ═══
+  // Niente viene mostrato dentro le card: tutto vive in questo pannello.
   // Modello: ogni "blocco tecnica" = una lettera Gruppo (A-F) con i suoi esercizi
   // correlati + le tecniche scelte + cadenza/recupero. I blocchi appena creati e
   // ancora senza esercizi vivono in techDrafts finché non gli correli un esercizio.
@@ -197,16 +170,17 @@ const Session = {
     Object.keys(grouped).forEach(name => {
       const ex = grouped[name][0] || {};
       if (!ex.gruppo) return;
-      if (!byGroup[ex.gruppo]) byGroup[ex.gruppo] = { gruppo: ex.gruppo, exercises: [], tecnica: new Set(), cadenza: "", recupero: null };
+      if (!byGroup[ex.gruppo]) byGroup[ex.gruppo] = { gruppo: ex.gruppo, exercises: [], tecnica: new Set(), cadenza: "", recupero: null, info: "" };
       byGroup[ex.gruppo].exercises.push(name);
       (ex.tecnica || []).forEach(t => byGroup[ex.gruppo].tecnica.add(t));
       if (ex.cadenza) byGroup[ex.gruppo].cadenza = ex.cadenza;
       if (ex.recupero != null) byGroup[ex.gruppo].recupero = ex.recupero;
+      if (ex.info) byGroup[ex.gruppo].info = ex.info;
     });
     const out = Object.values(byGroup).map(a => ({ ...a, tecnica: [...a.tecnica], draft: false }));
     // aggiungi le bozze (gruppi creati ma senza esercizi) non già presenti
     Object.keys(this.techDrafts).forEach(g => {
-      if (!byGroup[g]) out.push({ gruppo: g, exercises: [], tecnica: this.techDrafts[g].tecnica || [], cadenza: this.techDrafts[g].cadenza || "", recupero: this.techDrafts[g].recupero ?? null, draft: true });
+      if (!byGroup[g]) out.push({ gruppo: g, exercises: [], tecnica: this.techDrafts[g].tecnica || [], cadenza: this.techDrafts[g].cadenza || "", recupero: this.techDrafts[g].recupero ?? null, info: this.techDrafts[g].info || "", draft: true });
     });
     return out.sort((a, b) => a.gruppo.localeCompare(b.gruppo));
   },
@@ -258,6 +232,9 @@ const Session = {
             <input class="tech-in" type="number" min="0" step="5" placeholder="120" value="${a.recupero ?? ""}"
               onchange="Session.tgSet('${a.gruppo}','recupero',this.value)"></label>
         </div>
+        <div class="tg-lbl">Info tecnica</div>
+        <textarea class="tech-in tg-info" rows="2" placeholder="Es. drop al 70%, 2 cali; eccentrica 3s; cedimento all'ultima serie..."
+          onchange="Session.tgSet('${a.gruppo}','info',this.value)">${a.info || ""}</textarea>
       </div>`;
   },
 
@@ -265,13 +242,13 @@ const Session = {
     const used = new Set(this.techAssignments().map(a => a.gruppo));
     const free = CONFIG.GRUPPI.find(g => !used.has(g));
     if (!free) { alert("Hai raggiunto il numero massimo di blocchi tecnica."); return; }
-    this.techDrafts[free] = { tecnica: [], cadenza: "", recupero: null };
+    this.techDrafts[free] = { tecnica: [], cadenza: "", recupero: null, info: "" };
     this.renderTechPanel();
   },
 
   // Valori correnti di un blocco (da dati reali o da bozza)
   tgCurrent(g) {
-    return this.techAssignments().find(a => a.gruppo === g) || { gruppo: g, exercises: [], tecnica: [], cadenza: "", recupero: null, draft: true };
+    return this.techAssignments().find(a => a.gruppo === g) || { gruppo: g, exercises: [], tecnica: [], cadenza: "", recupero: null, info: "", draft: true };
   },
 
   tgToggleTec(g, name) {
@@ -285,7 +262,6 @@ const Session = {
       this.techDrafts[g].tecnica = arr;
     }
     this.renderTechPanel();
-    this.updateCardsTech();
   },
 
   tgSet(g, field, val) {
@@ -297,52 +273,30 @@ const Session = {
       this.techDrafts[g][field] = value;
     }
     this.renderTechPanel();
-    this.updateCardsTech();
   },
 
   tgToggleEx(g, exName, checked) {
     if (checked) {
       const a = this.tgCurrent(g);
-      // l'esercizio entra nel blocco ed eredita tecnica/cadenza/recupero del blocco
-      this.applyTechToSets(exName, { gruppo: g, tecnica: [...a.tecnica], cadenza: a.cadenza || "", recupero: a.recupero ?? null });
+      // l'esercizio entra nel blocco ed eredita tutti i campi tecnica del blocco
+      this.applyTechToSets(exName, { gruppo: g, tecnica: [...a.tecnica], cadenza: a.cadenza || "", recupero: a.recupero ?? null, info: a.info || "" });
       delete this.techDrafts[g];   // non è più una bozza
     } else {
       // esce dal blocco: azzera i suoi campi tecnica
-      this.applyTechToSets(exName, { gruppo: "", tecnica: [], cadenza: "", recupero: null });
+      this.applyTechToSets(exName, { gruppo: "", tecnica: [], cadenza: "", recupero: null, info: "" });
     }
     this.saveTech(exName);
     this.renderTechPanel();
-    this.updateCardsTech();
   },
 
   tgRemove(g) {
     const a = this.tgCurrent(g);
     a.exercises.forEach(ex => {
-      this.applyTechToSets(ex, { gruppo: "", tecnica: [], cadenza: "", recupero: null });
+      this.applyTechToSets(ex, { gruppo: "", tecnica: [], cadenza: "", recupero: null, info: "" });
       this.saveTech(ex);
     });
     delete this.techDrafts[g];
     this.renderTechPanel();
-    this.updateCardsTech();
-  },
-
-  // Aggiorna badge + banda superset sulle card senza ricostruirle
-  updateCardsTech() {
-    const grouped = this.groupByExercise(this.exercises);
-    const counts = this.groupCounts();
-    document.querySelectorAll(".ex-block").forEach(block => {
-      const name = block.dataset.ex;
-      const ex = (grouped[name] || [])[0] || {};
-      if (ex.gruppo && counts[ex.gruppo] > 1) block.dataset.group = ex.gruppo;
-      else delete block.dataset.group;
-    });
-    Object.keys(grouped).forEach(n => this.refreshBadges(n));
-  },
-
-  refreshBadges(exName) {
-    const ex = (this.groupByExercise(this.exercises)[exName] || [])[0] || {};
-    const el = document.getElementById(`badges-${this.sanitize(exName)}`);
-    if (el) el.innerHTML = this.techBadgesHTML(ex);
   },
 
   saveTech(exName) {
@@ -354,6 +308,7 @@ const Session = {
       cadenza:  ex.cadenza || "",
       gruppo:   ex.gruppo || "",
       recupero: ex.recupero ?? null,
+      info:     ex.info || "",
     };
     this.setSyncState("saving");
     clearTimeout(this._saveTimers["tech_" + exName]);
@@ -670,6 +625,7 @@ const Session = {
     props[CONFIG.PROPS.EL_CADENZA]  = API.prop.rich_text(last?.cadenza || "");
     props[CONFIG.PROPS.EL_GRUPPO]   = API.prop.select(last?.gruppo || "");
     props[CONFIG.PROPS.EL_RECUPERO] = API.prop.number(last?.recupero ?? null);
+    props[CONFIG.PROPS.EL_INFO]     = API.prop.rich_text(last?.info || "");
 
     // Aggiungi relazione esercizio se disponibile
     if (masterEntry) {
@@ -695,6 +651,7 @@ const Session = {
         cadenza:  last?.cadenza || "",
         gruppo:   last?.gruppo || "",
         recupero: last?.recupero ?? null,
+        info:     last?.info || "",
       };
       this.exercises.push(newSet);
 
