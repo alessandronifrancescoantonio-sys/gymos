@@ -424,7 +424,7 @@ input { font-family:inherit; }
 .quick-link { flex:1; display:flex; align-items:center; justify-content:center; gap:8px; padding:14px; border-radius:var(--radius-lg); background:var(--ink2); border:1px solid var(--ink3); color:var(--text); font-size:13px; font-weight:600; transition:all .15s; }
 .quick-link:active { border-color:var(--accent); background:var(--ink3); transform:scale(.98); }
 .quick-link i { font-size:18px; color:var(--accent); }
-@media (max-width:760px) { .quick-links { margin:12px 16px 0; } }
+@media (max-width:760px) { .quick-links { margin:12px 16px 14px; } }
 
 /* ═══════════ TECNICHE DI INTENSITÀ (tendina dentro l'esercizio) ═══════════ */
 .ex-tech { margin-top:10px; border-top:1px solid var(--ink3); padding-top:10px; }
