@@ -161,9 +161,20 @@ const Session = {
   // I campi (tecnica/cadenza/recupero/info) vivono sulle serie dell'esercizio.
   // "Gruppo" lega 2+ esercizi in un superset.
 
+  // Altri esercizi nello stesso superset (per indicare "in superset con …")
+  supersetPartners(exName) {
+    const grouped = this.groupByExercise(this.exercises);
+    const g = (grouped[exName]?.[0] || {}).gruppo;
+    if (!g) return [];
+    return Object.keys(grouped).filter(n => n !== exName && (grouped[n][0] || {}).gruppo === g);
+  },
+
   // Contenuto della tendina (bottone + box) per un esercizio
   exTechInnerHTML(exName, ex) {
-    const sup = ex.gruppo ? `<span class="ex-tech-sup">Superset ${ex.gruppo}</span>` : "";
+    const partners = this.supersetPartners(exName);
+    const sup = ex.gruppo
+      ? `<span class="ex-tech-sup"><i class="ti ti-link"></i>Superset${partners.length ? " con " + partners.join(", ") : ""}</span>`
+      : "";
     const tecLbl = (ex.tecnica && ex.tecnica.length) ? `<span>${ex.tecnica.join(", ")}</span>` : "";
     const summary = (sup || tecLbl)
       ? `<span class="ex-tech-summary">${sup}${tecLbl}</span>`
@@ -242,12 +253,30 @@ const Session = {
       const g = ex.gruppo || (grouped[other][0] || {}).gruppo || this.nextFreeGroup();
       this.applyTechToSets(exName, { gruppo: g }); this.saveTech(exName);
       this.applyTechToSets(other,  { gruppo: g }); this.saveTech(other);
+      // sposta l'esercizio correlato SUBITO DOPO quello di partenza
+      this.reorderAfter(other, exName);
     } else {
       this.applyTechToSets(other, { gruppo: "" }); this.saveTech(other);
       // se l'esercizio resta solo nel gruppo, sciogli anche lui
       if (this.countInGroup(ex.gruppo) < 2) { this.applyTechToSets(exName, { gruppo: "" }); this.saveTech(exName); }
     }
     this.refreshAllTech();
+  },
+
+  // Sposta moveName subito dopo afterName, nell'ordine logico e nel DOM
+  reorderAfter(moveName, afterName) {
+    const order = this.exOrder.filter(n => n !== moveName);
+    const idx = order.indexOf(afterName);
+    if (idx === -1) { this.exOrder = order.concat(moveName); }
+    else { order.splice(idx + 1, 0, moveName); this.exOrder = order; }
+    const container = document.getElementById("exercises-container");
+    if (container) {
+      const moveBlock  = container.querySelector(`.ex-block[data-ex="${moveName}"]`);
+      const afterBlock = container.querySelector(`.ex-block[data-ex="${afterName}"]`);
+      if (moveBlock && afterBlock) container.insertBefore(moveBlock, afterBlock.nextSibling);
+    }
+    this.saveOrder();
+    this.renumberBlocks();
   },
 
   nextFreeGroup() {

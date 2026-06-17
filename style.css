@@ -437,8 +437,9 @@ input { font-family:inherit; }
 .ex-tech-summary { margin-left:auto; display:inline-flex; align-items:center; gap:6px; flex-wrap:wrap;
   justify-content:flex-end; font-size:11px; font-weight:500; color:var(--ghost); }
 .ex-tech-summary.muted { color:var(--muted); font-style:italic; }
-.ex-tech-sup { font-size:9px; font-weight:700; letter-spacing:.4px; color:var(--accent);
+.ex-tech-sup { display:inline-flex; align-items:center; gap:3px; font-size:9px; font-weight:700; letter-spacing:.4px; color:var(--accent);
   background:rgba(255,59,47,.12); border:1px solid rgba(255,59,47,.35); padding:1px 6px; border-radius:4px; }
+.ex-tech-sup i { font-size:10px; }
 .ex-tech-chev { flex-shrink:0; transition:transform .2s; color:var(--dim); }
 .ex-tech.open .ex-tech-chev { transform:rotate(180deg); }
 .ex-tech-box { display:none; margin-top:10px; padding:12px; background:var(--ink3);
