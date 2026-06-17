@@ -425,3 +425,36 @@ input { font-family:inherit; }
 .quick-link:active { border-color:var(--accent); background:var(--ink3); transform:scale(.98); }
 .quick-link i { font-size:18px; color:var(--accent); }
 @media (max-width:760px) { .quick-links { margin:12px 16px 0; } }
+
+/* ═══════════ TECNICHE DI INTENSITÀ (sessione) ═══════════ */
+/* Badge nell'header esercizio (visibili anche a card chiusa) */
+.ex-tech-badges { display:inline-flex; flex-wrap:wrap; gap:5px; margin-left:2px; }
+.tech-badge { display:inline-flex; align-items:center; gap:3px; font-size:10px; font-weight:600;
+  padding:2px 7px; border-radius:999px; border:1px solid var(--ink4); color:var(--dim); line-height:1.4; white-space:nowrap; }
+.tech-badge.cad { color:var(--ghost); background:var(--ink3); border-color:var(--ink4); }
+.tech-badge.cad i { font-size:11px; }
+.grp-badge { display:inline-flex; align-items:center; font-size:10px; font-weight:700; letter-spacing:.3px;
+  padding:2px 8px; border-radius:999px; color:var(--accent); background:rgba(255,59,47,.12); border:1px solid rgba(255,59,47,.35); white-space:nowrap; }
+
+/* Barra di controllo dentro la card aperta */
+.tech-bar { display:flex; flex-direction:column; gap:10px; padding:12px; margin-bottom:10px;
+  background:var(--ink3); border:1px solid var(--ink4); border-radius:var(--radius-sm); }
+.tech-chips { display:flex; flex-wrap:wrap; gap:7px; }
+.tech-chip { font-size:11px; font-weight:600; padding:6px 11px; border-radius:999px; min-height:32px;
+  background:var(--ink2); border:1px solid var(--ink4); color:var(--dim); transition:all .15s; cursor:pointer; }
+.tech-chip:active { transform:scale(.95); }
+.tech-chip.on { color:var(--tc,#FF3B2F); border-color:var(--tc,#FF3B2F); background:color-mix(in srgb, var(--tc,#FF3B2F) 16%, transparent); }
+.tech-fields { display:flex; flex-wrap:wrap; gap:10px; }
+.tech-field { display:flex; flex-direction:column; gap:4px; flex:1; min-width:90px; }
+.tech-field > span { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); }
+.tech-in { width:100%; min-height:38px; padding:7px 10px; border-radius:var(--radius-sm);
+  background:var(--ink2); border:1px solid var(--ink4); color:var(--text); font-family:"DM Mono",monospace; font-size:13px; }
+.tech-in:focus { outline:none; border-color:var(--accent); }
+.tech-sel { cursor:pointer; appearance:none; }
+
+/* Evidenzia gli esercizi raggruppati (superset) con una banda a sinistra */
+.ex-block[data-group] { border-left:3px solid var(--accent); }
+.ex-block[data-group]::before { content:"SUPERSET " attr(data-group); position:absolute; top:-7px; left:10px;
+  font-size:9px; font-weight:700; letter-spacing:.5px; color:var(--accent);
+  background:var(--ink); padding:0 6px; border-radius:4px; }
+.ex-block { position:relative; }

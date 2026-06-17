@@ -98,10 +98,12 @@ const Session = {
       const rrMax   = sets[0]?.rrMax || 12;
       const prevMax = prevSets.length > 0 ? Math.max(...prevSets.map(s => s.kg || 0)) : 0;
       const sid     = this.sanitize(exName);
+      const ex      = sets[0] || {};   // i campi tecnica vivono a livello esercizio (su tutte le serie)
 
       const block = document.createElement("div");
       block.className  = "ex-block collapsed";
       block.dataset.ex = exName;
+      if (ex.gruppo) block.dataset.group = ex.gruppo;
 
       block.innerHTML = `
         <div class="ex-hd" onclick="Session.toggleEx(this, event)">
@@ -118,11 +120,13 @@ const Session = {
                   oninput="Session.updateRR('${exName}','max',this.value)"> rep
               </span>
               ${prevMax > 0 ? `<span>· max ${U.fmt(prevMax)} kg</span>` : ""}
+              <span class="ex-tech-badges" id="badges-${sid}">${this.techBadgesHTML(ex)}</span>
             </div>
           </div>
           <i class="ti ti-chevron-down ex-chevron"></i>
         </div>
         <div class="ex-body">
+          ${this.techBarHTML(exName, ex)}
           <div id="sets-${sid}"></div>
           <div class="add-set-row">
             <button class="add-set-btn" onclick="Session.addSet('${exName}')">
@@ -144,6 +148,106 @@ const Session = {
         setsContainer.appendChild(this.buildSetRow(set, si, prevSet, exName, rrMin, rrMax, prevMax));
       });
     });
+  },
+
+  // ─── TECNICHE DI INTENSITÀ (a livello esercizio) ───
+
+  // Badge mostrati nell'header (visibili anche a card chiusa)
+  techBadgesHTML(ex) {
+    const tags = (ex.tecnica || []).map(t => {
+      const c = (CONFIG.TECNICHE.find(x => x.name === t) || {}).color || "#7A7A8A";
+      return `<span class="tech-badge" style="color:${c};border-color:${c}55;background:${c}1a">${t}</span>`;
+    }).join("");
+    const cad = ex.cadenza ? `<span class="tech-badge cad"><i class="ti ti-clock-bolt"></i>${ex.cadenza}</span>` : "";
+    const grp = ex.gruppo ? `<span class="grp-badge">Gruppo ${ex.gruppo}${ex.recupero ? ` · ${ex.recupero}s` : ""}</span>` : "";
+    return tags + cad + grp;
+  },
+
+  // Barra di controllo dentro la card (visibile a card aperta)
+  techBarHTML(exName, ex) {
+    const active = ex.tecnica || [];
+    const chips = CONFIG.TECNICHE.map(t => {
+      const on = active.includes(t.name);
+      return `<button type="button" class="tech-chip${on ? " on" : ""}" style="${on ? `--tc:${t.color}` : ""}"
+        onclick="event.stopPropagation();Session.toggleTecnica('${exName}','${t.name}',this)">${t.name}</button>`;
+    }).join("");
+    const grpOpts = `<option value="">—</option>` +
+      CONFIG.GRUPPI.map(g => `<option value="${g}"${ex.gruppo === g ? " selected" : ""}>${g}</option>`).join("");
+    return `
+      <div class="tech-bar" onclick="event.stopPropagation()">
+        <div class="tech-chips">${chips}</div>
+        <div class="tech-fields">
+          <label class="tech-field"><span>Cadenza</span>
+            <input class="tech-in" type="text" placeholder="3-1-1" value="${ex.cadenza || ""}"
+              onchange="Session.setTech('${exName}','cadenza',this.value)"></label>
+          <label class="tech-field"><span>Gruppo</span>
+            <select class="tech-in tech-sel" onchange="Session.setTech('${exName}','gruppo',this.value)">${grpOpts}</select></label>
+          <label class="tech-field"><span>Rec. (s)</span>
+            <input class="tech-in" type="number" min="0" step="5" placeholder="120" value="${ex.recupero ?? ""}"
+              onchange="Session.setTech('${exName}','recupero',this.value)"></label>
+        </div>
+      </div>`;
+  },
+
+  // Applica un patch a TUTTE le serie dell'esercizio (la tecnica è per-esercizio)
+  applyTechToSets(exName, patch) {
+    const sets = this.groupByExercise(this.exercises)[exName] || [];
+    sets.forEach(s => Object.assign(s, patch));
+    return sets;
+  },
+
+  toggleTecnica(exName, name, btn) {
+    const sets = this.groupByExercise(this.exercises)[exName] || [];
+    const cur = new Set(sets[0]?.tecnica || []);
+    if (cur.has(name)) cur.delete(name); else cur.add(name);
+    this.applyTechToSets(exName, { tecnica: [...cur] });
+    if (btn) {
+      const on = cur.has(name);
+      btn.classList.toggle("on", on);
+      const c = (CONFIG.TECNICHE.find(x => x.name === name) || {}).color;
+      btn.style.setProperty("--tc", (on && c) ? c : "");
+    }
+    this.refreshBadges(exName);
+    this.saveTech(exName);
+  },
+
+  setTech(exName, field, val) {
+    const patch = {};
+    if (field === "recupero") patch.recupero = (val === "" ? null : Number(val));
+    else patch[field] = val;
+    this.applyTechToSets(exName, patch);
+    if (field === "gruppo") {
+      const block = document.querySelector(`.ex-block[data-ex="${exName}"]`);
+      if (block) { if (val) block.dataset.group = val; else delete block.dataset.group; }
+    }
+    this.refreshBadges(exName);
+    this.saveTech(exName);
+  },
+
+  refreshBadges(exName) {
+    const ex = (this.groupByExercise(this.exercises)[exName] || [])[0] || {};
+    const el = document.getElementById(`badges-${this.sanitize(exName)}`);
+    if (el) el.innerHTML = this.techBadgesHTML(ex);
+  },
+
+  saveTech(exName) {
+    const sets = this.groupByExercise(this.exercises)[exName] || [];
+    if (!sets.length) return;
+    const ex = sets[0];
+    const tech = {
+      tecnica:  ex.tecnica || [],
+      cadenza:  ex.cadenza || "",
+      gruppo:   ex.gruppo || "",
+      recupero: ex.recupero ?? null,
+    };
+    this.setSyncState("saving");
+    clearTimeout(this._saveTimers["tech_" + exName]);
+    this._saveTimers["tech_" + exName] = setTimeout(async () => {
+      try {
+        await Promise.all(sets.map(s => API.updateExerciseTech(s.id, tech)));
+        this.setSyncState("saved");
+      } catch(e) { console.error("saveTech:", e); this.setSyncState("error"); }
+    }, 800);
   },
 
   toggleEx(hd, event) {
@@ -446,6 +550,11 @@ const Session = {
     props[CONFIG.PROPS.EL_RR_MIN]  = API.prop.number(last?.rrMin || 8);
     props[CONFIG.PROPS.EL_RR_MAX]  = API.prop.number(last?.rrMax || 12);
     props[CONFIG.PROPS.EL_DATE]    = API.prop.date(date);
+    // Eredita le tecniche di intensità dall'esercizio (vivono su ogni serie)
+    props[CONFIG.PROPS.EL_TECNICA]  = API.prop.multi_select(last?.tecnica || []);
+    props[CONFIG.PROPS.EL_CADENZA]  = API.prop.rich_text(last?.cadenza || "");
+    props[CONFIG.PROPS.EL_GRUPPO]   = API.prop.select(last?.gruppo || "");
+    props[CONFIG.PROPS.EL_RECUPERO] = API.prop.number(last?.recupero ?? null);
 
     // Aggiungi relazione esercizio se disponibile
     if (masterEntry) {
@@ -467,6 +576,10 @@ const Session = {
         rrMax:  last?.rrMax || 12,
         note:   "",
         date,
+        tecnica:  last?.tecnica ? [...last.tecnica] : [],
+        cadenza:  last?.cadenza || "",
+        gruppo:   last?.gruppo || "",
+        recupero: last?.recupero ?? null,
       };
       this.exercises.push(newSet);
 

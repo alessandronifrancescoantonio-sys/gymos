@@ -84,6 +84,20 @@ const CONFIG = {
     { key: "bf",      label: "% Grasso", unit: "%",  color: "#F472B6", downGood: true  },
   ],
 
+  // Tecniche di intensità selezionabili nella sessione (devono esistere come
+  // opzioni nel multi-select "Tecnica" del DB Esercizi Log su Notion).
+  TECNICHE: [
+    { name: "Drop set",     color: "#FF3B2F" },
+    { name: "Stripping",    color: "#FF6B6B" },
+    { name: "Rest-pause",   color: "#F5A623" },
+    { name: "Myo-reps",     color: "#EAB308" },
+    { name: "Superset",     color: "#3B82F6" },
+    { name: "Giant set",    color: "#A78BFA" },
+    { name: "Eccentriche",  color: "#27D17F" },
+    { name: "Tempo lento",  color: "#34D399" },
+  ],
+  GRUPPI: ["A", "B", "C", "D", "E", "F"],
+
   PROPS: {
     WL_NAME:   "Nome sessione",
     WL_DATE:   "Data",
@@ -100,6 +114,10 @@ const CONFIG = {
     EL_RR_MAX:   "Rep range max",
     EL_NOTE:     "Note tecnica",
     EL_DATE:     "Data",
+    EL_TECNICA:  "Tecnica",
+    EL_CADENZA:  "Cadenza",
+    EL_GRUPPO:   "Gruppo",
+    EL_RECUPERO: "Recupero (s)",
     BM_NAME:    "Check-in",
     BM_DATE:    "Data",
     BM_PESO:    "Peso (kg)",

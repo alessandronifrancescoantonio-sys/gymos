@@ -46,7 +46,8 @@ const API = {
     rich_text: (val) => ({ rich_text: [{ text: { content: String(val) } }] }),
     number: (val) => ({ number: val === null ? null : Number(val) }),
     checkbox: (val) => ({ checkbox: Boolean(val) }),
-    select: (val) => ({ select: { name: String(val) } }),
+    select: (val) => ({ select: val ? { name: String(val) } : null }),
+    multi_select: (vals) => ({ multi_select: (vals || []).map(name => ({ name: String(name) })) }),
     date: (val) => ({ date: { start: val } }),  // val = "YYYY-MM-DD"
     relation: (ids) => ({ relation: ids.map(id => ({ id })) }),
   },
@@ -73,6 +74,10 @@ const API = {
     select: (page, prop) => {
       const p = page.properties[prop];
       return p?.select?.name || "";
+    },
+    multi_select: (page, prop) => {
+      const p = page.properties[prop];
+      return (p?.multi_select || []).map(o => o.name);
     },
     date: (page, prop) => {
       const p = page.properties[prop];
@@ -135,7 +140,21 @@ const API = {
       rrMax:this.read.number(p, CONFIG.PROPS.EL_RR_MAX),
       note: this.read.rich_text(p, CONFIG.PROPS.EL_NOTE),
       date: this.read.date(p, CONFIG.PROPS.EL_DATE),
+      tecnica:  this.read.multi_select(p, CONFIG.PROPS.EL_TECNICA),
+      cadenza:  this.read.rich_text(p, CONFIG.PROPS.EL_CADENZA),
+      gruppo:   this.read.select(p, CONFIG.PROPS.EL_GRUPPO),
+      recupero: this.read.number(p, CONFIG.PROPS.EL_RECUPERO),
     }));
+  },
+
+  // Aggiorna i campi "tecnica di intensità" di una entry esercizio
+  async updateExerciseTech(pageId, tech) {
+    const props = {};
+    if (tech.tecnica  !== undefined) props[CONFIG.PROPS.EL_TECNICA]  = API.prop.multi_select(tech.tecnica);
+    if (tech.cadenza  !== undefined) props[CONFIG.PROPS.EL_CADENZA]  = API.prop.rich_text(tech.cadenza);
+    if (tech.gruppo   !== undefined) props[CONFIG.PROPS.EL_GRUPPO]   = API.prop.select(tech.gruppo);
+    if (tech.recupero !== undefined) props[CONFIG.PROPS.EL_RECUPERO] = API.prop.number(tech.recupero);
+    return this.update(pageId, props);
   },
 
   // Storico di un esercizio specifico (per progression tracker)
