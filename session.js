@@ -65,7 +65,9 @@ const Session = {
       ? await API.getSessionExercises(sameType[0].id)
       : [];
 
+    this.techDrafts = {};
     this.renderExercises();
+    this.renderTechPanel();
     this.updateStats();
   },
 
@@ -90,6 +92,7 @@ const Session = {
     container.innerHTML = "";
     const grouped     = this.groupByExercise(this.exercises);
     const prevGrouped = this.groupByExercise(this.prevExercises);
+    const groupCounts = this.groupCounts();
 
     this.exOrder.forEach((exName, exIdx) => {
       const sets    = grouped[exName] || [];
@@ -103,7 +106,8 @@ const Session = {
       const block = document.createElement("div");
       block.className  = "ex-block collapsed";
       block.dataset.ex = exName;
-      if (ex.gruppo) block.dataset.group = ex.gruppo;
+      // La banda "SUPERSET" appare solo se il gruppo ha 2+ esercizi
+      if (ex.gruppo && groupCounts[ex.gruppo] > 1) block.dataset.group = ex.gruppo;
 
       block.innerHTML = `
         <div class="ex-hd" onclick="Session.toggleEx(this, event)">
@@ -126,7 +130,6 @@ const Session = {
           <i class="ti ti-chevron-down ex-chevron"></i>
         </div>
         <div class="ex-body">
-          ${this.techBarHTML(exName, ex)}
           <div id="sets-${sid}"></div>
           <div class="add-set-row">
             <button class="add-set-btn" onclick="Session.addSet('${exName}')">
@@ -163,65 +166,177 @@ const Session = {
     return tags + cad + grp;
   },
 
-  // Barra di controllo dentro la card (visibile a card aperta)
-  techBarHTML(exName, ex) {
-    const active = ex.tecnica || [];
-    const chips = CONFIG.TECNICHE.map(t => {
-      const on = active.includes(t.name);
-      return `<button type="button" class="tech-chip${on ? " on" : ""}" style="${on ? `--tc:${t.color}` : ""}"
-        onclick="event.stopPropagation();Session.toggleTecnica('${exName}','${t.name}',this)">${t.name}</button>`;
-    }).join("");
-    const grpOpts = `<option value="">—</option>` +
-      CONFIG.GRUPPI.map(g => `<option value="${g}"${ex.gruppo === g ? " selected" : ""}>${g}</option>`).join("");
-    return `
-      <div class="tech-bar" onclick="event.stopPropagation()">
-        <div class="tech-chips">${chips}</div>
-        <div class="tech-fields">
-          <label class="tech-field"><span>Cadenza</span>
-            <input class="tech-in" type="text" placeholder="3-1-1" value="${ex.cadenza || ""}"
-              onchange="Session.setTech('${exName}','cadenza',this.value)"></label>
-          <label class="tech-field"><span>Gruppo</span>
-            <select class="tech-in tech-sel" onchange="Session.setTech('${exName}','gruppo',this.value)">${grpOpts}</select></label>
-          <label class="tech-field"><span>Rec. (s)</span>
-            <input class="tech-in" type="number" min="0" step="5" placeholder="120" value="${ex.recupero ?? ""}"
-              onchange="Session.setTech('${exName}','recupero',this.value)"></label>
-        </div>
-      </div>`;
-  },
-
-  // Applica un patch a TUTTE le serie dell'esercizio (la tecnica è per-esercizio)
+  // Applica un patch a TUTTE le serie dell'esercizio (la tecnica vive su ogni serie)
   applyTechToSets(exName, patch) {
     const sets = this.groupByExercise(this.exercises)[exName] || [];
     sets.forEach(s => Object.assign(s, patch));
     return sets;
   },
 
-  toggleTecnica(exName, name, btn) {
-    const sets = this.groupByExercise(this.exercises)[exName] || [];
-    const cur = new Set(sets[0]?.tecnica || []);
-    if (cur.has(name)) cur.delete(name); else cur.add(name);
-    this.applyTechToSets(exName, { tecnica: [...cur] });
-    if (btn) {
-      const on = cur.has(name);
-      btn.classList.toggle("on", on);
-      const c = (CONFIG.TECNICHE.find(x => x.name === name) || {}).color;
-      btn.style.setProperty("--tc", (on && c) ? c : "");
-    }
-    this.refreshBadges(exName);
-    this.saveTech(exName);
+  // Quanti esercizi ci sono in ciascun gruppo (per banda superset)
+  groupCounts() {
+    const grouped = this.groupByExercise(this.exercises);
+    const counts = {};
+    Object.keys(grouped).forEach(n => {
+      const g = (grouped[n][0] || {}).gruppo;
+      if (g) counts[g] = (counts[g] || 0) + 1;
+    });
+    return counts;
   },
 
-  setTech(exName, field, val) {
-    const patch = {};
-    if (field === "recupero") patch.recupero = (val === "" ? null : Number(val));
-    else patch[field] = val;
-    this.applyTechToSets(exName, patch);
-    if (field === "gruppo") {
-      const block = document.querySelector(`.ex-block[data-ex="${exName}"]`);
-      if (block) { if (val) block.dataset.group = val; else delete block.dataset.group; }
+  // ═══ PANNELLO TECNICHE (in alto, fuori dagli esercizi) ═══
+  // Modello: ogni "blocco tecnica" = una lettera Gruppo (A-F) con i suoi esercizi
+  // correlati + le tecniche scelte + cadenza/recupero. I blocchi appena creati e
+  // ancora senza esercizi vivono in techDrafts finché non gli correli un esercizio.
+  techDrafts: {},
+
+  // Ricostruisce i blocchi dai dati reali (esercizi con un Gruppo) + le bozze
+  techAssignments() {
+    const grouped = this.groupByExercise(this.exercises);
+    const byGroup = {};
+    Object.keys(grouped).forEach(name => {
+      const ex = grouped[name][0] || {};
+      if (!ex.gruppo) return;
+      if (!byGroup[ex.gruppo]) byGroup[ex.gruppo] = { gruppo: ex.gruppo, exercises: [], tecnica: new Set(), cadenza: "", recupero: null };
+      byGroup[ex.gruppo].exercises.push(name);
+      (ex.tecnica || []).forEach(t => byGroup[ex.gruppo].tecnica.add(t));
+      if (ex.cadenza) byGroup[ex.gruppo].cadenza = ex.cadenza;
+      if (ex.recupero != null) byGroup[ex.gruppo].recupero = ex.recupero;
+    });
+    const out = Object.values(byGroup).map(a => ({ ...a, tecnica: [...a.tecnica], draft: false }));
+    // aggiungi le bozze (gruppi creati ma senza esercizi) non già presenti
+    Object.keys(this.techDrafts).forEach(g => {
+      if (!byGroup[g]) out.push({ gruppo: g, exercises: [], tecnica: this.techDrafts[g].tecnica || [], cadenza: this.techDrafts[g].cadenza || "", recupero: this.techDrafts[g].recupero ?? null, draft: true });
+    });
+    return out.sort((a, b) => a.gruppo.localeCompare(b.gruppo));
+  },
+
+  renderTechPanel() {
+    const wrap = document.getElementById("tech-groups");
+    if (!wrap) return;
+    const assigns = this.techAssignments();
+    if (!assigns.length) {
+      wrap.innerHTML = `<div class="tech-empty">Nessuna tecnica impostata. Tocca <b>Aggiungi</b> per scegliere una tecnica e correlarci uno o più esercizi.</div>`;
+      return;
     }
-    this.refreshBadges(exName);
+    wrap.innerHTML = assigns.map(a => this.techGroupHTML(a)).join("");
+  },
+
+  techGroupHTML(a) {
+    const exNames = Object.keys(this.groupByExercise(this.exercises));
+    const grouped = this.groupByExercise(this.exercises);
+    const chips = CONFIG.TECNICHE.map(t => {
+      const on = a.tecnica.includes(t.name);
+      return `<button type="button" class="tech-chip${on ? " on" : ""}" style="${on ? `--tc:${t.color}` : ""}"
+        onclick="Session.tgToggleTec('${a.gruppo}','${t.name}')">${t.name}</button>`;
+    }).join("");
+    const exItems = exNames.map(n => {
+      const g = (grouped[n][0] || {}).gruppo || "";
+      const checked  = g === a.gruppo;
+      const disabled = g && g !== a.gruppo;   // già correlato a un altro blocco
+      return `<label class="tg-ex${disabled ? " off" : ""}${checked ? " on" : ""}">
+        <input type="checkbox" ${checked ? "checked" : ""} ${disabled ? "disabled" : ""}
+          onchange="Session.tgToggleEx('${a.gruppo}','${n}',this.checked)"><span>${n}</span></label>`;
+    }).join("");
+    const supLabel = a.exercises.length > 1 ? `<span class="tg-sup">SUPERSET</span>` : "";
+    return `
+      <div class="tech-group" data-g="${a.gruppo}">
+        <div class="tg-head">
+          <span class="tg-letter">${a.gruppo}</span>${supLabel}
+          <span class="tg-count">${a.exercises.length || "0"} eserc.</span>
+          <button class="tg-del" onclick="Session.tgRemove('${a.gruppo}')" aria-label="Rimuovi"><i class="ti ti-trash"></i></button>
+        </div>
+        <div class="tg-lbl">Tecnica</div>
+        <div class="tech-chips">${chips}</div>
+        <div class="tg-lbl">Esercizi correlati</div>
+        <div class="tg-exs">${exItems}</div>
+        <div class="tech-fields">
+          <label class="tech-field"><span>Cadenza</span>
+            <input class="tech-in" type="text" placeholder="3-1-1" value="${a.cadenza || ""}"
+              onchange="Session.tgSet('${a.gruppo}','cadenza',this.value)"></label>
+          <label class="tech-field"><span>Recupero (s)</span>
+            <input class="tech-in" type="number" min="0" step="5" placeholder="120" value="${a.recupero ?? ""}"
+              onchange="Session.tgSet('${a.gruppo}','recupero',this.value)"></label>
+        </div>
+      </div>`;
+  },
+
+  addTechGroup() {
+    const used = new Set(this.techAssignments().map(a => a.gruppo));
+    const free = CONFIG.GRUPPI.find(g => !used.has(g));
+    if (!free) { alert("Hai raggiunto il numero massimo di blocchi tecnica."); return; }
+    this.techDrafts[free] = { tecnica: [], cadenza: "", recupero: null };
+    this.renderTechPanel();
+  },
+
+  // Valori correnti di un blocco (da dati reali o da bozza)
+  tgCurrent(g) {
+    return this.techAssignments().find(a => a.gruppo === g) || { gruppo: g, exercises: [], tecnica: [], cadenza: "", recupero: null, draft: true };
+  },
+
+  tgToggleTec(g, name) {
+    const a = this.tgCurrent(g);
+    const cur = new Set(a.tecnica);
+    if (cur.has(name)) cur.delete(name); else cur.add(name);
+    const arr = [...cur];
+    if (a.exercises.length) {
+      a.exercises.forEach(ex => { this.applyTechToSets(ex, { tecnica: arr }); this.saveTech(ex); });
+    } else if (this.techDrafts[g]) {
+      this.techDrafts[g].tecnica = arr;
+    }
+    this.renderTechPanel();
+    this.updateCardsTech();
+  },
+
+  tgSet(g, field, val) {
+    const a = this.tgCurrent(g);
+    const value = (field === "recupero") ? (val === "" ? null : Number(val)) : val;
+    if (a.exercises.length) {
+      a.exercises.forEach(ex => { this.applyTechToSets(ex, { [field]: value }); this.saveTech(ex); });
+    } else if (this.techDrafts[g]) {
+      this.techDrafts[g][field] = value;
+    }
+    this.renderTechPanel();
+    this.updateCardsTech();
+  },
+
+  tgToggleEx(g, exName, checked) {
+    if (checked) {
+      const a = this.tgCurrent(g);
+      // l'esercizio entra nel blocco ed eredita tecnica/cadenza/recupero del blocco
+      this.applyTechToSets(exName, { gruppo: g, tecnica: [...a.tecnica], cadenza: a.cadenza || "", recupero: a.recupero ?? null });
+      delete this.techDrafts[g];   // non è più una bozza
+    } else {
+      // esce dal blocco: azzera i suoi campi tecnica
+      this.applyTechToSets(exName, { gruppo: "", tecnica: [], cadenza: "", recupero: null });
+    }
     this.saveTech(exName);
+    this.renderTechPanel();
+    this.updateCardsTech();
+  },
+
+  tgRemove(g) {
+    const a = this.tgCurrent(g);
+    a.exercises.forEach(ex => {
+      this.applyTechToSets(ex, { gruppo: "", tecnica: [], cadenza: "", recupero: null });
+      this.saveTech(ex);
+    });
+    delete this.techDrafts[g];
+    this.renderTechPanel();
+    this.updateCardsTech();
+  },
+
+  // Aggiorna badge + banda superset sulle card senza ricostruirle
+  updateCardsTech() {
+    const grouped = this.groupByExercise(this.exercises);
+    const counts = this.groupCounts();
+    document.querySelectorAll(".ex-block").forEach(block => {
+      const name = block.dataset.ex;
+      const ex = (grouped[name] || [])[0] || {};
+      if (ex.gruppo && counts[ex.gruppo] > 1) block.dataset.group = ex.gruppo;
+      else delete block.dataset.group;
+    });
+    Object.keys(grouped).forEach(n => this.refreshBadges(n));
   },
 
   refreshBadges(exName) {
