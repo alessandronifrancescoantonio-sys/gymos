@@ -265,14 +265,19 @@ const Session = {
 
   // Sposta moveName subito dopo afterName, nell'ordine logico e nel DOM
   reorderAfter(moveName, afterName) {
+    if (moveName === afterName) return;
     const order = this.exOrder.filter(n => n !== moveName);
     const idx = order.indexOf(afterName);
-    if (idx === -1) { this.exOrder = order.concat(moveName); }
-    else { order.splice(idx + 1, 0, moveName); this.exOrder = order; }
+    if (idx === -1) order.push(moveName);
+    else order.splice(idx + 1, 0, moveName);
+    this.exOrder = order;
+    // Spostamento nel DOM: confronto dataset.ex (niente selettori, robusto con
+    // nomi che contengono spazi o caratteri speciali)
     const container = document.getElementById("exercises-container");
     if (container) {
-      const moveBlock  = container.querySelector(`.ex-block[data-ex="${moveName}"]`);
-      const afterBlock = container.querySelector(`.ex-block[data-ex="${afterName}"]`);
+      const blocks = [...container.querySelectorAll(".ex-block")];
+      const moveBlock  = blocks.find(b => b.dataset.ex === moveName);
+      const afterBlock = blocks.find(b => b.dataset.ex === afterName);
       if (moveBlock && afterBlock) container.insertBefore(moveBlock, afterBlock.nextSibling);
     }
     this.saveOrder();
