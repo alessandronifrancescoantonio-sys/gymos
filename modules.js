@@ -13,7 +13,7 @@ const Progression = {
     const keys = Object.keys(CONFIG.SCHEDE);
     if (!keys.length) return;
     if (!CONFIG.SCHEDE[this.activeScheda]) this.activeScheda = keys[0];
-    this.activeEx = CONFIG.SCHEDE[this.activeScheda].exercises[0];
+    this.activeEx = U.exName(CONFIG.SCHEDE[this.activeScheda].exercises[0]);
     this.buildSchedaBtns();
     this.buildExTabs();
     await this.loadHistory();
@@ -28,7 +28,7 @@ const Progression = {
       b.textContent = name;
       b.onclick = () => {
         this.activeScheda = name;
-        this.activeEx = CONFIG.SCHEDE[name].exercises[0];
+        this.activeEx = U.exName(CONFIG.SCHEDE[name].exercises[0]);
         this.buildSchedaBtns();
         this.buildExTabs();
         this.loadHistory();
@@ -41,7 +41,8 @@ const Progression = {
     const wrap = document.getElementById("prog-ex-tabs");
     wrap.innerHTML = "";
     const scheda = CONFIG.SCHEDE[this.activeScheda];
-    scheda.exercises.forEach(exName => {
+    scheda.exercises.forEach(item => {
+      const exName = U.exName(item);
       const b = document.createElement("button");
       b.className = "pill-btn" + (exName === this.activeEx ? " on" : "");
       b.textContent = exName;
@@ -423,7 +424,7 @@ const Dashboard = {
     if (prog) prog.style.display = "none";
     done.forEach(s => {
       const item = document.createElement("div");
-      item.className = "recent-sess-item";
+      item.className = "recent-sess-item clickable";
       item.innerHTML = `
         <div class="rs-icon"><i class="ti ti-barbell"></i></div>
         <div class="rs-main">
@@ -431,7 +432,9 @@ const Dashboard = {
           <div class="rs-date">${U.fmtDate(s.date)}</div>
         </div>
         <i class="ti ti-circle-check rs-check"></i>
+        <i class="ti ti-chevron-right rs-go"></i>
       `;
+      item.onclick = () => Session.openById(s.id);
       list.appendChild(item);
     });
   },
@@ -812,7 +815,7 @@ const Schede = {
           <button class="scheda-edit-btn" onclick="Schede.openEditor('${s.id}')"><i class="ti ti-pencil"></i></button>
           <button class="scheda-del-btn" onclick="Schede.remove('${s.id}','${s.nome.replace(/'/g,"")}')"><i class="ti ti-trash"></i></button>
         </div>
-        <div class="scheda-card-ex">${s.exercises.map(e => `<span class="scheda-ex-chip">${e}</span>`).join("")}</div>
+        <div class="scheda-card-ex">${s.exercises.map(e => `<span class="scheda-ex-chip">${U.exName(e)}<small>×${U.exSets(e)}</small></span>`).join("")}</div>
       `;
       wrap.appendChild(card);
     });
@@ -823,7 +826,7 @@ const Schede = {
     const titleEl = document.getElementById("scheda-editor-title");
     if (id) {
       const s = App.schede.find(x => x.id === id);
-      this.draftEx = [...(s.exercises || [])];
+      this.draftEx = (s.exercises || []).map(e => ({ nome: U.exName(e), serie: U.exSets(e) }));
       this.draftColor = API.COLOR_REV[s.colore] || "Rosso";
       document.getElementById("sc-nome").value = s.nome;
       titleEl.innerHTML = '<i class="ti ti-pencil"></i>Modifica scheda';
@@ -871,7 +874,13 @@ const Schede = {
       row.draggable = true;
       row.innerHTML = `
         <i class="ti ti-grip-vertical ex-editor-grip"></i>
-        <span class="ex-editor-name">${ex}</span>
+        <span class="ex-editor-name">${U.exName(ex)}</span>
+        <div class="ex-editor-sets">
+          <button type="button" onclick="Schede.bumpSets(${i},-1)">−</button>
+          <span id="scsets-${i}">${U.exSets(ex)}</span>
+          <button type="button" onclick="Schede.bumpSets(${i},1)">+</button>
+          <small>serie</small>
+        </div>
         <button class="ex-editor-del" onclick="Schede.removeExercise(${i})"><i class="ti ti-x"></i></button>
       `;
       row.addEventListener("dragstart", () => this.dragIdx = i);
@@ -892,10 +901,19 @@ const Schede = {
     const inp = document.getElementById("sc-new-ex");
     const val = inp.value.trim();
     if (!val) return;
-    this.draftEx.push(val);
+    this.draftEx.push({ nome: val, serie: 3 });
     inp.value = "";
     inp.focus();
     this.buildExList();
+  },
+
+  // Aumenta/diminuisce il numero di serie di un esercizio in editing
+  bumpSets(i, d) {
+    if (!this.draftEx[i]) return;
+    const next = Math.max(1, Math.min(20, U.exSets(this.draftEx[i]) + d));
+    this.draftEx[i] = { nome: U.exName(this.draftEx[i]), serie: next };
+    const el = document.getElementById(`scsets-${i}`);
+    if (el) el.textContent = next;
   },
 
   removeExercise(i) {

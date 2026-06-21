@@ -410,6 +410,11 @@ input { font-family:inherit; }
 .ex-editor-item { display:flex; align-items:center; gap:10px; padding:9px 10px; background:var(--ink3); border:1px solid var(--ink4); border-radius:9px; }
 .ex-editor-grip { color:var(--muted); font-size:16px; cursor:grab; }
 .ex-editor-name { flex:1; font-size:13px; color:var(--text); }
+.ex-editor-sets { display:inline-flex; align-items:center; gap:6px; flex-shrink:0; }
+.ex-editor-sets button { width:26px; height:26px; border-radius:6px; background:var(--ink2); border:1px solid var(--ink4); color:var(--text); font-size:15px; display:flex; align-items:center; justify-content:center; }
+.ex-editor-sets button:active { transform:scale(.92); border-color:var(--accent); }
+.ex-editor-sets span { min-width:16px; text-align:center; font-family:"DM Mono",monospace; font-weight:600; font-size:14px; color:var(--text); }
+.ex-editor-sets small { font-size:9px; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); }
 .ex-editor-del { width:26px; height:26px; border-radius:6px; color:rgba(239,68,68,.5); display:flex; align-items:center; justify-content:center; }
 .ex-editor-del:active { background:rgba(239,68,68,.12); color:var(--red); }
 .ex-editor-del i { font-size:13px; }
@@ -467,3 +472,14 @@ input { font-family:inherit; }
   background:var(--ink2); border:1px solid var(--ink4); color:var(--text); font-family:"DM Mono",monospace; font-size:13px; }
 .tech-in:focus { outline:none; border-color:var(--accent); }
 .tg-info { width:100%; font-family:"Outfit",sans-serif; font-size:13px; line-height:1.45; resize:vertical; min-height:42px; }
+
+/* Contatore serie nell'header esercizio (visibile a tendina chiusa) */
+.ex-setcount { display:inline-flex; flex-direction:column; align-items:center; justify-content:center; line-height:1;
+  font-family:"DM Mono",monospace; font-weight:600; font-size:15px; color:var(--text);
+  background:var(--ink3); border:1px solid var(--ink4); border-radius:8px; padding:4px 9px; flex-shrink:0; }
+.ex-setcount small { font-size:8px; font-weight:600; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); margin-top:2px; }
+
+/* Sessioni recenti cliccabili (Home) */
+.recent-sess-item.clickable { cursor:pointer; transition:border-color .15s, transform .1s; }
+.recent-sess-item.clickable:active { transform:scale(.99); border:1px solid var(--accent); }
+.rs-go { color:var(--dim); font-size:17px; flex-shrink:0; }

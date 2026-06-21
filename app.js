@@ -127,6 +127,11 @@ const U = {
   fmtV: v => v >= 1000 ? (v / 1000).toFixed(1) + "k kg" : Math.round(v) + " kg",
   vol:  (s, r, kg) => Math.round(s * r * (kg || 0)),
 
+  // Un esercizio di una scheda può essere una stringa (vecchio formato) o
+  // un oggetto { nome, serie } (nuovo formato). Questi helper li normalizzano.
+  exName: item => typeof item === "string" ? item : ((item && item.nome) || ""),
+  exSets: item => typeof item === "string" ? 1 : Math.max(1, (item && item.serie) || 1),
+
   fmtDate(isoDate) {
     if (!isoDate) return "—";
     const d = new Date(isoDate + "T12:00:00");

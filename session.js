@@ -12,13 +12,32 @@ const Session = {
   dragging:     null,
   selectedScheda: null,
 
+  _pendingId: null,
+
+  // Apre una sessione specifica dalla Home (Sessioni recenti)
+  openById(id) {
+    this._pendingId = id;
+    App.navigate("session");
+  },
+
   async load() {
     try {
       this.sessions = await API.getWorkoutSessions(20);
+      // se vogliamo aprire una sessione specifica non presente fra le ultime 20, allarga
+      const target = this._pendingId;
+      this._pendingId = null;
+      if (target && !this.sessions.find(s => s.id === target)) {
+        this.sessions = await API.getWorkoutSessions(50);
+      }
       this.buildSelect();
-      if (this.sessions.length > 0) {
-        this.activeId = this.sessions[0].id;
-        await this.loadSession(this.activeId);
+      const id = (target && this.sessions.find(s => s.id === target))
+        ? target
+        : (this.sessions[0] && this.sessions[0].id);
+      if (id) {
+        this.activeId = id;
+        const sel = document.getElementById("sess-select");
+        if (sel) sel.value = id;
+        await this.loadSession(id);
       }
     } catch(e) { console.error("Session.load:", e); }
   },
@@ -121,6 +140,7 @@ const Session = {
               ${prevMax > 0 ? `<span>· max ${U.fmt(prevMax)} kg</span>` : ""}
             </div>
           </div>
+          <span class="ex-setcount" id="setcount-${sid}">${sets.length}<small>serie</small></span>
           <i class="ti ti-chevron-down ex-chevron"></i>
         </div>
         <div class="ex-body">
@@ -342,6 +362,13 @@ const Session = {
       const num = b.querySelector(".ex-num");
       if (num) num.textContent = i + 1;
     });
+  },
+
+  // Aggiorna il contatore di serie nell'header di un esercizio
+  updateSetCount(exName) {
+    const n = (this.groupByExercise(this.exercises)[exName] || []).length;
+    const el = document.getElementById(`setcount-${this.sanitize(exName)}`);
+    if (el) el.innerHTML = `${n}<small>serie</small>`;
   },
 
   // ─── DRAG con long-press (touch) e mouse (desktop) ───
@@ -675,6 +702,7 @@ const Session = {
         this.buildSetRow(newSet, si, prevSet, exName, newSet.rrMin, newSet.rrMax, prevMax)
       );
       this.updateStats();
+      this.updateSetCount(exName);
     } catch(e) {
       console.error("addSet error:", e);
       alert("Errore nell'aggiungere la serie. Controlla la connessione.");
@@ -702,6 +730,7 @@ const Session = {
         sn.textContent = i + 1;
       });
     }
+    this.updateSetCount(exName);
   },
 
   getProgression(set, prevSet) {
@@ -966,18 +995,23 @@ Session._doCreateSession = async function(name) {
     const newSess = await API.create(CONFIG.DB.WORKOUT_LOG, sessProps);
     const sessId  = newSess.id;
 
-    const exercises = CONFIG.SCHEDE[name].exercises;
-    const creates   = exercises.map(function(exName) {
-      var props = {};
-      props[CONFIG.PROPS.EL_NAME]    = API.prop.title(exName + " – " + name + " – S1");
-      props[CONFIG.PROPS.EL_SESSION] = API.prop.relation([sessId]);
-      props[CONFIG.PROPS.EL_SETS]    = API.prop.number(1);
-      props[CONFIG.PROPS.EL_REPS]    = API.prop.number(0);
-      props[CONFIG.PROPS.EL_KG]      = API.prop.number(0);
-      props[CONFIG.PROPS.EL_RR_MIN]  = API.prop.number(8);
-      props[CONFIG.PROPS.EL_RR_MAX]  = API.prop.number(12);
-      props[CONFIG.PROPS.EL_DATE]    = API.prop.date(today);
-      return API.create(CONFIG.DB.ESERCIZI_LOG, props);
+    const exercises = CONFIG.SCHEDE[name].exercises || [];
+    const creates   = [];
+    exercises.forEach(function(item) {
+      var exNm  = U.exName(item);
+      var nSets = U.exSets(item);   // quante serie creare per questo esercizio
+      for (var i = 1; i <= nSets; i++) {
+        var props = {};
+        props[CONFIG.PROPS.EL_NAME]    = API.prop.title(exNm + " – " + name + " – S" + i);
+        props[CONFIG.PROPS.EL_SESSION] = API.prop.relation([sessId]);
+        props[CONFIG.PROPS.EL_SETS]    = API.prop.number(1);
+        props[CONFIG.PROPS.EL_REPS]    = API.prop.number(0);
+        props[CONFIG.PROPS.EL_KG]      = API.prop.number(0);
+        props[CONFIG.PROPS.EL_RR_MIN]  = API.prop.number(8);
+        props[CONFIG.PROPS.EL_RR_MAX]  = API.prop.number(12);
+        props[CONFIG.PROPS.EL_DATE]    = API.prop.date(today);
+        creates.push(API.create(CONFIG.DB.ESERCIZI_LOG, props));
+      }
     });
     await Promise.all(creates);
 
