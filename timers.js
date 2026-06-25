@@ -107,6 +107,10 @@ const RestTimer = {
   total:     0,
   remaining: 0,
   interval:  null,
+  endAt:     0,        // istante di fine (ms): preciso anche se il browser rallenta i tick
+  wakeLock:  null,
+  audioCtx:  null,
+  _notifAsked: false,
 
   openPicker() {
     document.getElementById("rest-picker").style.display = "flex";
@@ -118,22 +122,32 @@ const RestTimer = {
   start(seconds) {
     this.closePicker();
     this.total = seconds;
+    this.endAt = Date.now() + seconds * 1000;
     this.remaining = seconds;
     document.getElementById("rest-running").style.display = "flex";
     const fab = document.getElementById("rest-fab");
     if (fab) fab.style.visibility = "hidden";   // evita sovrapposizione con la barretta
+
+    // Tieni lo schermo acceso durante il recupero (niente standby, timer preciso)
+    this.requestWake();
+    // Prepara l'audio durante il tocco dell'utente (così il beep finale suona)
+    this.primeAudio();
+    // Chiedi una volta il permesso notifiche (per l'avviso a schermo spento)
+    this.ensureNotif();
+
     this.updateDisplay();
     clearInterval(this.interval);
     this.interval = setInterval(() => {
-      this.remaining--;
+      this.remaining = Math.max(0, Math.round((this.endAt - Date.now()) / 1000));
       this.updateDisplay();
-      if (this.remaining <= 0) this.finish();
-    }, 1000);
+      if (Date.now() >= this.endAt) this.finish();
+    }, 250);
   },
 
   addTime(s) {
-    this.remaining += s;
-    this.total = Math.max(this.total, this.remaining);
+    this.endAt += s * 1000;
+    this.total = Math.max(this.total, Math.round((this.endAt - Date.now()) / 1000));
+    this.remaining = Math.round((this.endAt - Date.now()) / 1000);
     this.updateDisplay();
   },
 
@@ -148,7 +162,7 @@ const RestTimer = {
     const ring = document.getElementById("rest-ring-fg");
     if (ring) {
       const circ = 2 * Math.PI * 54;
-      const pct = this.remaining / this.total;
+      const pct = this.total > 0 ? this.remaining / this.total : 0;
       ring.style.strokeDasharray = circ;
       ring.style.strokeDashoffset = circ * (1 - pct);
       if (pct > 0.5) ring.style.stroke = "#27D17F";
@@ -160,22 +174,110 @@ const RestTimer = {
   finish() {
     clearInterval(this.interval);
     this.interval = null;
-    if (navigator.vibrate) navigator.vibrate([120, 60, 120]);
-    const overlay = document.getElementById("rest-running");
-    overlay.classList.add("rest-done-flash");
-    setTimeout(() => {
-      overlay.classList.remove("rest-done-flash");
-      overlay.style.display = "none";
-      const fab = document.getElementById("rest-fab");
-      if (fab) fab.style.visibility = "";
-    }, 700);
+    this.releaseWake();
+    document.getElementById("rest-running").style.display = "none";
+    const fab = document.getElementById("rest-fab");
+    if (fab) fab.style.visibility = "";
+
+    // Avvisi: vibrazione forte + suono + notifica + flash rosso a tutto schermo
+    if (navigator.vibrate) navigator.vibrate([300, 120, 300, 120, 500]);
+    this.beep();
+    this.notify();
+    this.showFinished();
+  },
+
+  // Flash rosso a tutto schermo finché non lo tocchi (auto-chiude dopo 8s)
+  showFinished() {
+    const o = document.getElementById("rest-finished");
+    if (!o) return;
+    o.style.display = "flex";
+    clearTimeout(this._finTo);
+    this._finTo = setTimeout(() => this.dismissFinished(), 8000);
+  },
+  dismissFinished() {
+    const o = document.getElementById("rest-finished");
+    if (o) o.style.display = "none";
+    clearTimeout(this._finTo);
   },
 
   stop() {
     clearInterval(this.interval);
     this.interval = null;
+    this.releaseWake();
     document.getElementById("rest-running").style.display = "none";
     const fab = document.getElementById("rest-fab");
     if (fab) fab.style.visibility = "";
   },
+
+  // ── Wake Lock: schermo acceso durante il recupero ──
+  async requestWake() {
+    try {
+      if ("wakeLock" in navigator) {
+        this.wakeLock = await navigator.wakeLock.request("screen");
+        this.wakeLock.addEventListener("release", () => {});
+      }
+    } catch(e) {}
+  },
+  releaseWake() {
+    try { if (this.wakeLock) { this.wakeLock.release(); this.wakeLock = null; } } catch(e) {}
+  },
+
+  // ── Audio: beep finale (preparato durante il tap per evitare blocchi) ──
+  primeAudio() {
+    try {
+      if (!this.audioCtx) this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (this.audioCtx.state === "suspended") this.audioCtx.resume();
+    } catch(e) {}
+  },
+  beep() {
+    try {
+      const ctx = this.audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      if (ctx.state === "suspended") ctx.resume();
+      const tone = (t, f) => {
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = "sine"; o.frequency.value = f;
+        o.connect(g); g.connect(ctx.destination);
+        g.gain.setValueAtTime(0.0001, ctx.currentTime + t);
+        g.gain.exponentialRampToValueAtTime(0.35, ctx.currentTime + t + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + t + 0.35);
+        o.start(ctx.currentTime + t); o.stop(ctx.currentTime + t + 0.36);
+      };
+      tone(0, 880); tone(0.42, 1100);   // due bip
+    } catch(e) {}
+  },
+
+  // ── Notifica (utile se l'app è in secondo piano ma il telefono è acceso) ──
+  ensureNotif() {
+    try {
+      if (this._notifAsked) return;
+      this._notifAsked = true;
+      if ("Notification" in window && Notification.permission === "default") {
+        Notification.requestPermission().catch(() => {});
+      }
+    } catch(e) {}
+  },
+  notify() {
+    try {
+      if (!("Notification" in window) || Notification.permission !== "granted") return;
+      const opts = { body: "Pronto per la prossima serie 💪", icon: "icon-192.png", badge: "icon-192.png",
+        vibrate: [300, 120, 300, 120, 500], tag: "gymos-rest", renotify: true };
+      if (navigator.serviceWorker && navigator.serviceWorker.ready) {
+        navigator.serviceWorker.ready.then(reg => reg.showNotification("GymOS — Recupero finito!", opts)).catch(() => {
+          new Notification("GymOS — Recupero finito!", opts);
+        });
+      } else {
+        new Notification("GymOS — Recupero finito!", opts);
+      }
+    } catch(e) {}
+  },
 };
+
+// Riprendi lo schermo acceso se torni sull'app mentre il recupero è in corso
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && RestTimer.interval) {
+    RestTimer.requestWake();
+    RestTimer.remaining = Math.max(0, Math.round((RestTimer.endAt - Date.now()) / 1000));
+    RestTimer.updateDisplay();
+    if (Date.now() >= RestTimer.endAt) RestTimer.finish();
+  }
+});

@@ -335,6 +335,16 @@ input { font-family:inherit; }
 @keyframes restFlash { 0%,100%{border-color:var(--ink3)} 50%{border-color:var(--green);box-shadow:0 0 0 2px rgba(39,209,127,.5)} }
 @media (min-width:761px) { .rest-running { left:auto; right:24px; margin:0; bottom:24px; } }
 
+/* Flash "RECUPERO FINITO" a tutto schermo */
+.rest-finished { position:fixed; inset:0; z-index:700; display:flex; align-items:center; justify-content:center;
+  text-align:center; color:#fff; animation:restFinishedFlash 1s ease infinite; cursor:pointer; }
+.rest-finished-inner { display:flex; flex-direction:column; align-items:center; gap:14px; }
+.rest-finished-inner > i { font-size:72px; animation:bellShake 1s ease infinite; }
+.rf-title { font-family:'Bebas Neue',sans-serif; font-size:46px; letter-spacing:.06em; }
+.rf-sub { font-size:13px; opacity:.85; text-transform:uppercase; letter-spacing:.1em; }
+@keyframes restFinishedFlash { 0%,100%{background:#FF3B2F} 50%{background:#7a0d06} }
+@keyframes bellShake { 0%,100%{transform:rotate(0)} 25%{transform:rotate(12deg)} 75%{transform:rotate(-12deg)} }
+
 /* ═══════════ HEADER SESSIONE (ridisegnato) ═══════════ */
 .sess-header { padding:20px 24px 0; }
 .sess-header-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; min-height:18px; }
