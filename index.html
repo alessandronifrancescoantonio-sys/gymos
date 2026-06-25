@@ -521,5 +521,10 @@
 <script src="modules.js"></script>
 <script src="timers.js"></script>
 <script src="app.js"></script>
+<script>
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("sw.js").catch(function(){});
+  }
+</script>
 </body>
 </html>

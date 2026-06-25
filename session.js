@@ -77,7 +77,9 @@ const Session = {
     // Mantieni ordine custom se compatibile, altrimenti usa quello di Notion
     const savedOrder = JSON.parse(localStorage.getItem(`gymos_order_${id}`) || "null");
     if (savedOrder && savedOrder.every(n => keys.includes(n))) {
-      this.exOrder = savedOrder;
+      // mantieni l'ordine salvato, ma appendi gli esercizi nuovi (es. aggiunti
+      // dalla scheda via riallineamento) che non sono ancora nell'ordine salvato
+      this.exOrder = savedOrder.concat(keys.filter(k => !savedOrder.includes(k)));
     } else {
       this.exOrder = keys;
     }
