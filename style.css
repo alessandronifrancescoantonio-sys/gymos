@@ -146,9 +146,24 @@ input { font-family:inherit; }
 .rr-in-sm:focus { border-color:var(--blue); }
 .ex-chevron { color:var(--muted); font-size:18px; flex-shrink:0; transition:transform .2s; }
 .ex-block.collapsed .ex-chevron { transform:rotate(-90deg); }
-.set-card { padding:12px 14px; border-bottom:1px solid var(--ink3); }
+.set-card { border-bottom:1px solid var(--ink3); -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
 .set-card:last-of-type { border-bottom:none; }
-.set-card-top { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
+/* Serie a tendina: header riepilogo (sempre visibile) + corpo modificabile */
+.set-hd { display:flex; align-items:center; gap:10px; padding:11px 14px; cursor:pointer; touch-action:manipulation; }
+.set-hd-sum { flex:1; display:flex; align-items:baseline; gap:3px; font-family:'DM Mono',monospace; }
+.ssum { font-size:17px; font-weight:600; color:var(--text); }
+.ssum-u { font-size:10px; color:var(--muted); }
+.ssum-x { font-size:12px; color:var(--muted); margin:0 3px; }
+.set-hd-badge { flex-shrink:0; }
+.set-chev { color:var(--dim); font-size:16px; transition:transform .2s; flex-shrink:0; }
+.set-card:not(.set-collapsed) .set-chev { transform:rotate(180deg); }
+.set-card:not(.set-collapsed) .set-hd { border-bottom:1px solid var(--ink3); }
+.set-body { padding:12px 14px 14px; }
+.set-card.set-collapsed .set-body { display:none; }
+.set-body-top { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
+.set-counter { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:var(--accent); flex-shrink:0; }
+.note-inp, .val-edit { -webkit-user-select:text; user-select:text; }
+.adj { touch-action:manipulation; }
 .set-num { width:24px; height:24px; border-radius:7px; background:var(--ink3); border:1px solid var(--ink4); display:flex; align-items:center; justify-content:center; font-family:'DM Mono',monospace; font-size:11px; color:var(--dim); flex-shrink:0; }
 .set-prev { flex:1; background:var(--ink); border:1px solid var(--ink3); border-radius:8px; padding:5px 10px; display:flex; align-items:center; justify-content:center; gap:5px; }
 .set-prev .pv { font-family:'DM Mono',monospace; font-size:11px; color:var(--ghost); font-weight:500; }

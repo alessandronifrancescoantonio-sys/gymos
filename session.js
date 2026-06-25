@@ -178,9 +178,12 @@ const Session = {
       container.appendChild(block);
 
       const setsContainer = document.getElementById(`sets-${sid}`);
+      // apri di default la prima serie ancora da fare (reps = 0); se sono tutte
+      // fatte, restano tutte chiuse
+      let firstTodo = sets.findIndex(s => !(s.reps > 0));
       sets.forEach((set, si) => {
         const prevSet = prevSets[si] || null;
-        setsContainer.appendChild(this.buildSetRow(set, si, prevSet, exName, rrMin, rrMax, prevMax));
+        setsContainer.appendChild(this.buildSetRow(set, si, prevSet, exName, rrMin, rrMax, prevMax, sets.length, si === firstTodo));
       });
     });
   },
@@ -602,9 +605,9 @@ const Session = {
     });
   },
 
-  buildSetRow(set, si, prevSet, exName, rrMin, rrMax, prevMax) {
+  buildSetRow(set, si, prevSet, exName, rrMin, rrMax, prevMax, total, expanded) {
     const row = document.createElement("div");
-    row.className = "set-card";
+    row.className = "set-card" + (expanded ? "" : " set-collapsed");
     row.id = `setrow-${set.id}`;
 
     const prevHTML = prevSet
@@ -616,33 +619,42 @@ const Session = {
     const repCls = set.reps > 0 ? "stepper-val" : "stepper-val empty";
 
     row.innerHTML = `
-      <div class="set-card-top">
-        <div class="set-num">${si + 1}</div>
-        <div class="set-prev">${prevHTML}</div>
-        <button class="rm-set-btn" onclick="Session.removeSet('${set.id}','${exName}')" aria-label="Rimuovi serie">
-          <i class="ti ti-x"></i>
-        </button>
+      <div class="set-hd" onclick="Session.toggleSet('${set.id}','${exName}')">
+        <span class="set-num">${si + 1}</span>
+        <div class="set-hd-sum">
+          <span class="ssum" id="ssum-kg-${set.id}">${U.fmt(set.kg)}</span><span class="ssum-u">kg</span>
+          <span class="ssum-x">×</span>
+          <span class="ssum" id="ssum-rep-${set.id}">${set.reps > 0 ? set.reps : "0"}</span><span class="ssum-u">rep</span>
+        </div>
+        <div class="set-hd-badge" id="prog-${set.id}">${status}</div>
+        <i class="ti ti-chevron-down set-chev"></i>
       </div>
-      <div class="stepper-row">
-        <span class="stepper-lbl">Kg</span>
-        <button class="adj" data-id="${set.id}" data-f="k" data-d="-2.5" data-ex="${exName}">−</button>
-        <span class="${repCls}" id="kg-${set.id}" title="Tocca per inserire il valore"
-          onclick="Session.editVal('${set.id}','k','${exName}')">${U.fmt(set.kg)}</span>
-        <button class="adj" data-id="${set.id}" data-f="k" data-d="2.5" data-ex="${exName}">+</button>
+      <div class="set-body">
+        <div class="set-body-top">
+          <span class="set-counter">Serie ${si + 1}/${total || 1}</span>
+          <div class="set-prev">${prevHTML}</div>
+          <button class="rm-set-btn" onclick="Session.removeSet('${set.id}','${exName}')" aria-label="Rimuovi serie">
+            <i class="ti ti-x"></i>
+          </button>
+        </div>
+        <div class="stepper-row">
+          <span class="stepper-lbl">Kg</span>
+          <button class="adj" data-id="${set.id}" data-f="k" data-d="-2.5" data-ex="${exName}">−</button>
+          <span class="${repCls}" id="kg-${set.id}" title="Tocca per inserire il valore"
+            onclick="Session.editVal('${set.id}','k','${exName}')">${U.fmt(set.kg)}</span>
+          <button class="adj" data-id="${set.id}" data-f="k" data-d="2.5" data-ex="${exName}">+</button>
+        </div>
+        <div class="stepper-row">
+          <span class="stepper-lbl">Rep</span>
+          <button class="adj" data-id="${set.id}" data-f="r" data-d="-1" data-ex="${exName}">−</button>
+          <span class="${repCls}" id="rep-${set.id}" title="Tocca per inserire il valore"
+            onclick="Session.editVal('${set.id}','r','${exName}')">${set.reps > 0 ? set.reps : "0"}</span>
+          <button class="adj" data-id="${set.id}" data-f="r" data-d="1" data-ex="${exName}">+</button>
+        </div>
+        <input class="note-inp" type="text" value="${set.note || ""}"
+          placeholder="Note: forma, sensazione..."
+          onchange="Session.saveNote('${set.id}',this.value)">
       </div>
-      <div class="stepper-row">
-        <span class="stepper-lbl">Rep</span>
-        <button class="adj" data-id="${set.id}" data-f="r" data-d="-1" data-ex="${exName}">−</button>
-        <span class="${repCls}" id="rep-${set.id}" title="Tocca per inserire il valore"
-          onclick="Session.editVal('${set.id}','r','${exName}')">${set.reps > 0 ? set.reps : "0"}</span>
-        <button class="adj" data-id="${set.id}" data-f="r" data-d="1" data-ex="${exName}">+</button>
-      </div>
-      <div class="set-meta-row">
-        <div id="prog-${set.id}">${status}</div>
-      </div>
-      <input class="note-inp" type="text" value="${set.note || ""}"
-        placeholder="Note: forma, sensazione..."
-        onchange="Session.saveNote('${set.id}',this.value)">
     `;
     // tieni premuto +/− per ripetere
     row.querySelectorAll(".adj").forEach(btn => this.bindHold(btn));
@@ -714,8 +726,10 @@ const Session = {
       const prevSets      = prevGrouped[exName] || [];
       const prevSet       = prevSets[si] || null;
       const prevMax       = prevSets.length > 0 ? Math.max(...prevSets.map(s => s.kg || 0)) : 0;
+      // la nuova serie si apre, le altre si chiudono
+      if (setsContainer) setsContainer.querySelectorAll(".set-card").forEach(c => c.classList.add("set-collapsed"));
       setsContainer.appendChild(
-        this.buildSetRow(newSet, si, prevSet, exName, newSet.rrMin, newSet.rrMax, prevMax)
+        this.buildSetRow(newSet, si, prevSet, exName, newSet.rrMin, newSet.rrMax, prevMax, si + 1, true)
       );
       this.updateStats();
       this.updateSetCount(exName);
@@ -903,7 +917,17 @@ const Session = {
     inp.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); inp.blur(); } });
   },
 
-  // Aggiorna display + badge + statistiche + autosave dopo un cambio di valore
+  // Apre una serie e chiude le altre dello stesso esercizio (vedi solo la corrente)
+  toggleSet(id, exName) {
+    const card = document.getElementById(`setrow-${id}`);
+    if (!card) return;
+    const willOpen = card.classList.contains("set-collapsed");
+    const container = card.parentElement;
+    if (container) container.querySelectorAll(".set-card").forEach(c => c.classList.add("set-collapsed"));
+    if (willOpen) card.classList.remove("set-collapsed");
+  },
+
+  // Aggiorna display + riepilogo + badge + statistiche + autosave dopo un cambio di valore
   refreshSetValue(set, exName) {
     const id = set.id;
     const repEl  = document.getElementById(`rep-${id}`);
@@ -911,6 +935,10 @@ const Session = {
     const progEl = document.getElementById(`prog-${id}`);
     if (repEl) { repEl.textContent = set.reps > 0 ? set.reps : "0"; repEl.className = set.reps > 0 ? "stepper-val" : "stepper-val empty"; }
     if (kgEl)  { kgEl.textContent = U.fmt(set.kg); kgEl.className = set.kg > 0 ? "stepper-val" : "stepper-val empty"; }
+    const sumKg = document.getElementById(`ssum-kg-${id}`);
+    const sumRep = document.getElementById(`ssum-rep-${id}`);
+    if (sumKg)  sumKg.textContent = U.fmt(set.kg);
+    if (sumRep) sumRep.textContent = set.reps > 0 ? set.reps : "0";
 
     const grouped  = this.groupByExercise(this.exercises);
     const prevG    = this.groupByExercise(this.prevExercises);
