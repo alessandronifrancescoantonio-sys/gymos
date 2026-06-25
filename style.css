@@ -402,6 +402,30 @@ input { font-family:inherit; }
 .scheda-card-ex { display:flex; flex-wrap:wrap; gap:6px; }
 .scheda-ex-chip { font-size:11px; color:var(--ghost); background:var(--ink3); border:1px solid var(--ink4); padding:4px 10px; border-radius:100px; }
 
+/* Programmi → sedute */
+.prog-card { background:var(--ink2); border:1px solid var(--ink3); border-radius:var(--radius-lg); margin-bottom:12px; overflow:hidden; }
+.prog-card.active { border-color:rgba(255,59,47,.4); }
+.prog-head { display:flex; align-items:center; gap:10px; padding:14px 16px; cursor:pointer; }
+.prog-chev { color:var(--dim); font-size:18px; transition:transform .2s; flex-shrink:0; }
+.prog-chev.open { transform:rotate(90deg); }
+.prog-name { font-size:16px; font-weight:600; color:var(--text); flex:1; min-width:0; }
+.prog-active-badge { display:inline-flex; align-items:center; gap:3px; font-size:10px; font-weight:700; letter-spacing:.4px; color:var(--accent);
+  background:rgba(255,59,47,.12); border:1px solid rgba(255,59,47,.35); padding:2px 8px; border-radius:100px; }
+.prog-active-badge i { font-size:11px; }
+.prog-count { font-size:11px; color:var(--dim); background:var(--ink3); padding:3px 9px; border-radius:100px; flex-shrink:0; }
+.prog-activate { font-size:11px; font-weight:600; color:var(--ghost); background:var(--ink3); border:1px solid var(--ink4); padding:6px 10px; border-radius:100px; flex-shrink:0; }
+.prog-activate:active { border-color:var(--accent); color:var(--accent); }
+.prog-body { display:none; padding:0 14px 14px; flex-direction:column; gap:8px; }
+.prog-body.open { display:flex; }
+.seduta-row { display:flex; align-items:center; gap:10px; padding:11px 12px; background:var(--ink3); border:1px solid var(--ink4); border-radius:10px; }
+.seduta-main { flex:1; min-width:0; }
+.seduta-name { font-size:14px; font-weight:600; color:var(--text); }
+.seduta-ex { font-size:11px; color:var(--dim); margin-top:2px; line-height:1.4; }
+.seduta-ex b { color:var(--ghost); font-weight:600; }
+.prog-add-seduta { display:flex; align-items:center; justify-content:center; gap:6px; padding:10px; border-radius:10px;
+  background:transparent; border:1px dashed var(--ink4); color:var(--dim); font-size:12px; font-weight:600; }
+.prog-add-seduta:active { border-color:var(--accent); color:var(--accent); }
+
 /* Editor scheda */
 .scheda-editor-box { max-width:440px; max-height:88vh; overflow-y:auto; }
 .color-picker { display:flex; gap:8px; flex-wrap:wrap; }

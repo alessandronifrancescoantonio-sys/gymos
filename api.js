@@ -416,27 +416,41 @@ const API = {
         ordine:  this.read.number(p, CONFIG.PROPS.SC_ORDINE) || 0,
         exercises,
         attiva:  this.read.checkbox(p, CONFIG.PROPS.SC_ATTIVA),
+        programma:   this.read.rich_text(p, CONFIG.PROPS.SC_PROG) || "La mia scheda",
+        progAttivo:  this.read.checkbox(p, CONFIG.PROPS.SC_PROG_ON),
       };
     }).filter(s => s.attiva !== false);
   },
 
-  async createScheda(nome, colorName, exercises, ordine) {
+  // Una "seduta" è una riga del DB Schede (appartiene a un Programma)
+  async createScheda(nome, colorName, exercises, ordine, programma, progAttivo) {
     const props = {};
     props[CONFIG.PROPS.SC_NOME]     = API.prop.title(nome);
     props[CONFIG.PROPS.SC_COLORE]   = API.prop.select(colorName || "Rosso");
     props[CONFIG.PROPS.SC_ORDINE]   = API.prop.number(ordine || 0);
     props[CONFIG.PROPS.SC_ESERCIZI] = API.prop.rich_text(JSON.stringify(exercises || []));
     props[CONFIG.PROPS.SC_ATTIVA]   = API.prop.checkbox(true);
+    props[CONFIG.PROPS.SC_PROG]     = API.prop.rich_text(programma || "La mia scheda");
+    props[CONFIG.PROPS.SC_PROG_ON]  = API.prop.checkbox(!!progAttivo);
     return this.create(CONFIG.DB.SCHEDE_DB, props);
   },
 
   async updateScheda(id, fields) {
     const props = {};
-    if (fields.nome      != null) props[CONFIG.PROPS.SC_NOME]     = API.prop.title(fields.nome);
-    if (fields.colorName != null) props[CONFIG.PROPS.SC_COLORE]   = API.prop.select(fields.colorName);
-    if (fields.ordine    != null) props[CONFIG.PROPS.SC_ORDINE]   = API.prop.number(fields.ordine);
-    if (fields.exercises != null) props[CONFIG.PROPS.SC_ESERCIZI] = API.prop.rich_text(JSON.stringify(fields.exercises));
+    if (fields.nome       != null) props[CONFIG.PROPS.SC_NOME]     = API.prop.title(fields.nome);
+    if (fields.colorName  != null) props[CONFIG.PROPS.SC_COLORE]   = API.prop.select(fields.colorName);
+    if (fields.ordine     != null) props[CONFIG.PROPS.SC_ORDINE]   = API.prop.number(fields.ordine);
+    if (fields.exercises  != null) props[CONFIG.PROPS.SC_ESERCIZI] = API.prop.rich_text(JSON.stringify(fields.exercises));
+    if (fields.programma  != null) props[CONFIG.PROPS.SC_PROG]     = API.prop.rich_text(fields.programma);
+    if (fields.progAttivo != null) props[CONFIG.PROPS.SC_PROG_ON]  = API.prop.checkbox(!!fields.progAttivo);
     return this.update(id, props);
+  },
+
+  // Rende attivo un programma: imposta progAttivo su tutte le sue sedute, false sulle altre
+  async setActiveProgram(programma, allSedute) {
+    await Promise.all((allSedute || []).map(s =>
+      this.update(s.id, { [CONFIG.PROPS.SC_PROG_ON]: API.prop.checkbox(s.programma === programma) })
+    ));
   },
 
   async deleteScheda(id) {

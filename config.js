@@ -173,5 +173,7 @@ const CONFIG = {
     SC_ESERCIZI: "Esercizi",
     SC_ATTIVA:   "Attiva",
     SC_NOTE:     "Note",
+    SC_PROG:     "Programma",
+    SC_PROG_ON:  "Programma attivo",
   },
 };

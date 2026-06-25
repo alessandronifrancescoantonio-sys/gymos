@@ -795,30 +795,78 @@ const Schede = {
     this.render();
   },
 
+  escq: s => String(s).replace(/'/g, "\\'"),
+
   render() {
     const wrap = document.getElementById("schede-list");
     if (!wrap) return;
     wrap.innerHTML = "";
-    if (!App.schede.length) {
-      wrap.innerHTML = '<div class="empty-state">Nessuna scheda. Creane una con "Nuova scheda"!</div>';
+    const programmi = App.programmi || {};
+    const names = Object.keys(programmi);
+    if (!names.length) {
+      wrap.innerHTML = '<div class="empty-state">Nessun programma. Crea il primo con "Nuovo programma"!</div>';
       return;
     }
-    App.schede.forEach((s, idx) => {
+    if (!this._expanded) this._expanded = new Set([App.activeProgram]);
+
+    names.forEach(pg => {
+      const sedute   = programmi[pg];
+      const isActive = pg === App.activeProgram;
+      const open     = this._expanded.has(pg);
+      const pgEsc    = this.escq(pg);
       const card = document.createElement("div");
-      card.className = "scheda-card";
-      card.style.setProperty("--sc-color", s.colore);
+      card.className = "prog-card" + (isActive ? " active" : "");
       card.innerHTML = `
-        <div class="scheda-card-head">
-          <div class="scheda-color-dot" style="background:${s.colore}"></div>
-          <div class="scheda-card-name">${s.nome}</div>
-          <div class="scheda-card-count">${s.exercises.length} es.</div>
-          <button class="scheda-edit-btn" onclick="Schede.openEditor('${s.id}')"><i class="ti ti-pencil"></i></button>
-          <button class="scheda-del-btn" onclick="Schede.remove('${s.id}','${s.nome.replace(/'/g,"")}')"><i class="ti ti-trash"></i></button>
+        <div class="prog-head" onclick="Schede.toggleProgram('${pgEsc}')">
+          <i class="ti ti-chevron-right prog-chev${open ? " open" : ""}"></i>
+          <div class="prog-name">${pg}</div>
+          ${isActive ? '<span class="prog-active-badge"><i class="ti ti-check"></i>Attiva</span>' : ""}
+          <span class="prog-count">${sedute.length} sed.</span>
+          ${isActive ? "" : `<button class="prog-activate" onclick="event.stopPropagation();Schede.setActive('${pgEsc}')">Rendi attiva</button>`}
         </div>
-        <div class="scheda-card-ex">${s.exercises.map(e => `<span class="scheda-ex-chip">${U.exName(e)}<small>×${U.exSets(e)}</small></span>`).join("")}</div>
+        <div class="prog-body${open ? " open" : ""}">
+          ${sedute.map(s => `
+            <div class="seduta-row">
+              <div class="scheda-color-dot" style="background:${s.colore}"></div>
+              <div class="seduta-main">
+                <div class="seduta-name">${s.nome}</div>
+                <div class="seduta-ex">${s.exercises.map(e => `${U.exName(e)} <b>×${U.exSets(e)}</b>`).join(" · ") || "nessun esercizio"}</div>
+              </div>
+              <button class="scheda-edit-btn" onclick="Schede.openEditor('${s.id}')"><i class="ti ti-pencil"></i></button>
+              <button class="scheda-del-btn" onclick="Schede.remove('${s.id}','${s.nome.replace(/'/g,"")}')"><i class="ti ti-trash"></i></button>
+            </div>`).join("")}
+          <button class="prog-add-seduta" onclick="Schede.addSeduta('${pgEsc}')"><i class="ti ti-plus"></i> Aggiungi seduta</button>
+        </div>
       `;
       wrap.appendChild(card);
     });
+  },
+
+  toggleProgram(pg) {
+    if (!this._expanded) this._expanded = new Set();
+    if (this._expanded.has(pg)) this._expanded.delete(pg);
+    else this._expanded.add(pg);
+    this.render();
+  },
+
+  async setActive(pg) {
+    try {
+      await API.setActiveProgram(pg, App.schede);
+      if (this._expanded) this._expanded.add(pg);
+      await this.load();
+    } catch(e) { console.error(e); alert("Errore nel cambio programma attivo"); }
+  },
+
+  newProgram() {
+    const name = prompt("Nome del nuovo programma:");
+    if (!name || !name.trim()) return;
+    this._newProgram = name.trim();
+    this.openEditor();   // crea la prima seduta di questo programma
+  },
+
+  addSeduta(pg) {
+    this._newProgram = pg;
+    this.openEditor();
   },
 
   openEditor(id) {
@@ -829,12 +877,13 @@ const Schede = {
       this.draftEx = (s.exercises || []).map(e => ({ nome: U.exName(e), serie: U.exSets(e) }));
       this.draftColor = API.COLOR_REV[s.colore] || "Rosso";
       document.getElementById("sc-nome").value = s.nome;
-      titleEl.innerHTML = '<i class="ti ti-pencil"></i>Modifica scheda';
+      titleEl.innerHTML = '<i class="ti ti-pencil"></i>Modifica seduta';
     } else {
       this.draftEx = [];
       this.draftColor = "Rosso";
       document.getElementById("sc-nome").value = "";
-      titleEl.innerHTML = '<i class="ti ti-clipboard-list"></i>Nuova scheda';
+      const pg = this._newProgram || App.activeProgram || "La mia scheda";
+      titleEl.innerHTML = `<i class="ti ti-clipboard-list"></i>Nuova seduta · <span style="color:var(--accent)">${pg}</span>`;
     }
     document.getElementById("scheda-editor-msg").textContent = "";
     this.buildColorPicker();
@@ -931,9 +980,13 @@ const Schede = {
       if (this.editing) {
         await API.updateScheda(this.editing, { nome, colorName: this.draftColor, exercises: this.draftEx });
       } else {
+        const programma = this._newProgram || App.activeProgram || "La mia scheda";
+        // se non esiste ancora un programma attivo, il primo creato diventa attivo
+        const progAttivo = (programma === App.activeProgram) || !App.activeProgram;
         const ordine = App.schede.length + 1;
-        await API.createScheda(nome, this.draftColor, this.draftEx, ordine);
+        await API.createScheda(nome, this.draftColor, this.draftEx, ordine, programma, progAttivo);
       }
+      this._newProgram = null;
       document.getElementById("scheda-editor").style.display = "none";
       await this.load();
     } catch(e) {

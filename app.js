@@ -97,13 +97,29 @@ const App = {
     }
   },
 
-  // Carica le schede da Notion e popola CONFIG.SCHEDE (formato usato ovunque)
+  // Carica le sedute da Notion, le raggruppa per Programma e popola CONFIG.SCHEDE
+  // con le SOLE sedute del programma ATTIVO (così sessione/progressioni lo usano).
   async loadSchede() {
     try {
       const schede = await API.getSchede();
-      App.schede = schede; // lista completa con id, per la sezione gestione
-      const map = {};
+      App.schede = schede; // tutte le sedute (con id), per la sezione gestione
+
+      // Raggruppa per programma, in ordine di apparizione
+      const programmi = {};   // nome programma -> [sedute]
       schede.forEach(s => {
+        const pg = s.programma || "La mia scheda";
+        (programmi[pg] = programmi[pg] || []).push(s);
+      });
+      App.programmi = programmi;
+
+      // Programma attivo = quello con almeno una seduta progAttivo; fallback al primo
+      const names = Object.keys(programmi);
+      let active = names.find(pg => programmi[pg].some(s => s.progAttivo)) || names[0] || null;
+      App.activeProgram = active;
+
+      // CONFIG.SCHEDE = sedute del solo programma attivo (formato usato ovunque)
+      const map = {};
+      (active ? programmi[active] : []).forEach(s => {
         map[s.nome] = { color: s.colore, exercises: s.exercises, _id: s.id };
       });
       CONFIG.SCHEDE = map;
@@ -112,6 +128,8 @@ const App = {
     }
   },
   schede: [],
+  programmi: {},
+  activeProgram: null,
 };
 
 function setConnStatus(ok) {
