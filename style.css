@@ -162,8 +162,11 @@ input { font-family:inherit; }
 .stepper-lbl { font-size:10px; color:var(--dim); width:28px; text-transform:uppercase; letter-spacing:.04em; flex-shrink:0; }
 .adj { width:40px; height:40px; border-radius:10px; border:1px solid rgba(255,59,47,.3); background:rgba(255,59,47,.08); font-size:22px; display:flex; align-items:center; justify-content:center; color:var(--accent); transition:all .1s; flex-shrink:0; line-height:1; font-weight:300; }
 .adj:active { transform:scale(.9); background:rgba(255,59,47,.2); }
-.stepper-val { flex:1; text-align:center; font-family:'DM Mono',monospace; font-size:20px; font-weight:500; color:var(--text); }
+.stepper-val { flex:1; text-align:center; font-family:'DM Mono',monospace; font-size:20px; font-weight:500; color:var(--text); cursor:pointer; border-radius:8px; padding:4px 0; transition:background .12s; }
+.stepper-val:active { background:var(--ink3); }
 .stepper-val.empty { color:var(--muted); }
+.val-edit { width:100%; text-align:center; font-family:'DM Mono',monospace; font-size:20px; font-weight:500;
+  background:var(--ink3); border:1px solid var(--accent); border-radius:8px; color:var(--text); padding:3px 0; outline:none; }
 .stepper-unit { font-size:11px; color:var(--muted); width:28px; flex-shrink:0; }
 .set-meta-row { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:10px; }
 .badge { display:inline-flex; align-items:center; gap:3px; padding:5px 10px; border-radius:100px; font-size:11px; font-weight:700; white-space:nowrap; }

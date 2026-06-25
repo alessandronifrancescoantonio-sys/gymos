@@ -115,6 +115,7 @@ const Session = {
       const prevSets= prevGrouped[exName] || [];
       const rrMin   = sets[0]?.rrMin || 8;
       const rrMax   = sets[0]?.rrMax || 12;
+      const rest    = sets[0]?.recupero ?? "";
       const prevMax = prevSets.length > 0 ? Math.max(...prevSets.map(s => s.kg || 0)) : 0;
       const sid     = this.sanitize(exName);
       const ex      = sets[0] || {};   // i campi tecnica vivono a livello esercizio (su tutte le serie)
@@ -136,6 +137,11 @@ const Session = {
                   oninput="Session.updateRR('${exName}','min',this.value)">–<input class="rr-in-sm" type="number" value="${rrMax}" min="1" max="40"
                   onclick="event.stopPropagation()"
                   oninput="Session.updateRR('${exName}','max',this.value)"> rep
+              </span>
+              <span class="ex-target-inline">· rec
+                <input class="rr-in-sm" type="number" value="${rest}" min="0" step="5" placeholder="90"
+                  onclick="event.stopPropagation()"
+                  oninput="Session.updateRest('${exName}',this.value)"> s
               </span>
               ${prevMax > 0 ? `<span>· max ${U.fmt(prevMax)} kg</span>` : ""}
             </div>
@@ -233,9 +239,6 @@ const Session = {
           <label class="tech-field"><span>Cadenza</span>
             <input class="tech-in" type="text" placeholder="3-1-1" value="${ex.cadenza || ""}"
               onchange="Session.setExField('${exName}','cadenza',this.value)"></label>
-          <label class="tech-field"><span>Recupero (s)</span>
-            <input class="tech-in" type="number" min="0" step="5" placeholder="120" value="${ex.recupero ?? ""}"
-              onchange="Session.setExField('${exName}','recupero',this.value)"></label>
         </div>
         <div class="tg-lbl">Info tecnica</div>
         <textarea class="tech-in tg-info" rows="2" placeholder="Es. drop al 70%, 2 cali; eccentrica 3s..."
@@ -537,7 +540,7 @@ const Session = {
 
     // Verifica se il punto toccato è un controllo interattivo (allora NON parte il drag)
     function isInteractive(target) {
-      return target.closest("button, input, textarea, select, a, .adj, .rm-set-btn, .add-set-btn, .note-inp, .rr-in-sm, .ex-tech");
+      return target.closest("button, input, textarea, select, a, .adj, .rm-set-btn, .add-set-btn, .note-inp, .rr-in-sm, .ex-tech, .stepper-val");
     }
 
     let touchStartX = 0;
@@ -613,15 +616,17 @@ const Session = {
       </div>
       <div class="stepper-row">
         <span class="stepper-lbl">Kg</span>
-        <button class="adj" onclick="Session.adjSet('${set.id}','k',-2.5,'${exName}')">−</button>
-        <span class="${repCls}" id="kg-${set.id}">${U.fmt(set.kg)}</span>
-        <button class="adj" onclick="Session.adjSet('${set.id}','k',2.5,'${exName}')">+</button>
+        <button class="adj" data-id="${set.id}" data-f="k" data-d="-2.5" data-ex="${exName}">−</button>
+        <span class="${repCls}" id="kg-${set.id}" title="Tocca per inserire il valore"
+          onclick="Session.editVal('${set.id}','k','${exName}')">${U.fmt(set.kg)}</span>
+        <button class="adj" data-id="${set.id}" data-f="k" data-d="2.5" data-ex="${exName}">+</button>
       </div>
       <div class="stepper-row">
         <span class="stepper-lbl">Rep</span>
-        <button class="adj" onclick="Session.adjSet('${set.id}','r',-1,'${exName}')">−</button>
-        <span class="${repCls}" id="rep-${set.id}">${set.reps > 0 ? set.reps : "0"}</span>
-        <button class="adj" onclick="Session.adjSet('${set.id}','r',1,'${exName}')">+</button>
+        <button class="adj" data-id="${set.id}" data-f="r" data-d="-1" data-ex="${exName}">−</button>
+        <span class="${repCls}" id="rep-${set.id}" title="Tocca per inserire il valore"
+          onclick="Session.editVal('${set.id}','r','${exName}')">${set.reps > 0 ? set.reps : "0"}</span>
+        <button class="adj" data-id="${set.id}" data-f="r" data-d="1" data-ex="${exName}">+</button>
       </div>
       <div class="set-meta-row">
         <div id="prog-${set.id}">${status}</div>
@@ -630,6 +635,8 @@ const Session = {
         placeholder="Note: forma, sensazione..."
         onchange="Session.saveNote('${set.id}',this.value)">
     `;
+    // tieni premuto +/− per ripetere
+    row.querySelectorAll(".adj").forEach(btn => this.bindHold(btn));
     return row;
   },
 
@@ -758,7 +765,33 @@ const Session = {
     if (!set) return;
     if (field === "r") set.reps = Math.max(0, (set.reps || 0) + delta);
     if (field === "k") set.kg   = Math.max(0, Math.round(((set.kg || 0) + delta) * 10) / 10);
+    this.refreshSetValue(set, exName);
+  },
 
+  // Inserimento manuale: tocca il numero (kg o rep) e scrivi il valore esatto
+  editVal(id, field, exName) {
+    const span = document.getElementById(`${field === "k" ? "kg" : "rep"}-${id}`);
+    if (!span || span.querySelector("input")) return;
+    const set = this.exercises.find(e => e.id === id);
+    if (!set) return;
+    const cur = field === "k" ? (set.kg || 0) : (set.reps || 0);
+    span.innerHTML = `<input class="val-edit" type="number" inputmode="decimal" step="${field === "k" ? "0.5" : "1"}" min="0" value="${cur}">`;
+    const inp = span.querySelector("input");
+    inp.focus(); inp.select();
+    const commit = () => {
+      let v = parseFloat(inp.value);
+      if (isNaN(v) || v < 0) v = 0;
+      if (field === "k") set.kg = Math.round(v * 10) / 10;
+      else set.reps = Math.round(v);
+      this.refreshSetValue(set, exName);
+    };
+    inp.addEventListener("blur", commit);
+    inp.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); inp.blur(); } });
+  },
+
+  // Aggiorna display + badge + statistiche + autosave dopo un cambio di valore
+  refreshSetValue(set, exName) {
+    const id = set.id;
     const repEl  = document.getElementById(`rep-${id}`);
     const kgEl   = document.getElementById(`kg-${id}`);
     const progEl = document.getElementById(`prog-${id}`);
@@ -776,6 +809,16 @@ const Session = {
     );
     this.updateStats();
     this.autosave(set);   // salvataggio automatico
+  },
+
+  // Tieni premuto +/−: dopo 400ms ripete ogni 90ms finché tieni premuto
+  bindHold(btn) {
+    const fire = () => this.adjSet(btn.dataset.id, btn.dataset.f, parseFloat(btn.dataset.d), btn.dataset.ex);
+    let to = null, iv = null;
+    const start = e => { if (e.cancelable) e.preventDefault(); fire(); to = setTimeout(() => { iv = setInterval(fire, 90); }, 400); };
+    const stop  = () => { clearTimeout(to); clearInterval(iv); to = iv = null; };
+    btn.addEventListener("pointerdown", start);
+    ["pointerup", "pointerleave", "pointercancel"].forEach(ev => btn.addEventListener(ev, stop));
   },
 
   // ─── AUTOSAVE con debounce ───
@@ -827,6 +870,23 @@ const Session = {
             [CONFIG.PROPS.EL_RR_MIN]: API.prop.number(s.rrMin),
             [CONFIG.PROPS.EL_RR_MAX]: API.prop.number(s.rrMax),
           })));
+          this.setSyncState("saved");
+        } catch(e) { this.setSyncState("error"); }
+      }, 800);
+    }
+  },
+
+  // Recupero tra le serie (in header, come il rep range): salvato su tutte le serie
+  updateRest(exName, val) {
+    const sets = this.groupByExercise(this.exercises)[exName] || [];
+    const v = (val === "" ? null : Number(val));
+    sets.forEach(s => { s.recupero = v; });
+    if (sets[0]) {
+      clearTimeout(this._saveTimers["rest_" + exName]);
+      this._saveTimers["rest_" + exName] = setTimeout(async () => {
+        this.setSyncState("saving");
+        try {
+          await Promise.all(sets.map(s => API.update(s.id, { [CONFIG.PROPS.EL_RECUPERO]: API.prop.number(v) })));
           this.setSyncState("saved");
         } catch(e) { this.setSyncState("error"); }
       }, 800);
