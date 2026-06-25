@@ -604,7 +604,7 @@ const Cardio = {
     const tipo = document.getElementById("ca-tipo")?.value || "";
     const note = document.getElementById("ca-note")?.value || "";
     const durata = get("ca-durata");
-    if (!tipo && !durata) { alert("Inserisci almeno tipo o durata"); return; }
+    if (!tipo && !durata) { U.alert("Inserisci almeno tipo o durata"); return; }
     const data = {
       tipo,
       durata,
@@ -625,7 +625,7 @@ const Cardio = {
       if (msg) { msg.style.display = "flex"; setTimeout(() => msg.style.display = "none", 2500); }
     } catch(e) {
       console.error(e);
-      alert("Errore nel salvataggio del cardio.");
+      U.alert("Errore nel salvataggio del cardio.");
     }
   },
 };
@@ -751,7 +751,7 @@ const Diary = {
       energia: this.energia,
       note: document.getElementById("sl-note")?.value || "",
     };
-    if (data.ore == null) { alert("Inserisci almeno le ore dormite"); return; }
+    if (data.ore == null) { U.alert("Inserisci almeno le ore dormite"); return; }
     try {
       await API.saveSleep(data);
       ["sl-ore","sl-hrv","sl-note"].forEach(id => { const e=document.getElementById(id); if(e) e.value=""; });
@@ -759,7 +759,7 @@ const Diary = {
       this.buildRatings(); this.buildEnergia();
       const msg = document.getElementById("sleep-save-msg");
       if (msg) { msg.style.display="flex"; setTimeout(()=>msg.style.display="none",2500); }
-    } catch(e) { console.error(e); alert("Errore salvataggio sonno."); }
+    } catch(e) { console.error(e); U.alert("Errore salvataggio sonno."); }
   },
 
   async saveHabit() {
@@ -775,7 +775,7 @@ const Diary = {
       if (res && res.id) this.habitId = res.id;
       const msg = document.getElementById("habit-save-msg");
       if (msg) { msg.style.display="flex"; setTimeout(()=>msg.style.display="none",2500); }
-    } catch(e) { console.error(e); alert("Errore salvataggio abitudini."); }
+    } catch(e) { console.error(e); U.alert("Errore salvataggio abitudini."); }
   },
 };
 
@@ -854,11 +854,11 @@ const Schede = {
       await API.setActiveProgram(pg, App.schede);
       if (this._expanded) this._expanded.add(pg);
       await this.load();
-    } catch(e) { console.error(e); alert("Errore nel cambio programma attivo"); }
+    } catch(e) { console.error(e); U.alert("Errore nel cambio programma attivo"); }
   },
 
-  newProgram() {
-    const name = prompt("Nome del nuovo programma:");
+  async newProgram() {
+    const name = await U.prompt("Nuovo programma", { placeholder: "Es. Massa, Definizione…", okText: "Crea" });
     if (!name || !name.trim()) return;
     this._newProgram = name.trim();
     this.openEditor();   // crea la prima seduta di questo programma
@@ -996,10 +996,10 @@ const Schede = {
   },
 
   async remove(id, nome) {
-    if (!confirm(`Eliminare la scheda "${nome}"? Le sessioni già salvate restano.`)) return;
+    if (!await U.confirm(`Eliminare la seduta "${nome}"? Le sessioni già salvate restano.`, { danger: true, okText: "Elimina" })) return;
     try {
       await API.deleteScheda(id);
       await this.load();
-    } catch(e) { console.error(e); alert("Errore eliminazione"); }
+    } catch(e) { console.error(e); U.alert("Errore eliminazione"); }
   },
 };

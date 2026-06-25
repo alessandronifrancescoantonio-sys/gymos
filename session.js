@@ -721,13 +721,13 @@ const Session = {
       this.updateSetCount(exName);
     } catch(e) {
       console.error("addSet error:", e);
-      alert("Errore nell'aggiungere la serie. Controlla la connessione.");
+      U.alert("Errore nell'aggiungere la serie. Controlla la connessione.");
     }
   },
 
   // ─── RIMUOVI SERIE ───
   async removeSet(id, exName) {
-    if (!confirm("Rimuovere questa serie?")) return;
+    if (!await U.confirm("Rimuovere questa serie?", { danger: true, okText: "Rimuovi" })) return;
     // Rimuovi da UI
     const row = document.getElementById(`setrow-${id}`);
     if (row) row.remove();
@@ -775,10 +775,10 @@ const Session = {
   },
 
   async addExercise() {
-    const name = prompt("Nome del nuovo esercizio:");
+    const name = await U.prompt("Nuovo esercizio", { placeholder: "Es. Curl manubri" });
     if (!name || !name.trim()) return;
     const exName = name.trim();
-    if (this.groupByExercise(this.exercises)[exName]) { alert("Esercizio già presente nella sessione."); return; }
+    if (this.groupByExercise(this.exercises)[exName]) { U.alert("Esercizio già presente nella sessione."); return; }
     this.setSyncState("saving");
     try {
       const nSets = 3;
@@ -790,11 +790,11 @@ const Session = {
       this.updateStats();
       this.setSyncState("saved");
       this.syncSedutaExercise(exName, nSets, "add");   // riflette sulla seduta
-    } catch(e) { console.error("addExercise:", e); this.setSyncState("error"); alert("Errore nell'aggiungere l'esercizio."); }
+    } catch(e) { console.error("addExercise:", e); this.setSyncState("error"); U.alert("Errore nell'aggiungere l'esercizio."); }
   },
 
   async deleteExercise(exName) {
-    if (!confirm(`Rimuovere "${exName}" dalla sessione e dalla scheda?`)) return;
+    if (!await U.confirm(`Rimuovere "${exName}" dalla sessione e dalla scheda?`, { danger: true, okText: "Rimuovi" })) return;
     const sets = this.groupByExercise(this.exercises)[exName] || [];
     this.setSyncState("saving");
     try {
@@ -806,7 +806,7 @@ const Session = {
       this.updateStats();
       this.setSyncState("saved");
       this.syncSedutaExercise(exName, 0, "remove");   // riflette sulla seduta
-    } catch(e) { console.error("deleteExercise:", e); this.setSyncState("error"); alert("Errore nella rimozione."); }
+    } catch(e) { console.error("deleteExercise:", e); this.setSyncState("error"); U.alert("Errore nella rimozione."); }
   },
 
   // Aggiorna la seduta (template) del programma attivo legata a questa sessione

@@ -150,6 +150,48 @@ const U = {
   exName: item => typeof item === "string" ? item : ((item && item.nome) || ""),
   exSets: item => typeof item === "string" ? 1 : Math.max(1, (item && item.serie) || 1),
 
+  // ─── Modali in-app (sostituiscono confirm/prompt/alert nativi) ───
+  _modal(opts) {
+    return new Promise(resolve => {
+      const ov = document.getElementById("app-modal");
+      if (!ov) { resolve(opts.input ? null : (opts.kind === "alert")); return; }
+      const titleEl = document.getElementById("app-modal-title");
+      const msgEl   = document.getElementById("app-modal-msg");
+      const inp     = document.getElementById("app-modal-input");
+      const ok      = document.getElementById("app-modal-ok");
+      const cancel  = document.getElementById("app-modal-cancel");
+
+      titleEl.textContent = opts.title || "";
+      titleEl.style.display = opts.title ? "block" : "none";
+      msgEl.textContent = opts.message || "";
+      msgEl.style.display = opts.message ? "block" : "none";
+      if (opts.input) {
+        inp.style.display = "block";
+        inp.value = opts.value || "";
+        inp.placeholder = opts.placeholder || "";
+      } else { inp.style.display = "none"; }
+      ok.textContent = opts.okText || "Conferma";
+      ok.classList.toggle("danger", !!opts.danger);
+      cancel.style.display = (opts.kind === "alert") ? "none" : "inline-flex";
+      ov.style.display = "flex";
+      if (opts.input) setTimeout(() => { inp.focus(); inp.select(); }, 50);
+
+      const cleanup = () => {
+        ov.style.display = "none";
+        ok.onclick = cancel.onclick = ov.onclick = inp.onkeydown = null;
+        ok.classList.remove("danger");
+      };
+      const done = v => { cleanup(); resolve(v); };
+      ok.onclick     = () => done(opts.input ? (inp.value.trim() || null) : true);
+      cancel.onclick = () => done(opts.input ? null : false);
+      ov.onclick     = e => { if (e.target === ov) done(opts.input ? null : false); };
+      if (opts.input) inp.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); done(inp.value.trim() || null); } };
+    });
+  },
+  confirm(message, opts = {}) { return this._modal({ message, title: opts.title, danger: opts.danger, okText: opts.okText || "Conferma" }); },
+  prompt(message, opts = {})  { return this._modal({ input: true, title: message, placeholder: opts.placeholder, value: opts.value, okText: opts.okText || "Aggiungi" }); },
+  alert(message, opts = {})   { return this._modal({ message, title: opts.title, kind: "alert", okText: opts.okText || "Ok" }); },
+
   fmtDate(isoDate) {
     if (!isoDate) return "—";
     const d = new Date(isoDate + "T12:00:00");

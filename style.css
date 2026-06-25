@@ -511,6 +511,20 @@ input { font-family:inherit; }
 .del-ex-btn:active { background:rgba(239,68,68,.1); color:var(--red); }
 @media (max-width:760px) { .add-ex-btn { margin:4px 16px 8px; } }
 
+/* Modale in-app (confirm / prompt / alert) */
+.app-modal-overlay { position:fixed; inset:0; z-index:600; background:rgba(0,0,0,.72); backdrop-filter:blur(4px);
+  display:flex; align-items:center; justify-content:center; padding:24px; }
+.app-modal-box { width:100%; max-width:380px; background:var(--ink2); border:1px solid var(--ink3);
+  border-radius:var(--radius-lg); padding:20px; }
+.app-modal-title { font-size:17px; font-weight:600; color:var(--text); margin-bottom:8px; }
+.app-modal-msg { font-size:14px; color:var(--ghost); line-height:1.5; margin-bottom:14px; }
+.app-modal-input { width:100%; min-height:46px; padding:11px 13px; margin-bottom:16px; border-radius:var(--radius-sm);
+  background:var(--ink3); border:1px solid var(--ink4); color:var(--text); font-family:"Outfit",sans-serif; font-size:15px; }
+.app-modal-input:focus { outline:none; border-color:var(--accent); }
+.app-modal-actions { display:flex; gap:10px; }
+.app-modal-actions .btn-primary, .app-modal-actions .btn-cancel { flex:1; justify-content:center; }
+.app-modal-actions .btn-primary.danger { background:var(--red); }
+
 /* Contatore serie nell'header esercizio (visibile a tendina chiusa) */
 .ex-setcount { display:inline-flex; flex-direction:column; align-items:center; justify-content:center; line-height:1;
   font-family:"DM Mono",monospace; font-weight:600; font-size:15px; color:var(--text);
