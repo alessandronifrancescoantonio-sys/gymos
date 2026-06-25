@@ -149,6 +149,7 @@ const API = {
       cadenza:  this.read.rich_text(p, CONFIG.PROPS.EL_CADENZA),
       gruppo:   this.read.select(p, CONFIG.PROPS.EL_GRUPPO),
       recupero: this.read.number(p, CONFIG.PROPS.EL_RECUPERO),
+      rir:      this.read.number(p, CONFIG.PROPS.EL_RIR),
       info:     this.read.rich_text(p, CONFIG.PROPS.EL_INFO),
     }));
   },

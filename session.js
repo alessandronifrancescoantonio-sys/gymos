@@ -122,6 +122,7 @@ const Session = {
       const rrMin   = sets[0]?.rrMin || 8;
       const rrMax   = sets[0]?.rrMax || 12;
       const rest    = sets[0]?.recupero ?? "";
+      const rir     = sets[0]?.rir ?? "";
       const prevMax = prevSets.length > 0 ? Math.max(...prevSets.map(s => s.kg || 0)) : 0;
       const sid     = this.sanitize(exName);
       const ex      = sets[0] || {};   // i campi tecnica vivono a livello esercizio (su tutte le serie)
@@ -148,6 +149,11 @@ const Session = {
                 <input class="rr-in-sm" type="number" value="${rest}" min="0" step="5" placeholder="90"
                   onclick="event.stopPropagation()"
                   oninput="Session.updateRest('${exName}',this.value)"> s
+              </span>
+              <span class="ex-target-inline">· RIR
+                <input class="rr-in-sm" type="number" value="${rir}" min="0" max="10" step="1" placeholder="2"
+                  onclick="event.stopPropagation()"
+                  oninput="Session.updateRIR('${exName}',this.value)">
               </span>
               ${prevMax > 0 ? `<span>· max ${U.fmt(prevMax)} kg</span>` : ""}
             </div>
@@ -690,6 +696,7 @@ const Session = {
     props[CONFIG.PROPS.EL_CADENZA]  = API.prop.rich_text(last?.cadenza || "");
     props[CONFIG.PROPS.EL_GRUPPO]   = API.prop.select(last?.gruppo || "");
     props[CONFIG.PROPS.EL_RECUPERO] = API.prop.number(last?.recupero ?? null);
+    props[CONFIG.PROPS.EL_RIR]      = API.prop.number(last?.rir ?? null);
     props[CONFIG.PROPS.EL_INFO]     = API.prop.rich_text(last?.info || "");
 
     // Aggiungi relazione esercizio se disponibile
@@ -716,6 +723,7 @@ const Session = {
         cadenza:  last?.cadenza || "",
         gruppo:   last?.gruppo || "",
         recupero: last?.recupero ?? null,
+        rir:      last?.rir ?? null,
         info:     last?.info || "",
       };
       this.exercises.push(newSet);
@@ -855,15 +863,14 @@ const Session = {
         this.exercises.push(...made);
       }
     }
-    // 2) togli dalla sessione gli esercizi non più nella scheda E senza dati loggati
+    // 2) togli dalla sessione (in corso) gli esercizi non più nella scheda.
+    // Le pagine vengono archiviate (recuperabili dal cestino di Notion), non
+    // cancellate; le sessioni completate non passano mai di qui.
     for (const name of present) {
       if (!tmplNames.includes(name)) {
         const sets = grouped[name];
-        const hasData = sets.some(s => (s.reps || 0) > 0);
-        if (!hasData) {
-          await Promise.all(sets.map(s => API.archivePage(s.id).catch(() => {})));
-          this.exercises = this.exercises.filter(x => x.name.split(" – ")[0] !== name);
-        }
+        await Promise.all(sets.map(s => API.archivePage(s.id).catch(() => {})));
+        this.exercises = this.exercises.filter(x => x.name.split(" – ")[0] !== name);
       }
     }
   },
@@ -1029,6 +1036,23 @@ const Session = {
         this.setSyncState("saving");
         try {
           await Promise.all(sets.map(s => API.update(s.id, { [CONFIG.PROPS.EL_RECUPERO]: API.prop.number(v) })));
+          this.setSyncState("saved");
+        } catch(e) { this.setSyncState("error"); }
+      }, 800);
+    }
+  },
+
+  // RIR (reps in reserve) per esercizio, in header come il rep range
+  updateRIR(exName, val) {
+    const sets = this.groupByExercise(this.exercises)[exName] || [];
+    const v = (val === "" ? null : Number(val));
+    sets.forEach(s => { s.rir = v; });
+    if (sets[0]) {
+      clearTimeout(this._saveTimers["rir_" + exName]);
+      this._saveTimers["rir_" + exName] = setTimeout(async () => {
+        this.setSyncState("saving");
+        try {
+          await Promise.all(sets.map(s => API.update(s.id, { [CONFIG.PROPS.EL_RIR]: API.prop.number(v) })));
           this.setSyncState("saved");
         } catch(e) { this.setSyncState("error"); }
       }, 800);
