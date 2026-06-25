@@ -67,6 +67,9 @@ const Session = {
 
     this.exercises = await API.getSessionExercises(id);
 
+    // Stato "serie completata" (locale per sessione)
+    this._done = new Set(JSON.parse(localStorage.getItem(`gymos_done_${id}`) || "[]"));
+
     // Riallinea la sessione IN CORSO alla sua seduta (aggiunge esercizi nuovi
     // della scheda; toglie quelli rimossi dalla scheda solo se senza dati).
     if (sess.done === false) await this.reconcileWithScheda(sess).catch(console.error);
@@ -185,9 +188,9 @@ const Session = {
       container.appendChild(block);
 
       const setsContainer = document.getElementById(`sets-${sid}`);
-      // apri di default la prima serie ancora da fare (reps = 0); se sono tutte
+      // apri di default la prima serie non ancora completata; se sono tutte
       // fatte, restano tutte chiuse
-      let firstTodo = sets.findIndex(s => !(s.reps > 0));
+      let firstTodo = sets.findIndex(s => !this._done.has(s.id));
       sets.forEach((set, si) => {
         const prevSet = prevSets[si] || null;
         setsContainer.appendChild(this.buildSetRow(set, si, prevSet, exName, rrMin, rrMax, prevMax, sets.length, si === firstTodo));
@@ -613,8 +616,9 @@ const Session = {
   },
 
   buildSetRow(set, si, prevSet, exName, rrMin, rrMax, prevMax, total, expanded) {
+    const done = !!(this._done && this._done.has(set.id));
     const row = document.createElement("div");
-    row.className = "set-card" + (expanded ? "" : " set-collapsed");
+    row.className = "set-card" + (expanded ? "" : " set-collapsed") + (done ? " set-done" : "");
     row.id = `setrow-${set.id}`;
 
     const prevHTML = prevSet
@@ -634,6 +638,7 @@ const Session = {
           <span class="ssum" id="ssum-rep-${set.id}">${set.reps > 0 ? set.reps : "0"}</span><span class="ssum-u">rep</span>
         </div>
         <div class="set-hd-badge" id="prog-${set.id}">${status}</div>
+        <i class="ti ti-circle-check set-done-mark"></i>
         <i class="ti ti-chevron-down set-chev"></i>
       </div>
       <div class="set-body">
@@ -661,6 +666,9 @@ const Session = {
         <input class="note-inp" type="text" value="${set.note || ""}"
           placeholder="Note: forma, sensazione..."
           onchange="Session.saveNote('${set.id}',this.value)">
+        <button class="set-done-btn" onclick="Session.completeSet('${set.id}','${exName}')">
+          ${done ? '<i class="ti ti-rotate-2"></i> Annulla' : '<i class="ti ti-check"></i> Serie fatta'}
+        </button>
       </div>
     `;
     // tieni premuto +/− per ripetere
@@ -948,6 +956,38 @@ const Session = {
     const container = card.parentElement;
     if (container) container.querySelectorAll(".set-card").forEach(c => c.classList.add("set-collapsed"));
     if (willOpen) card.classList.remove("set-collapsed");
+  },
+
+  _done: new Set(),
+  saveDone() {
+    if (this.activeId) localStorage.setItem(`gymos_done_${this.activeId}`, JSON.stringify([...this._done]));
+  },
+
+  // "Serie fatta": segna completata, chiude la serie, apre la successiva e avvia
+  // il timer di recupero con il tempo dell'esercizio (o 90s di default).
+  completeSet(id, exName) {
+    const card = document.getElementById(`setrow-${id}`);
+    if (!card) return;
+    const nowDone = !this._done.has(id);
+    if (nowDone) this._done.add(id); else this._done.delete(id);
+    this.saveDone();
+    card.classList.toggle("set-done", nowDone);
+    const btn = card.querySelector(".set-done-btn");
+    if (btn) btn.innerHTML = nowDone
+      ? '<i class="ti ti-rotate-2"></i> Annulla'
+      : '<i class="ti ti-check"></i> Serie fatta';
+
+    if (nowDone) {
+      if (navigator.vibrate) navigator.vibrate(20);
+      // chiudi questa serie e apri la successiva dello stesso esercizio
+      card.classList.add("set-collapsed");
+      const next = card.nextElementSibling;
+      if (next && next.classList.contains("set-card")) next.classList.remove("set-collapsed");
+      // avvia il recupero automatico
+      const set = this.exercises.find(e => e.id === id);
+      const secs = (set && set.recupero) ? set.recupero : 90;
+      if (typeof RestTimer !== "undefined") RestTimer.start(secs);
+    }
   },
 
   // Aggiorna display + riepilogo + badge + statistiche + autosave dopo un cambio di valore

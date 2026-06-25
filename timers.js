@@ -120,6 +120,8 @@ const RestTimer = {
     this.total = seconds;
     this.remaining = seconds;
     document.getElementById("rest-running").style.display = "flex";
+    const fab = document.getElementById("rest-fab");
+    if (fab) fab.style.visibility = "hidden";   // evita sovrapposizione con la barretta
     this.updateDisplay();
     clearInterval(this.interval);
     this.interval = setInterval(() => {
@@ -164,6 +166,8 @@ const RestTimer = {
     setTimeout(() => {
       overlay.classList.remove("rest-done-flash");
       overlay.style.display = "none";
+      const fab = document.getElementById("rest-fab");
+      if (fab) fab.style.visibility = "";
     }, 700);
   },
 
@@ -171,5 +175,7 @@ const RestTimer = {
     clearInterval(this.interval);
     this.interval = null;
     document.getElementById("rest-running").style.display = "none";
+    const fab = document.getElementById("rest-fab");
+    if (fab) fab.style.visibility = "";
   },
 };
