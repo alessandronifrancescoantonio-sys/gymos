@@ -76,10 +76,11 @@ const Session = {
     const keys = Object.keys(grouped);
     // Mantieni ordine custom se compatibile, altrimenti usa quello di Notion
     const savedOrder = JSON.parse(localStorage.getItem(`gymos_order_${id}`) || "null");
-    if (savedOrder && savedOrder.every(n => keys.includes(n))) {
-      // mantieni l'ordine salvato, ma appendi gli esercizi nuovi (es. aggiunti
-      // dalla scheda via riallineamento) che non sono ancora nell'ordine salvato
-      this.exOrder = savedOrder.concat(keys.filter(k => !savedOrder.includes(k)));
+    if (savedOrder && savedOrder.length) {
+      // mantieni l'ordine salvato per gli esercizi ancora presenti, scarta quelli
+      // rimossi, e appendi quelli nuovi (es. aggiunti dalla scheda) in fondo
+      this.exOrder = savedOrder.filter(n => keys.includes(n))
+        .concat(keys.filter(k => !savedOrder.includes(k)));
     } else {
       this.exOrder = keys;
     }
@@ -558,7 +559,7 @@ const Session = {
 
     // Verifica se il punto toccato è un controllo interattivo (allora NON parte il drag)
     function isInteractive(target) {
-      return target.closest("button, input, textarea, select, a, .adj, .rm-set-btn, .add-set-btn, .note-inp, .rr-in-sm, .ex-tech, .stepper-val");
+      return target.closest("button, input, textarea, select, a, .adj, .rm-set-btn, .add-set-btn, .note-inp, .rr-in-sm, .ex-tech, .stepper-val, .set-card");
     }
 
     let touchStartX = 0;
@@ -627,7 +628,7 @@ const Session = {
     row.innerHTML = `
       <div class="set-hd" onclick="Session.toggleSet('${set.id}','${exName}')">
         <span class="set-num">${si + 1}</span>
-        <div class="set-hd-sum">
+        <div class="set-hd-sum${set.reps > 0 ? "" : " empty"}" id="sumwrap-${set.id}">
           <span class="ssum" id="ssum-kg-${set.id}">${U.fmt(set.kg)}</span><span class="ssum-u">kg</span>
           <span class="ssum-x">×</span>
           <span class="ssum" id="ssum-rep-${set.id}">${set.reps > 0 ? set.reps : "0"}</span><span class="ssum-u">rep</span>
@@ -864,13 +865,28 @@ const Session = {
       }
     }
     // 2) togli dalla sessione (in corso) gli esercizi non più nella scheda.
-    // Le pagine vengono archiviate (recuperabili dal cestino di Notion), non
-    // cancellate; le sessioni completate non passano mai di qui.
-    for (const name of present) {
-      if (!tmplNames.includes(name)) {
-        const sets = grouped[name];
-        await Promise.all(sets.map(s => API.archivePage(s.id).catch(() => {})));
-        this.exercises = this.exercises.filter(x => x.name.split(" – ")[0] !== name);
+    const toRemove = present.filter(name => !tmplNames.includes(name));
+    const noData = [], withData = [];
+    toRemove.forEach(name => {
+      (grouped[name].some(s => (s.reps || 0) > 0) ? withData : noData).push(name);
+    });
+    const archive = async name => {
+      await Promise.all(grouped[name].map(s => API.archivePage(s.id).catch(() => {})));
+      this.exercises = this.exercises.filter(x => x.name.split(" – ")[0] !== name);
+    };
+    // Senza dati: rimuovi subito (recuperabili dal cestino Notion)
+    for (const name of noData) await archive(name);
+    // Con dati registrati: chiedi conferma (una volta sola per tutti)
+    if (withData.length) {
+      const ok = await U.confirm(
+        `Questi esercizi sono stati tolti dalla scheda ma hanno serie già registrate in questa sessione: ${withData.join(", ")}. Rimuoverli anche dalla sessione?`,
+        { danger: true, okText: "Rimuovi" }
+      );
+      if (ok) {
+        for (const name of withData) await archive(name);
+      } else {
+        // li tieni: rimettili nella scheda così non te lo richiede ogni volta
+        for (const name of withData) this.syncSedutaExercise(name, grouped[name].length, "add");
       }
     }
   },
@@ -946,6 +962,8 @@ const Session = {
     const sumRep = document.getElementById(`ssum-rep-${id}`);
     if (sumKg)  sumKg.textContent = U.fmt(set.kg);
     if (sumRep) sumRep.textContent = set.reps > 0 ? set.reps : "0";
+    const sumWrap = document.getElementById(`sumwrap-${id}`);
+    if (sumWrap) sumWrap.classList.toggle("empty", !(set.reps > 0));
 
     const grouped  = this.groupByExercise(this.exercises);
     const prevG    = this.groupByExercise(this.prevExercises);

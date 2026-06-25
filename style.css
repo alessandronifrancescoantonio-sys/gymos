@@ -152,6 +152,7 @@ input { font-family:inherit; }
 .set-hd { display:flex; align-items:center; gap:10px; padding:11px 14px; cursor:pointer; touch-action:manipulation; }
 .set-hd-sum { flex:1; display:flex; align-items:baseline; gap:3px; font-family:'DM Mono',monospace; }
 .ssum { font-size:17px; font-weight:600; color:var(--text); }
+.set-hd-sum.empty .ssum { color:var(--muted); }
 .ssum-u { font-size:10px; color:var(--muted); }
 .ssum-x { font-size:12px; color:var(--muted); margin:0 3px; }
 .set-hd-badge { flex-shrink:0; }
