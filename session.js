@@ -67,6 +67,10 @@ const Session = {
 
     this.exercises = await API.getSessionExercises(id);
 
+    // Riallinea la sessione IN CORSO alla sua seduta (aggiunge esercizi nuovi
+    // della scheda; toglie quelli rimossi dalla scheda solo se senza dati).
+    if (sess.done === false) await this.reconcileWithScheda(sess).catch(console.error);
+
     // Ordine: usa exOrder salvato per questa sessione, o quello di arrivo da Notion
     const grouped = this.groupByExercise(this.exercises);
     const keys = Object.keys(grouped);
@@ -159,6 +163,9 @@ const Session = {
           <div class="ex-tech${(ex.tecnica && ex.tecnica.length) || ex.gruppo ? " has-tech" : ""}" id="extech-${sid}">
             ${this.exTechInnerHTML(exName, ex)}
           </div>
+          <button class="del-ex-btn" onclick="Session.deleteExercise('${exName}')">
+            <i class="ti ti-trash"></i> Rimuovi esercizio dalla scheda
+          </button>
         </div>
       `;
 
@@ -738,6 +745,111 @@ const Session = {
       });
     }
     this.updateSetCount(exName);
+  },
+
+  // ─── ESERCIZI INTERI: aggiungi / rimuovi (con sync sulla seduta) ───
+
+  // Crea in Notion N serie per un esercizio nella sessione attiva, ritorna gli oggetti set
+  async _createExerciseSets(exName, nSets, base) {
+    const sess = this.sessions.find(s => s.id === this.activeId);
+    const date = sess?.date || U.today();
+    const made = [];
+    for (let i = 1; i <= nSets; i++) {
+      const props = {};
+      props[CONFIG.PROPS.EL_NAME]    = API.prop.title(`${exName} – ${sess?.name || ""} – S${i}`);
+      props[CONFIG.PROPS.EL_SESSION] = API.prop.relation([this.activeId]);
+      props[CONFIG.PROPS.EL_SETS]    = API.prop.number(1);
+      props[CONFIG.PROPS.EL_REPS]    = API.prop.number(0);
+      props[CONFIG.PROPS.EL_KG]      = API.prop.number(0);
+      props[CONFIG.PROPS.EL_RR_MIN]  = API.prop.number(base?.rrMin || 8);
+      props[CONFIG.PROPS.EL_RR_MAX]  = API.prop.number(base?.rrMax || 12);
+      props[CONFIG.PROPS.EL_DATE]    = API.prop.date(date);
+      const page = await API.create(CONFIG.DB.ESERCIZI_LOG, props);
+      made.push({ id: page.id, name: `${exName} – ${sess?.name || ""} – S${i}`, sets: 1, reps: 0, kg: 0,
+        rrMin: base?.rrMin || 8, rrMax: base?.rrMax || 12, note: "", date,
+        tecnica: [], cadenza: "", gruppo: "", recupero: null, info: "" });
+    }
+    return made;
+  },
+
+  async addExercise() {
+    const name = prompt("Nome del nuovo esercizio:");
+    if (!name || !name.trim()) return;
+    const exName = name.trim();
+    if (this.groupByExercise(this.exercises)[exName]) { alert("Esercizio già presente nella sessione."); return; }
+    this.setSyncState("saving");
+    try {
+      const nSets = 3;
+      const made = await this._createExerciseSets(exName, nSets, null);
+      this.exercises.push(...made);
+      this.exOrder.push(exName);
+      this.saveOrder();
+      this.renderExercises();
+      this.updateStats();
+      this.setSyncState("saved");
+      this.syncSedutaExercise(exName, nSets, "add");   // riflette sulla seduta
+    } catch(e) { console.error("addExercise:", e); this.setSyncState("error"); alert("Errore nell'aggiungere l'esercizio."); }
+  },
+
+  async deleteExercise(exName) {
+    if (!confirm(`Rimuovere "${exName}" dalla sessione e dalla scheda?`)) return;
+    const sets = this.groupByExercise(this.exercises)[exName] || [];
+    this.setSyncState("saving");
+    try {
+      await Promise.all(sets.map(s => API.archivePage(s.id).catch(console.error)));
+      this.exercises = this.exercises.filter(e => e.name.split(" – ")[0] !== exName);
+      this.exOrder = this.exOrder.filter(n => n !== exName);
+      this.saveOrder();
+      this.renderExercises();
+      this.updateStats();
+      this.setSyncState("saved");
+      this.syncSedutaExercise(exName, 0, "remove");   // riflette sulla seduta
+    } catch(e) { console.error("deleteExercise:", e); this.setSyncState("error"); alert("Errore nella rimozione."); }
+  },
+
+  // Aggiorna la seduta (template) del programma attivo legata a questa sessione
+  syncSedutaExercise(exName, serie, action) {
+    const sess  = this.sessions.find(s => s.id === this.activeId);
+    const sched = sess && CONFIG.SCHEDE[sess.type];   // { _id, exercises, color }
+    if (!sched || !sched._id) return;                 // sessione non legata a una seduta del programma attivo
+    let list = (sched.exercises || []).map(e => ({ nome: U.exName(e), serie: U.exSets(e) }));
+    if (action === "add") {
+      if (!list.some(e => e.nome === exName)) list.push({ nome: exName, serie: serie || 3 });
+    } else {
+      list = list.filter(e => e.nome !== exName);
+    }
+    sched.exercises = list;
+    const sd = App.schede.find(x => x.id === sched._id);
+    if (sd) sd.exercises = list;
+    API.updateScheda(sched._id, { exercises: list }).catch(console.error);
+  },
+
+  // Riallinea la sessione in corso alla sua seduta (chiamato in loadSession)
+  async reconcileWithScheda(sess) {
+    const sched = CONFIG.SCHEDE[sess.type];
+    if (!sched) return;
+    const grouped   = this.groupByExercise(this.exercises);
+    const present   = Object.keys(grouped);
+    const tmpl      = (sched.exercises || []).map(e => ({ nome: U.exName(e), serie: U.exSets(e) }));
+    const tmplNames = tmpl.map(e => e.nome);
+    // 1) aggiungi gli esercizi della scheda non presenti nella sessione
+    for (const e of tmpl) {
+      if (!present.includes(e.nome)) {
+        const made = await this._createExerciseSets(e.nome, e.serie, null);
+        this.exercises.push(...made);
+      }
+    }
+    // 2) togli dalla sessione gli esercizi non più nella scheda E senza dati loggati
+    for (const name of present) {
+      if (!tmplNames.includes(name)) {
+        const sets = grouped[name];
+        const hasData = sets.some(s => (s.reps || 0) > 0);
+        if (!hasData) {
+          await Promise.all(sets.map(s => API.archivePage(s.id).catch(() => {})));
+          this.exercises = this.exercises.filter(x => x.name.split(" – ")[0] !== name);
+        }
+      }
+    }
   },
 
   getProgression(set, prevSet) {

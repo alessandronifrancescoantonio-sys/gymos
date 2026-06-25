@@ -39,6 +39,11 @@ const API = {
     return this.call(`/pages/${pageId}`, "PATCH", { properties });
   },
 
+  // ─── ARCHIVE PAGE (rimozione vera: sparisce dalle query) ───
+  async archivePage(pageId) {
+    return this.call(`/pages/${pageId}`, "PATCH", { archived: true });
+  },
+
   // ─── HELPERS: costruttori di proprietà Notion ───
 
   prop: {

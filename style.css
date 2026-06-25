@@ -500,6 +500,17 @@ input { font-family:inherit; }
 .tech-in:focus { outline:none; border-color:var(--accent); }
 .tg-info { width:100%; font-family:"Outfit",sans-serif; font-size:13px; line-height:1.45; resize:vertical; min-height:42px; }
 
+/* Aggiungi/Rimuovi interi esercizi nella sessione */
+.add-ex-btn { display:flex; align-items:center; justify-content:center; gap:8px; width:auto; margin:4px 0 8px;
+  padding:14px; border-radius:var(--radius-lg); background:rgba(255,59,47,.1); border:1px solid rgba(255,59,47,.35);
+  color:var(--accent); font-size:13px; font-weight:600; }
+.add-ex-btn:active { transform:scale(.99); background:rgba(255,59,47,.18); }
+.del-ex-btn { display:flex; align-items:center; justify-content:center; gap:6px; width:100%; margin-top:10px;
+  padding:9px; border-radius:var(--radius-sm); background:transparent; border:1px dashed rgba(239,68,68,.4);
+  color:rgba(239,68,68,.85); font-size:12px; font-weight:600; }
+.del-ex-btn:active { background:rgba(239,68,68,.1); color:var(--red); }
+@media (max-width:760px) { .add-ex-btn { margin:4px 16px 8px; } }
+
 /* Contatore serie nell'header esercizio (visibile a tendina chiusa) */
 .ex-setcount { display:inline-flex; flex-direction:column; align-items:center; justify-content:center; line-height:1;
   font-family:"DM Mono",monospace; font-weight:600; font-size:15px; color:var(--text);
