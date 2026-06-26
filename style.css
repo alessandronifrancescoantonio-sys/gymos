@@ -458,17 +458,28 @@ input { font-family:inherit; }
 .prog-count { font-size:11px; color:var(--dim); background:var(--ink3); padding:3px 9px; border-radius:100px; flex-shrink:0; }
 .prog-activate { font-size:11px; font-weight:600; color:var(--ghost); background:var(--ink3); border:1px solid var(--ink4); padding:6px 10px; border-radius:100px; flex-shrink:0; }
 .prog-activate:active { border-color:var(--accent); color:var(--accent); }
-.prog-body { display:none; padding:0 14px 14px; flex-direction:column; gap:8px; }
+.prog-body { display:none; padding:0 14px 14px; flex-direction:column; gap:10px; }
 .prog-body.open { display:flex; }
-.seduta-row { display:flex; align-items:center; gap:10px; padding:11px 12px; background:var(--ink3); border:1px solid var(--ink4); border-radius:10px; }
-.seduta-main { flex:1; min-width:0; }
-.seduta-name { font-size:14px; font-weight:600; color:var(--text); }
-.seduta-ex { display:flex; flex-wrap:wrap; gap:5px; margin-top:7px; }
-.seduta-chip { display:inline-flex; align-items:center; gap:5px; font-size:11px; color:var(--ghost);
-  background:var(--ink2); border:1px solid var(--ink4); border-radius:7px; padding:4px 8px; line-height:1.2; }
-.seduta-chip b { font-family:'DM Mono',monospace; font-weight:600; font-size:10px; color:var(--accent); }
-.seduta-empty { font-size:11px; color:var(--muted); font-style:italic; }
-.prog-add-seduta { display:flex; align-items:center; justify-content:center; gap:6px; padding:10px; border-radius:10px;
+/* Seduta in stile lista Apple: header pulito + lista esercizi su righe allineate */
+.seduta-card { background:var(--ink3); border:1px solid var(--ink4); border-radius:12px; overflow:hidden; }
+.seduta-head { display:flex; align-items:center; gap:10px; padding:12px 14px; border-bottom:1px solid var(--ink4); }
+.seduta-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+.seduta-head .seduta-name { flex:1; min-width:0; font-size:15px; font-weight:600; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.seduta-count { font-size:11px; color:var(--dim); background:var(--ink2); padding:3px 9px; border-radius:100px; flex-shrink:0; }
+.seduta-act { width:32px; height:32px; border-radius:8px; background:var(--ink2); border:1px solid var(--ink4); color:var(--ghost); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.seduta-act:active { transform:scale(.94); border-color:var(--accent); color:var(--accent); }
+.seduta-act.del { color:rgba(239,68,68,.6); }
+.seduta-act.del:active { border-color:var(--red); color:var(--red); }
+.seduta-act i { font-size:15px; }
+.seduta-list { display:flex; flex-direction:column; }
+.ex-line { display:flex; align-items:center; gap:12px; padding:11px 14px; border-bottom:1px solid var(--ink2); }
+.ex-line:last-child { border-bottom:none; }
+.ex-line-num { width:20px; font-family:'DM Mono',monospace; font-size:12px; font-weight:500; color:var(--muted); text-align:center; flex-shrink:0; }
+.ex-line-name { flex:1; min-width:0; font-size:14px; color:var(--text); }
+.ex-line-sets { font-family:'DM Mono',monospace; font-size:13px; font-weight:600; color:var(--ghost); display:flex; align-items:baseline; gap:4px; flex-shrink:0; }
+.ex-line-sets small { font-family:"Outfit",sans-serif; font-size:10px; font-weight:500; color:var(--muted); }
+.ex-line.empty { font-size:12px; color:var(--muted); font-style:italic; justify-content:center; }
+.prog-add-seduta { display:flex; align-items:center; justify-content:center; gap:6px; padding:11px; border-radius:12px;
   background:transparent; border:1px dashed var(--ink4); color:var(--dim); font-size:12px; font-weight:600; }
 .prog-add-seduta:active { border-color:var(--accent); color:var(--accent); }
 

@@ -828,16 +828,24 @@ const Schede = {
         </div>
         <div class="prog-body${open ? " open" : ""}">
           ${sedute.map(s => `
-            <div class="seduta-row">
-              <div class="scheda-color-dot" style="background:${s.colore}"></div>
-              <div class="seduta-main">
-                <div class="seduta-name">${s.nome}</div>
-                <div class="seduta-ex">${s.exercises.length
-                  ? s.exercises.map(e => `<span class="seduta-chip">${U.exName(e)}<b>${U.exSets(e)}×</b></span>`).join("")
-                  : '<span class="seduta-empty">nessun esercizio</span>'}</div>
+            <div class="seduta-card">
+              <div class="seduta-head">
+                <span class="seduta-dot" style="background:${s.colore}"></span>
+                <span class="seduta-name">${s.nome}</span>
+                <span class="seduta-count">${s.exercises.length} es.</span>
+                <button class="seduta-act" onclick="Schede.openEditor('${s.id}')" aria-label="Modifica"><i class="ti ti-pencil"></i></button>
+                <button class="seduta-act del" onclick="Schede.remove('${s.id}','${s.nome.replace(/'/g,"")}')" aria-label="Elimina"><i class="ti ti-trash"></i></button>
               </div>
-              <button class="scheda-edit-btn" onclick="Schede.openEditor('${s.id}')"><i class="ti ti-pencil"></i></button>
-              <button class="scheda-del-btn" onclick="Schede.remove('${s.id}','${s.nome.replace(/'/g,"")}')"><i class="ti ti-trash"></i></button>
+              <div class="seduta-list">
+                ${s.exercises.length
+                  ? s.exercises.map((e, i) => `
+                    <div class="ex-line">
+                      <span class="ex-line-num">${i + 1}</span>
+                      <span class="ex-line-name">${U.exName(e)}</span>
+                      <span class="ex-line-sets">${U.exSets(e)}<small>serie</small></span>
+                    </div>`).join("")
+                  : '<div class="ex-line empty">Nessun esercizio — tocca la matita per aggiungerli</div>'}
+              </div>
             </div>`).join("")}
           <button class="prog-add-seduta" onclick="Schede.addSeduta('${pgEsc}')"><i class="ti ti-plus"></i> Aggiungi seduta</button>
         </div>
