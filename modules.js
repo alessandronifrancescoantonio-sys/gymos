@@ -841,7 +841,7 @@ const Schede = {
                   ? s.exercises.map((e, i) => `
                     <div class="ex-line">
                       <span class="ex-line-num">${i + 1}</span>
-                      <span class="ex-line-name">${U.exName(e)}</span>
+                      <span class="ex-line-name">${U.exName(e)}${(U.exTec(e).length || U.exGrp(e)) ? ` <i class="ti ti-bolt ex-line-tech" title="${[...U.exTec(e), U.exGrp(e) ? "Superset " + U.exGrp(e) : ""].filter(Boolean).join(", ")}"></i>` : ""}</span>
                       <span class="ex-line-sets">${U.exSets(e)}<small>serie</small></span>
                     </div>`).join("")
                   : '<div class="ex-line empty">Nessun esercizio — tocca la matita per aggiungerli</div>'}
@@ -886,7 +886,7 @@ const Schede = {
     const titleEl = document.getElementById("scheda-editor-title");
     if (id) {
       const s = App.schede.find(x => x.id === id);
-      this.draftEx = (s.exercises || []).map(e => ({ nome: U.exName(e), serie: U.exSets(e) }));
+      this.draftEx = (s.exercises || []).map(e => ({ nome: U.exName(e), serie: U.exSets(e), recupero: U.exRest(e), rir: U.exRir(e), tecnica: U.exTec(e), cadenza: U.exCad(e), info: U.exInfo(e), gruppo: U.exGrp(e) }));
       this.draftColor = API.COLOR_REV[s.colore] || "Rosso";
       document.getElementById("sc-nome").value = s.nome;
       titleEl.innerHTML = '<i class="ti ti-pencil"></i>Modifica seduta';
@@ -934,15 +934,26 @@ const Schede = {
       row.className = "ex-editor-item";
       row.draggable = true;
       row.innerHTML = `
-        <i class="ti ti-grip-vertical ex-editor-grip"></i>
-        <span class="ex-editor-name">${U.exName(ex)}</span>
-        <div class="ex-editor-sets">
-          <button type="button" onclick="Schede.bumpSets(${i},-1)">−</button>
-          <span id="scsets-${i}">${U.exSets(ex)}</span>
-          <button type="button" onclick="Schede.bumpSets(${i},1)">+</button>
-          <small>serie</small>
+        <div class="ex-editor-top">
+          <i class="ti ti-grip-vertical ex-editor-grip"></i>
+          <span class="ex-editor-name">${U.exName(ex)}</span>
+          <button class="ex-editor-del" onclick="Schede.removeExercise(${i})"><i class="ti ti-x"></i></button>
         </div>
-        <button class="ex-editor-del" onclick="Schede.removeExercise(${i})"><i class="ti ti-x"></i></button>
+        <div class="ex-editor-fields">
+          <div class="ex-editor-sets">
+            <button type="button" onclick="Schede.bumpSets(${i},-1)">−</button>
+            <span id="scsets-${i}">${U.exSets(ex)}</span>
+            <button type="button" onclick="Schede.bumpSets(${i},1)">+</button>
+            <small>serie</small>
+          </div>
+          <label class="ex-editor-f"><span>Rec s</span>
+            <input type="number" min="0" step="5" placeholder="90" value="${U.exRest(ex) ?? ""}" onchange="Schede.setMeta(${i},'recupero',this.value)"></label>
+          <label class="ex-editor-f"><span>RIR</span>
+            <input type="number" min="0" max="10" step="1" placeholder="2" value="${U.exRir(ex) ?? ""}" onchange="Schede.setMeta(${i},'rir',this.value)"></label>
+        </div>
+        <div class="ed-tech${(U.exTec(ex).length || U.exGrp(ex)) ? " has-tech" : ""}" id="ed-tech-${i}">
+          ${this.edTechHTML(i, ex)}
+        </div>
       `;
       row.addEventListener("dragstart", () => this.dragIdx = i);
       row.addEventListener("dragover", e => e.preventDefault());
@@ -962,19 +973,94 @@ const Schede = {
     const inp = document.getElementById("sc-new-ex");
     const val = inp.value.trim();
     if (!val) return;
-    this.draftEx.push({ nome: val, serie: 3 });
+    this.draftEx.push({ nome: val, serie: 3, recupero: null, rir: null, tecnica: [], cadenza: "", info: "", gruppo: "" });
     inp.value = "";
     inp.focus();
     this.buildExList();
   },
 
-  // Aumenta/diminuisce il numero di serie di un esercizio in editing
+  // Aumenta/diminuisce il numero di serie (conserva recupero/rir)
   bumpSets(i, d) {
     if (!this.draftEx[i]) return;
     const next = Math.max(1, Math.min(20, U.exSets(this.draftEx[i]) + d));
-    this.draftEx[i] = { nome: U.exName(this.draftEx[i]), serie: next };
+    this.draftEx[i].serie = next;
     const el = document.getElementById(`scsets-${i}`);
     if (el) el.textContent = next;
+  },
+
+  // Imposta recupero/rir di un esercizio in editing
+  setMeta(i, field, val) {
+    if (!this.draftEx[i]) return;
+    this.draftEx[i][field] = (val === "" ? null : Number(val));
+  },
+
+  // ─── Tecnica di intensità nell'editor scheda (come in sessione) ───
+  edPartners(i) {
+    const g = U.exGrp(this.draftEx[i]);
+    if (!g) return [];
+    return this.draftEx.filter((e, j) => j !== i && U.exGrp(e) === g).map(e => U.exName(e));
+  },
+  edTechHTML(i, ex) {
+    const tec = U.exTec(ex), grp = U.exGrp(ex);
+    const partners = this.edPartners(i);
+    const sup = grp ? `<span class="ed-tech-sup"><i class="ti ti-link"></i>Superset${partners.length ? " con " + partners.join(", ") : ""}</span>` : "";
+    const tecLbl = tec.length ? `<span>${tec.join(", ")}</span>` : "";
+    const summary = (sup || tecLbl) ? `<span class="ed-tech-sum">${sup}${tecLbl}</span>` : `<span class="ed-tech-sum muted">imposta…</span>`;
+    const chips = (CONFIG.TECNICHE || []).map(t => {
+      const on = tec.includes(t.name);
+      return `<button type="button" class="tech-chip${on ? " on" : ""}" style="${on ? `--tc:${t.color}` : ""}" onclick="Schede.edToggleTec(${i},'${t.name}')">${t.name}</button>`;
+    }).join("");
+    const corr = this.draftEx.map((e, j) => ({ e, j })).filter(o => o.j !== i).map(o => {
+      const og = U.exGrp(o.e);
+      const same = grp && og === grp, other = og && og !== grp;
+      return `<label class="tg-ex${other ? " off" : ""}${same ? " on" : ""}"><input type="checkbox" ${same ? "checked" : ""} ${other ? "disabled" : ""} onchange="Schede.edCorrelate(${i},${o.j},this.checked)"><span>${U.exName(o.e)}</span></label>`;
+    }).join("");
+    return `
+      <button type="button" class="ed-tech-toggle" onclick="Schede.toggleEdTech(${i}, this)">
+        <i class="ti ti-bolt"></i><span class="ed-tech-label">Tecnica di intensità</span>${summary}<i class="ti ti-chevron-down ed-tech-chev"></i>
+      </button>
+      <div class="ed-tech-box">
+        <div class="tg-lbl">Tecnica</div>
+        <div class="tech-chips">${chips}</div>
+        <div class="tech-fields">
+          <label class="tech-field"><span>Cadenza</span><input class="tech-in" type="text" placeholder="3-1-1" value="${U.exCad(ex)}" onchange="Schede.edSetText(${i},'cadenza',this.value)"></label>
+        </div>
+        <div class="tg-lbl">Info tecnica</div>
+        <textarea class="tech-in tg-info" rows="2" placeholder="Es. drop al 70%, 2 cali; eccentrica 3s..." onchange="Schede.edSetText(${i},'info',this.value)">${U.exInfo(ex)}</textarea>
+        <div class="tg-lbl">Superset — raggruppa con</div>
+        <div class="tg-exs">${corr || '<span class="tech-empty">Nessun altro esercizio</span>'}</div>
+      </div>`;
+  },
+  toggleEdTech(i, btn) { const w = btn.closest(".ed-tech"); if (w) w.classList.toggle("open"); },
+  _reTechRow(i) {
+    const w = document.getElementById(`ed-tech-${i}`);
+    if (!w) return;
+    const open = w.classList.contains("open");
+    w.innerHTML = this.edTechHTML(i, this.draftEx[i]);
+    w.classList.toggle("has-tech", !!(U.exTec(this.draftEx[i]).length || U.exGrp(this.draftEx[i])));
+    if (open) w.classList.add("open");
+  },
+  edToggleTec(i, name) {
+    const cur = new Set(U.exTec(this.draftEx[i]));
+    if (cur.has(name)) cur.delete(name); else cur.add(name);
+    this.draftEx[i].tecnica = [...cur];
+    this._reTechRow(i);
+  },
+  edSetText(i, field, val) { if (this.draftEx[i]) this.draftEx[i][field] = val; },
+  edNextGroup() {
+    const used = new Set(this.draftEx.map(e => U.exGrp(e)).filter(Boolean));
+    return (CONFIG.GRUPPI || ["A","B","C","D","E","F"]).find(g => !used.has(g)) || "A";
+  },
+  edCorrelate(i, j, checked) {
+    if (checked) {
+      const g = U.exGrp(this.draftEx[i]) || U.exGrp(this.draftEx[j]) || this.edNextGroup();
+      this.draftEx[i].gruppo = g; this.draftEx[j].gruppo = g;
+    } else {
+      this.draftEx[j].gruppo = "";
+      const g = U.exGrp(this.draftEx[i]);
+      if (g && this.draftEx.filter(e => U.exGrp(e) === g).length < 2) this.draftEx[i].gruppo = "";
+    }
+    this.buildExList();
   },
 
   removeExercise(i) {

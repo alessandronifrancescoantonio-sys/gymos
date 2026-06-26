@@ -149,6 +149,12 @@ const U = {
   // un oggetto { nome, serie } (nuovo formato). Questi helper li normalizzano.
   exName: item => typeof item === "string" ? item : ((item && item.nome) || ""),
   exSets: item => typeof item === "string" ? 1 : Math.max(1, (item && item.serie) || 1),
+  exRest: item => (item && typeof item === "object" && item.recupero != null) ? item.recupero : null,
+  exRir:  item => (item && typeof item === "object" && item.rir != null) ? item.rir : null,
+  exTec:  item => (item && typeof item === "object" && Array.isArray(item.tecnica)) ? item.tecnica : [],
+  exCad:  item => (item && typeof item === "object" && item.cadenza) ? item.cadenza : "",
+  exInfo: item => (item && typeof item === "object" && item.info) ? item.info : "",
+  exGrp:  item => (item && typeof item === "object" && item.gruppo) ? item.gruppo : "",
 
   // ─── Modali in-app (sostituiscono confirm/prompt/alert nativi) ───
   _modal(opts) {

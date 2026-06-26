@@ -371,6 +371,7 @@ const Session = {
       try {
         await Promise.all(sets.map(s => API.updateExerciseTech(s.id, tech)));
         this.setSyncState("saved");
+        this.syncSedutaMeta(exName);   // riflette la tecnica sulla scheda
       } catch(e) { console.error("saveTech:", e); this.setSyncState("error"); }
     }, 800);
   },
@@ -750,7 +751,7 @@ const Session = {
       );
       this.updateStats();
       this.updateSetCount(exName);
-      this.syncSedutaSets(exName);   // aggiorna il n. serie sulla scheda
+      this.syncSedutaMeta(exName);   // aggiorna serie/recupero/rir/tecnica sulla scheda
     } catch(e) {
       console.error("addSet error:", e);
       U.alert("Errore nell'aggiungere la serie. Controlla la connessione.");
@@ -777,7 +778,7 @@ const Session = {
       });
     }
     this.updateSetCount(exName);
-    this.syncSedutaSets(exName);   // aggiorna il n. serie sulla scheda
+    this.syncSedutaMeta(exName);   // aggiorna serie/recupero/rir/tecnica sulla scheda
   },
 
   // ─── ESERCIZI INTERI: aggiungi / rimuovi (con sync sulla seduta) ───
@@ -857,21 +858,31 @@ const Session = {
     API.updateScheda(sched._id, { exercises: list }).catch(console.error);
   },
 
-  // Aggiorna sulla seduta il NUMERO DI SERIE di un esercizio = quante serie ha
-  // ora nella sessione (sync sessione -> scheda, dinamico).
-  syncSedutaSets(exName) {
+  // Aggiorna sulla seduta i meta di un esercizio (serie + recupero + rir) dai
+  // valori correnti nella sessione (sync sessione -> scheda, dinamico).
+  syncSedutaMeta(exName) {
     const sess  = this.sessions.find(s => s.id === this.activeId);
     const sched = sess && CONFIG.SCHEDE[sess.type];
     if (!sched || !sched._id) return;
-    const count = (this.groupByExercise(this.exercises)[exName] || []).length;
-    if (count < 1) return;   // se non resta nessuna serie, ci pensa la rimozione esercizio
-    let list = (sched.exercises || []).map(e => ({ nome: U.exName(e), serie: U.exSets(e) }));
+    const sets = this.groupByExercise(this.exercises)[exName] || [];
+    if (!sets.length) return;   // se non resta nessuna serie, ci pensa la rimozione esercizio
+    const ex = sets[0];
+    const next = {
+      nome: exName, serie: sets.length,
+      recupero: ex.recupero ?? null, rir: ex.rir ?? null,
+      tecnica: ex.tecnica || [], cadenza: ex.cadenza || "", info: ex.info || "", gruppo: ex.gruppo || "",
+    };
+    const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+    let list = (sched.exercises || []).map(e => ({
+      nome: U.exName(e), serie: U.exSets(e), recupero: U.exRest(e), rir: U.exRir(e),
+      tecnica: U.exTec(e), cadenza: U.exCad(e), info: U.exInfo(e), gruppo: U.exGrp(e),
+    }));
     const item = list.find(e => e.nome === exName);
     if (item) {
-      if (item.serie === count) return;   // già allineato
-      item.serie = count;
+      if (same(item, next)) return;
+      Object.assign(item, next);
     } else {
-      list.push({ nome: exName, serie: count });
+      list.push(next);
     }
     sched.exercises = list;
     const sd = App.schede.find(x => x.id === sched._id);
@@ -885,15 +896,18 @@ const Session = {
     if (!sched) return;
     const grouped   = this.groupByExercise(this.exercises);
     const present   = Object.keys(grouped);
-    const tmpl      = (sched.exercises || []).map(e => ({ nome: U.exName(e), serie: U.exSets(e) }));
+    const tmpl      = (sched.exercises || []).map(e => ({
+      nome: U.exName(e), serie: U.exSets(e), recupero: U.exRest(e), rir: U.exRir(e),
+      tecnica: U.exTec(e), cadenza: U.exCad(e), info: U.exInfo(e), gruppo: U.exGrp(e),
+    }));
     const tmplNames = tmpl.map(e => e.nome);
     // 1) per ogni esercizio della scheda: se manca lo crea; se c'è, allinea il
-    //    NUMERO DI SERIE a quello della scheda (aggiunge le mancanti, toglie le
-    //    in eccesso SOLO se vuote e non completate, per non perdere dati).
+    //    NUMERO DI SERIE (aggiunge le mancanti, toglie le in eccesso SOLO se vuote)
+    //    e i META (recupero/rir/tecnica/cadenza/info/gruppo) ai valori della scheda.
     for (const e of tmpl) {
       const cur = grouped[e.nome];
       if (!cur) {
-        const made = await this._createExerciseSets(e.nome, e.serie, null);
+        const made = await this._createExerciseSets(e.nome, e.serie, e);
         this.exercises.push(...made);
       } else if (e.serie > cur.length) {
         const made = await this._createExerciseSets(e.nome, e.serie - cur.length, cur[0]);
@@ -904,6 +918,19 @@ const Session = {
         for (const s of drop) {
           await API.archivePage(s.id).catch(() => {});
           this.exercises = this.exercises.filter(x => x.id !== s.id);
+        }
+      }
+      // allinea i meta (la scheda è la sorgente) su tutte le serie dell'esercizio
+      const cur2 = this.groupByExercise(this.exercises)[e.nome] || [];
+      if (cur2.length) {
+        const meta = { recupero: e.recupero ?? null, rir: e.rir ?? null, tecnica: e.tecnica || [], cadenza: e.cadenza || "", info: e.info || "", gruppo: e.gruppo || "" };
+        const c0 = cur2[0];
+        const differs = (c0.recupero ?? null) !== meta.recupero || (c0.rir ?? null) !== meta.rir ||
+          JSON.stringify(c0.tecnica || []) !== JSON.stringify(meta.tecnica) ||
+          (c0.cadenza || "") !== meta.cadenza || (c0.info || "") !== meta.info || (c0.gruppo || "") !== meta.gruppo;
+        if (differs) {
+          cur2.forEach(s => Object.assign(s, meta));
+          await Promise.all(cur2.map(s => API.updateExerciseTech(s.id, meta)));
         }
       }
     }
@@ -1130,6 +1157,7 @@ const Session = {
         try {
           await Promise.all(sets.map(s => API.update(s.id, { [CONFIG.PROPS.EL_RECUPERO]: API.prop.number(v) })));
           this.setSyncState("saved");
+          this.syncSedutaMeta(exName);
         } catch(e) { this.setSyncState("error"); }
       }, 800);
     }
@@ -1147,6 +1175,7 @@ const Session = {
         try {
           await Promise.all(sets.map(s => API.update(s.id, { [CONFIG.PROPS.EL_RIR]: API.prop.number(v) })));
           this.setSyncState("saved");
+          this.syncSedutaMeta(exName);
         } catch(e) { this.setSyncState("error"); }
       }, 800);
     }
@@ -1319,6 +1348,12 @@ Session._doCreateSession = async function(name) {
     exercises.forEach(function(item) {
       var exNm  = U.exName(item);
       var nSets = U.exSets(item);   // quante serie creare per questo esercizio
+      var rec   = U.exRest(item);
+      var rir   = U.exRir(item);
+      var tec   = U.exTec(item);
+      var cad   = U.exCad(item);
+      var inf   = U.exInfo(item);
+      var grp   = U.exGrp(item);
       for (var i = 1; i <= nSets; i++) {
         var props = {};
         props[CONFIG.PROPS.EL_NAME]    = API.prop.title(exNm + " – " + name + " – S" + i);
@@ -1328,6 +1363,12 @@ Session._doCreateSession = async function(name) {
         props[CONFIG.PROPS.EL_KG]      = API.prop.number(0);
         props[CONFIG.PROPS.EL_RR_MIN]  = API.prop.number(8);
         props[CONFIG.PROPS.EL_RR_MAX]  = API.prop.number(12);
+        props[CONFIG.PROPS.EL_RECUPERO]= API.prop.number(rec);
+        props[CONFIG.PROPS.EL_RIR]     = API.prop.number(rir);
+        props[CONFIG.PROPS.EL_TECNICA] = API.prop.multi_select(tec);
+        props[CONFIG.PROPS.EL_CADENZA] = API.prop.rich_text(cad);
+        props[CONFIG.PROPS.EL_GRUPPO]  = API.prop.select(grp);
+        props[CONFIG.PROPS.EL_INFO]    = API.prop.rich_text(inf);
         props[CONFIG.PROPS.EL_DATE]    = API.prop.date(today);
         creates.push(API.create(CONFIG.DB.ESERCIZI_LOG, props));
       }

@@ -476,6 +476,7 @@ input { font-family:inherit; }
 .ex-line:last-child { border-bottom:none; }
 .ex-line-num { width:20px; font-family:'DM Mono',monospace; font-size:12px; font-weight:500; color:var(--muted); text-align:center; flex-shrink:0; }
 .ex-line-name { flex:1; min-width:0; font-size:14px; color:var(--text); }
+.ex-line-tech { color:var(--accent); font-size:13px; vertical-align:-1px; }
 .ex-line-sets { font-family:'DM Mono',monospace; font-size:13px; font-weight:600; color:var(--ghost); display:flex; align-items:baseline; gap:4px; flex-shrink:0; }
 .ex-line-sets small { font-family:"Outfit",sans-serif; font-size:10px; font-weight:500; color:var(--muted); }
 .ex-line.empty { font-size:12px; color:var(--muted); font-style:italic; justify-content:center; }
@@ -491,10 +492,30 @@ input { font-family:inherit; }
 .color-swatch.on { border-color:var(--text); box-shadow:0 0 0 2px var(--ink2); }
 .ex-editor-list { display:flex; flex-direction:column; gap:6px; }
 .ex-editor-empty { font-size:12px; color:var(--muted); font-style:italic; padding:8px 0; }
-.ex-editor-item { display:flex; align-items:center; gap:10px; padding:9px 10px; background:var(--ink3); border:1px solid var(--ink4); border-radius:9px; }
+.ex-editor-item { display:flex; flex-direction:column; gap:9px; padding:10px 11px; background:var(--ink3); border:1px solid var(--ink4); border-radius:10px; }
+.ex-editor-top { display:flex; align-items:center; gap:10px; }
 .ex-editor-grip { color:var(--muted); font-size:16px; cursor:grab; }
-.ex-editor-name { flex:1; font-size:13px; color:var(--text); }
+.ex-editor-name { flex:1; font-size:14px; font-weight:600; color:var(--text); }
+.ex-editor-fields { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding-left:26px; }
+.ex-editor-f { display:inline-flex; align-items:center; gap:6px; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.3px; color:var(--muted); }
+.ex-editor-f input { width:54px; min-height:34px; padding:5px 8px; border-radius:8px; background:var(--ink2); border:1px solid var(--ink4); color:var(--text); font-family:'DM Mono',monospace; font-size:13px; text-align:center; }
+.ex-editor-f input:focus { outline:none; border-color:var(--accent); }
 .ex-editor-sets { display:inline-flex; align-items:center; gap:6px; flex-shrink:0; }
+/* Tecnica di intensità nell'editor scheda */
+.ed-tech { margin-left:26px; }
+.ed-tech-toggle { width:100%; display:flex; align-items:center; gap:7px; padding:8px 10px; min-height:38px; border-radius:8px;
+  background:var(--ink2); border:1px solid var(--ink4); color:var(--dim); font-size:11px; font-weight:600; text-align:left; }
+.ed-tech.has-tech .ed-tech-toggle { color:var(--text); border-color:rgba(255,59,47,.35); }
+.ed-tech-toggle > .ti-bolt { color:var(--accent); font-size:15px; flex-shrink:0; }
+.ed-tech-label { flex-shrink:0; }
+.ed-tech-sum { margin-left:auto; display:inline-flex; align-items:center; gap:5px; flex-wrap:wrap; justify-content:flex-end; font-size:10px; font-weight:500; color:var(--ghost); }
+.ed-tech-sum.muted { color:var(--muted); font-style:italic; }
+.ed-tech-sup { display:inline-flex; align-items:center; gap:3px; font-size:9px; font-weight:700; color:var(--accent); background:rgba(255,59,47,.12); border:1px solid rgba(255,59,47,.35); padding:1px 5px; border-radius:4px; }
+.ed-tech-sup i { font-size:10px; }
+.ed-tech-chev { flex-shrink:0; transition:transform .2s; color:var(--dim); }
+.ed-tech.open .ed-tech-chev { transform:rotate(180deg); }
+.ed-tech-box { display:none; margin-top:8px; padding:11px; background:var(--ink2); border:1px solid var(--ink4); border-radius:8px; }
+.ed-tech.open .ed-tech-box { display:block; }
 .ex-editor-sets button { width:26px; height:26px; border-radius:6px; background:var(--ink2); border:1px solid var(--ink4); color:var(--text); font-size:15px; display:flex; align-items:center; justify-content:center; }
 .ex-editor-sets button:active { transform:scale(.92); border-color:var(--accent); }
 .ex-editor-sets span { min-width:16px; text-align:center; font-family:"DM Mono",monospace; font-weight:600; font-size:14px; color:var(--text); }
