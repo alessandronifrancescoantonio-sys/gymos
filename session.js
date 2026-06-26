@@ -750,6 +750,7 @@ const Session = {
       );
       this.updateStats();
       this.updateSetCount(exName);
+      this.syncSedutaSets(exName);   // aggiorna il n. serie sulla scheda
     } catch(e) {
       console.error("addSet error:", e);
       U.alert("Errore nell'aggiungere la serie. Controlla la connessione.");
@@ -762,13 +763,11 @@ const Session = {
     // Rimuovi da UI
     const row = document.getElementById(`setrow-${id}`);
     if (row) row.remove();
-    // Rimuovi da array locale
+    // Rimuovi da array locale + stato "fatto"
     this.exercises = this.exercises.filter(e => e.id !== id);
-    // Archivia in Notion (non possiamo cancellare, quindi la segniamo come 0 serie)
-    await API.update(id, {
-      [CONFIG.PROPS.EL_REPS]: API.prop.number(0),
-      [CONFIG.PROPS.EL_SETS]: API.prop.number(0),
-    }).catch(console.error);
+    if (this._done) { this._done.delete(id); this.saveDone(); }
+    // Rimozione vera (archiviata): così il conteggio resta coerente anche dopo refresh
+    await API.archivePage(id).catch(console.error);
     this.updateStats();
     // Rinumera le serie
     const setsContainer = document.getElementById(`sets-${this.sanitize(exName)}`);
@@ -778,6 +777,7 @@ const Session = {
       });
     }
     this.updateSetCount(exName);
+    this.syncSedutaSets(exName);   // aggiorna il n. serie sulla scheda
   },
 
   // ─── ESERCIZI INTERI: aggiungi / rimuovi (con sync sulla seduta) ───
@@ -857,6 +857,28 @@ const Session = {
     API.updateScheda(sched._id, { exercises: list }).catch(console.error);
   },
 
+  // Aggiorna sulla seduta il NUMERO DI SERIE di un esercizio = quante serie ha
+  // ora nella sessione (sync sessione -> scheda, dinamico).
+  syncSedutaSets(exName) {
+    const sess  = this.sessions.find(s => s.id === this.activeId);
+    const sched = sess && CONFIG.SCHEDE[sess.type];
+    if (!sched || !sched._id) return;
+    const count = (this.groupByExercise(this.exercises)[exName] || []).length;
+    if (count < 1) return;   // se non resta nessuna serie, ci pensa la rimozione esercizio
+    let list = (sched.exercises || []).map(e => ({ nome: U.exName(e), serie: U.exSets(e) }));
+    const item = list.find(e => e.nome === exName);
+    if (item) {
+      if (item.serie === count) return;   // già allineato
+      item.serie = count;
+    } else {
+      list.push({ nome: exName, serie: count });
+    }
+    sched.exercises = list;
+    const sd = App.schede.find(x => x.id === sched._id);
+    if (sd) sd.exercises = list;
+    API.updateScheda(sched._id, { exercises: list }).catch(console.error);
+  },
+
   // Riallinea la sessione in corso alla sua seduta (chiamato in loadSession)
   async reconcileWithScheda(sess) {
     const sched = CONFIG.SCHEDE[sess.type];
@@ -865,11 +887,24 @@ const Session = {
     const present   = Object.keys(grouped);
     const tmpl      = (sched.exercises || []).map(e => ({ nome: U.exName(e), serie: U.exSets(e) }));
     const tmplNames = tmpl.map(e => e.nome);
-    // 1) aggiungi gli esercizi della scheda non presenti nella sessione
+    // 1) per ogni esercizio della scheda: se manca lo crea; se c'è, allinea il
+    //    NUMERO DI SERIE a quello della scheda (aggiunge le mancanti, toglie le
+    //    in eccesso SOLO se vuote e non completate, per non perdere dati).
     for (const e of tmpl) {
-      if (!present.includes(e.nome)) {
+      const cur = grouped[e.nome];
+      if (!cur) {
         const made = await this._createExerciseSets(e.nome, e.serie, null);
         this.exercises.push(...made);
+      } else if (e.serie > cur.length) {
+        const made = await this._createExerciseSets(e.nome, e.serie - cur.length, cur[0]);
+        this.exercises.push(...made);
+      } else if (e.serie < cur.length) {
+        const removable = cur.filter(s => !(s.reps > 0) && !this._done.has(s.id));
+        const drop = removable.slice(-(cur.length - e.serie));
+        for (const s of drop) {
+          await API.archivePage(s.id).catch(() => {});
+          this.exercises = this.exercises.filter(x => x.id !== s.id);
+        }
       }
     }
     // 2) togli dalla sessione (in corso) gli esercizi non più nella scheda.
