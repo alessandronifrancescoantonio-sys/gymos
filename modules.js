@@ -376,7 +376,9 @@ const Dashboard = {
       return d >= startOfWeek;
     });
 
-    document.getElementById("d-sessions").textContent = thisWeek.filter(s => s.done).length + "/" + thisWeek.length;
+    // Denominatore = numero di sedute del programma attivo (obiettivo settimanale)
+    const target = Object.keys(CONFIG.SCHEDE || {}).length || thisWeek.length;
+    document.getElementById("d-sessions").textContent = thisWeek.filter(s => s.done).length + "/" + target;
     document.getElementById("d-sessions-sub").textContent = "completate questa settimana";
 
     const last = checkins[checkins.length - 1];
@@ -830,7 +832,9 @@ const Schede = {
               <div class="scheda-color-dot" style="background:${s.colore}"></div>
               <div class="seduta-main">
                 <div class="seduta-name">${s.nome}</div>
-                <div class="seduta-ex">${s.exercises.map(e => `${U.exName(e)} <b>×${U.exSets(e)}</b>`).join(" · ") || "nessun esercizio"}</div>
+                <div class="seduta-ex">${s.exercises.length
+                  ? s.exercises.map(e => `<span class="seduta-chip">${U.exName(e)}<b>${U.exSets(e)}×</b></span>`).join("")
+                  : '<span class="seduta-empty">nessun esercizio</span>'}</div>
               </div>
               <button class="scheda-edit-btn" onclick="Schede.openEditor('${s.id}')"><i class="ti ti-pencil"></i></button>
               <button class="scheda-del-btn" onclick="Schede.remove('${s.id}','${s.nome.replace(/'/g,"")}')"><i class="ti ti-trash"></i></button>
