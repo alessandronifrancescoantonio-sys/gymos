@@ -170,6 +170,8 @@ const U = {
   exCad:  item => (item && typeof item === "object" && item.cadenza) ? item.cadenza : "",
   exInfo: item => (item && typeof item === "object" && item.info) ? item.info : "",
   exGrp:  item => (item && typeof item === "object" && item.gruppo) ? item.gruppo : "",
+  exRrMin: item => (item && typeof item === "object" && item.rrMin != null) ? item.rrMin : 8,
+  exRrMax: item => (item && typeof item === "object" && item.rrMax != null) ? item.rrMax : 12,
 
   // ─── Modali in-app (sostituiscono confirm/prompt/alert nativi) ───
   _modal(opts) {

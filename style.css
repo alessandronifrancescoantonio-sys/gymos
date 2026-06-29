@@ -522,6 +522,25 @@ input { font-family:inherit; }
 .ex-editor-f { display:inline-flex; align-items:center; gap:6px; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.3px; color:var(--muted); }
 .ex-editor-f input { width:54px; min-height:34px; padding:5px 8px; border-radius:8px; background:var(--ink2); border:1px solid var(--ink4); color:var(--text); font-family:'DM Mono',monospace; font-size:13px; text-align:center; }
 .ex-editor-f input:focus { outline:none; border-color:var(--accent); }
+.ex-editor-range .range-pair { display:inline-flex; align-items:center; gap:4px; }
+.ex-editor-range .range-pair i { color:var(--muted); font-style:normal; }
+.ex-editor-range input { width:40px; }
+
+/* ─── Note della sessione precedente (vista compatta a tendina) ─── */
+.prev-notes { margin:0 0 10px; }
+.prev-notes-toggle { display:flex; align-items:center; gap:7px; width:100%;
+  font-size:11px; font-weight:600; color:var(--amber); background:rgba(245,166,35,.08);
+  border:1px solid rgba(245,166,35,.20); border-radius:var(--radius-sm); padding:7px 10px; }
+.prev-notes-toggle i.ti-notes { font-size:14px; }
+.prev-notes-toggle em { font-style:normal; font-family:'DM Mono',monospace; font-size:10px;
+  background:rgba(245,166,35,.18); color:var(--amber); border-radius:100px; padding:1px 7px; }
+.prev-notes-toggle .pn-chev { margin-left:auto; font-size:15px; transition:transform .2s; color:var(--dim); }
+.prev-notes.open .pn-chev { transform:rotate(180deg); }
+.prev-notes-body { display:none; padding:8px 4px 2px; }
+.prev-notes.open .prev-notes-body { display:block; animation:fadeIn .2s ease; }
+.pn-line { display:flex; gap:8px; font-size:12px; color:var(--text2); padding:4px 0; line-height:1.45; }
+.pn-line + .pn-line { border-top:1px solid var(--ink3); }
+.pn-line b { color:var(--amber); font-family:'DM Mono',monospace; font-size:11px; flex-shrink:0; min-width:20px; }
 .ex-editor-sets { display:inline-flex; align-items:center; gap:6px; flex-shrink:0; }
 /* Tecnica di intensità nell'editor scheda */
 .ed-tech { margin-left:26px; }

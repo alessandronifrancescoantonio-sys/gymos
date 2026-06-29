@@ -167,6 +167,7 @@ const Session = {
           <i class="ti ti-chevron-down ex-chevron"></i>
         </div>
         <div class="ex-body">
+          ${this.prevNotesHTML(prevSets)}
           <div id="sets-${sid}"></div>
           <div class="add-set-row">
             <button class="add-set-btn" onclick="Session.addSet('${exName}')">
@@ -410,6 +411,28 @@ const Session = {
       const y = block.getBoundingClientRect().top + window.scrollY - offset;
       window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
     });
+  },
+
+  // Vista compatta delle note della sessione precedente (chiusa di default)
+  prevNotesHTML(prevSets) {
+    const esc = t => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const notes = (prevSets || [])
+      .map((s, i) => ({ n: i + 1, t: (s.note || "").trim() }))
+      .filter(o => o.t);
+    if (!notes.length) return "";
+    const body = notes.map(o => `<div class="pn-line"><b>S${o.n}</b><span>${esc(o.t)}</span></div>`).join("");
+    return `<div class="prev-notes">
+      <button type="button" class="prev-notes-toggle" onclick="Session.togglePrevNotes(this, event)">
+        <i class="ti ti-notes"></i><span>Note scorsa volta</span><em>${notes.length}</em>
+        <i class="ti ti-chevron-down pn-chev"></i>
+      </button>
+      <div class="prev-notes-body">${body}</div>
+    </div>`;
+  },
+  togglePrevNotes(btn, event) {
+    if (event) event.stopPropagation();
+    const wrap = btn.closest(".prev-notes");
+    if (wrap) wrap.classList.toggle("open");
   },
 
   // Aggiorna lo stato "completato" di un esercizio: se tutte le serie sono fatte
@@ -916,11 +939,13 @@ const Session = {
     const next = {
       nome: exName, serie: sets.length,
       recupero: ex.recupero ?? null, rir: ex.rir ?? null,
+      rrMin: ex.rrMin ?? 8, rrMax: ex.rrMax ?? 12,
       tecnica: ex.tecnica || [], cadenza: ex.cadenza || "", info: ex.info || "", gruppo: ex.gruppo || "",
     };
     const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
     let list = (sched.exercises || []).map(e => ({
       nome: U.exName(e), serie: U.exSets(e), recupero: U.exRest(e), rir: U.exRir(e),
+      rrMin: U.exRrMin(e), rrMax: U.exRrMax(e),
       tecnica: U.exTec(e), cadenza: U.exCad(e), info: U.exInfo(e), gruppo: U.exGrp(e),
     }));
     const item = list.find(e => e.nome === exName);
@@ -944,6 +969,7 @@ const Session = {
     const present   = Object.keys(grouped);
     const tmpl      = (sched.exercises || []).map(e => ({
       nome: U.exName(e), serie: U.exSets(e), recupero: U.exRest(e), rir: U.exRir(e),
+      rrMin: U.exRrMin(e), rrMax: U.exRrMax(e),
       tecnica: U.exTec(e), cadenza: U.exCad(e), info: U.exInfo(e), gruppo: U.exGrp(e),
     }));
     const tmplNames = tmpl.map(e => e.nome);
@@ -969,9 +995,10 @@ const Session = {
       // allinea i meta (la scheda è la sorgente) su tutte le serie dell'esercizio
       const cur2 = this.groupByExercise(this.exercises)[e.nome] || [];
       if (cur2.length) {
-        const meta = { recupero: e.recupero ?? null, rir: e.rir ?? null, tecnica: e.tecnica || [], cadenza: e.cadenza || "", info: e.info || "", gruppo: e.gruppo || "" };
+        const meta = { recupero: e.recupero ?? null, rir: e.rir ?? null, rrMin: e.rrMin ?? 8, rrMax: e.rrMax ?? 12, tecnica: e.tecnica || [], cadenza: e.cadenza || "", info: e.info || "", gruppo: e.gruppo || "" };
         const c0 = cur2[0];
         const differs = (c0.recupero ?? null) !== meta.recupero || (c0.rir ?? null) !== meta.rir ||
+          (c0.rrMin ?? 8) !== meta.rrMin || (c0.rrMax ?? 12) !== meta.rrMax ||
           JSON.stringify(c0.tecnica || []) !== JSON.stringify(meta.tecnica) ||
           (c0.cadenza || "") !== meta.cadenza || (c0.info || "") !== meta.info || (c0.gruppo || "") !== meta.gruppo;
         if (differs) {

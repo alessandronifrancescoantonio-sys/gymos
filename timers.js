@@ -186,23 +186,25 @@ const RestTimer = {
     this.showFinished();
   },
 
-  // Flash rosso a tutto schermo finché non lo tocchi (auto-chiude dopo 8s)
+  // Flash rosso a tutto schermo finché non lo tocchi (auto-chiude dopo 20s)
   showFinished() {
     const o = document.getElementById("rest-finished");
     if (!o) return;
     o.style.display = "flex";
     clearTimeout(this._finTo);
-    this._finTo = setTimeout(() => this.dismissFinished(), 8000);
+    this._finTo = setTimeout(() => this.dismissFinished(), 20000);
   },
   dismissFinished() {
     const o = document.getElementById("rest-finished");
     if (o) o.style.display = "none";
     clearTimeout(this._finTo);
+    this.stopAlarm();   // toccando lo schermo si zittisce l'allarme
   },
 
   stop() {
     clearInterval(this.interval);
     this.interval = null;
+    this.stopAlarm();
     this.releaseWake();
     document.getElementById("rest-running").style.display = "none";
     const fab = document.getElementById("rest-fab");
@@ -229,21 +231,38 @@ const RestTimer = {
       if (this.audioCtx.state === "suspended") this.audioCtx.resume();
     } catch(e) {}
   },
-  beep() {
+  // Suona un singolo "burst" di 3 toni ascendenti (più udibile sopra la musica)
+  _burst() {
     try {
       const ctx = this.audioCtx || new (window.AudioContext || window.webkitAudioContext)();
       if (ctx.state === "suspended") ctx.resume();
+      this.audioCtx = ctx;
       const tone = (t, f) => {
         const o = ctx.createOscillator(), g = ctx.createGain();
-        o.type = "sine"; o.frequency.value = f;
+        o.type = "triangle"; o.frequency.value = f;   // triangle = più ricco/percepibile
         o.connect(g); g.connect(ctx.destination);
         g.gain.setValueAtTime(0.0001, ctx.currentTime + t);
-        g.gain.exponentialRampToValueAtTime(0.35, ctx.currentTime + t + 0.02);
-        g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + t + 0.35);
-        o.start(ctx.currentTime + t); o.stop(ctx.currentTime + t + 0.36);
+        g.gain.exponentialRampToValueAtTime(0.6, ctx.currentTime + t + 0.02);   // volume più alto
+        g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + t + 0.30);
+        o.start(ctx.currentTime + t); o.stop(ctx.currentTime + t + 0.31);
       };
-      tone(0, 880); tone(0.42, 1100);   // due bip
+      tone(0, 880); tone(0.22, 1100); tone(0.44, 1320);
     } catch(e) {}
+  },
+  // Allarme ripetuto: continua a suonare/vibrare finché non si tocca lo schermo
+  // (max ~20s di sicurezza), così non lo si perde quando ci si allena con la musica.
+  beep() {
+    this.stopAlarm();
+    this._alarmStart = Date.now();
+    this._burst();
+    this._alarmInt = setInterval(() => {
+      if (Date.now() - this._alarmStart > 20000) { this.stopAlarm(); return; }
+      this._burst();
+      if (navigator.vibrate) navigator.vibrate([250, 120, 250]);
+    }, 1500);
+  },
+  stopAlarm() {
+    if (this._alarmInt) { clearInterval(this._alarmInt); this._alarmInt = null; }
   },
 
   // ── Notifica (utile se l'app è in secondo piano ma il telefono è acceso) ──

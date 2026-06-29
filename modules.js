@@ -886,7 +886,7 @@ const Schede = {
     const titleEl = document.getElementById("scheda-editor-title");
     if (id) {
       const s = App.schede.find(x => x.id === id);
-      this.draftEx = (s.exercises || []).map(e => ({ nome: U.exName(e), serie: U.exSets(e), recupero: U.exRest(e), rir: U.exRir(e), tecnica: U.exTec(e), cadenza: U.exCad(e), info: U.exInfo(e), gruppo: U.exGrp(e) }));
+      this.draftEx = (s.exercises || []).map(e => ({ nome: U.exName(e), serie: U.exSets(e), recupero: U.exRest(e), rir: U.exRir(e), rrMin: U.exRrMin(e), rrMax: U.exRrMax(e), tecnica: U.exTec(e), cadenza: U.exCad(e), info: U.exInfo(e), gruppo: U.exGrp(e) }));
       this.draftColor = API.COLOR_REV[s.colore] || "Rosso";
       document.getElementById("sc-nome").value = s.nome;
       titleEl.innerHTML = '<i class="ti ti-pencil"></i>Modifica seduta';
@@ -946,6 +946,12 @@ const Schede = {
             <button type="button" onclick="Schede.bumpSets(${i},1)">+</button>
             <small>serie</small>
           </div>
+          <label class="ex-editor-f ex-editor-range"><span>Rep</span>
+            <span class="range-pair">
+              <input type="number" min="1" max="40" placeholder="8" value="${U.exRrMin(ex)}" onchange="Schede.setRange(${i},'rrMin',this.value)">
+              <i>–</i>
+              <input type="number" min="1" max="40" placeholder="12" value="${U.exRrMax(ex)}" onchange="Schede.setRange(${i},'rrMax',this.value)">
+            </span></label>
           <label class="ex-editor-f"><span>Rec s</span>
             <input type="number" min="0" step="5" placeholder="90" value="${U.exRest(ex) ?? ""}" onchange="Schede.setMeta(${i},'recupero',this.value)"></label>
           <label class="ex-editor-f"><span>RIR</span>
@@ -973,7 +979,7 @@ const Schede = {
     const inp = document.getElementById("sc-new-ex");
     const val = inp.value.trim();
     if (!val) return;
-    this.draftEx.push({ nome: val, serie: 3, recupero: null, rir: null, tecnica: [], cadenza: "", info: "", gruppo: "" });
+    this.draftEx.push({ nome: val, serie: 3, recupero: null, rir: null, rrMin: 8, rrMax: 12, tecnica: [], cadenza: "", info: "", gruppo: "" });
     inp.value = "";
     inp.focus();
     this.buildExList();
@@ -992,6 +998,13 @@ const Schede = {
   setMeta(i, field, val) {
     if (!this.draftEx[i]) return;
     this.draftEx[i][field] = (val === "" ? null : Number(val));
+  },
+
+  // Imposta il rep range (min/max) di un esercizio in editing
+  setRange(i, field, val) {
+    if (!this.draftEx[i]) return;
+    const n = parseInt(val);
+    this.draftEx[i][field] = (val === "" || isNaN(n)) ? (field === "rrMin" ? 8 : 12) : Math.max(1, Math.min(40, n));
   },
 
   // ─── Tecnica di intensità nell'editor scheda (come in sessione) ───

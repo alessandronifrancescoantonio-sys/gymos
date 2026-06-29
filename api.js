@@ -180,6 +180,8 @@ const API = {
     if (tech.recupero !== undefined) props[CONFIG.PROPS.EL_RECUPERO] = API.prop.number(tech.recupero);
     if (tech.rir      !== undefined) props[CONFIG.PROPS.EL_RIR]      = API.prop.number(tech.rir);
     if (tech.info     !== undefined) props[CONFIG.PROPS.EL_INFO]     = API.prop.rich_text(tech.info);
+    if (tech.rrMin    !== undefined) props[CONFIG.PROPS.EL_RR_MIN]   = API.prop.number(tech.rrMin);
+    if (tech.rrMax    !== undefined) props[CONFIG.PROPS.EL_RR_MAX]   = API.prop.number(tech.rrMax);
     return this.update(pageId, props);
   },
 
