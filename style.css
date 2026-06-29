@@ -146,6 +146,22 @@ input { font-family:inherit; }
 .rr-in-sm:focus { border-color:var(--blue); }
 .ex-chevron { color:var(--muted); font-size:18px; flex-shrink:0; transition:transform .2s; }
 .ex-block.collapsed .ex-chevron { transform:rotate(-90deg); }
+
+/* ─── Focus: esercizio aperto in primo piano, gli altri si abbassano ─── */
+.ex-block { transition:opacity .25s ease, transform .25s ease, filter .25s ease; }
+#exercises-container:has(.ex-block:not(.collapsed)) .ex-block.collapsed:not(.ex-focused) {
+  opacity:.45; transform:scale(.97);
+}
+#exercises-container:has(.ex-block:not(.collapsed)) .ex-block.collapsed:not(.ex-focused) .ex-sub { display:none; }
+
+/* ─── Esercizio completato: schiarito, compatto, con spunta ─── */
+.ex-done-check { display:none; color:var(--green,#22c55e); font-size:22px; flex-shrink:0; }
+.ex-block.ex-done .ex-done-check { display:inline-block; }
+.ex-block.ex-done.collapsed { opacity:.5; }
+.ex-block.ex-done.collapsed .ex-name { text-decoration:line-through; text-decoration-color:var(--muted); }
+.ex-block.ex-done.collapsed .ex-setcount { display:none; }
+.ex-block.ex-done.collapsed .ex-sub { display:none; }
+.ex-block.ex-done .ex-num { color:var(--green,#22c55e); }
 .set-card { border-bottom:1px solid var(--ink3); -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
 .set-card:last-of-type { border-bottom:none; }
 /* Serie a tendina: header riepilogo (sempre visibile) + corpo modificabile */

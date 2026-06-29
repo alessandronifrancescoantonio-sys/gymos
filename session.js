@@ -163,6 +163,7 @@ const Session = {
             </div>
           </div>
           <span class="ex-setcount" id="setcount-${sid}">${sets.length}<small>serie</small></span>
+          <i class="ti ti-circle-check-filled ex-done-check"></i>
           <i class="ti ti-chevron-down ex-chevron"></i>
         </div>
         <div class="ex-body">
@@ -196,6 +197,7 @@ const Session = {
         setsContainer.appendChild(this.buildSetRow(set, si, prevSet, exName, rrMin, rrMax, prevMax, sets.length, si === firstTodo));
       });
     });
+    this.refreshAllDone();
   },
 
   // Applica un patch a TUTTE le serie dell'esercizio (la tecnica vive su ogni serie)
@@ -380,7 +382,37 @@ const Session = {
     if (event && (event.target.closest(".drag-handle") || event.target.closest("input"))) return;
     // Se è appena avvenuto un drag, non fare il toggle
     if (this._justDragged) { this._justDragged = false; return; }
-    hd.parentElement.classList.toggle("collapsed");
+    const block = hd.parentElement;
+    const willOpen = block.classList.contains("collapsed");
+    if (willOpen) {
+      // FOCUS: apri solo questo, chiudi e "abbassa" tutti gli altri
+      document.querySelectorAll("#exercises-container .ex-block").forEach(b => {
+        b.classList.add("collapsed");
+        b.classList.toggle("ex-focused", b === block);
+      });
+      block.classList.remove("collapsed");
+      block.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+      block.classList.add("collapsed");
+      block.classList.remove("ex-focused");
+    }
+  },
+
+  // Aggiorna lo stato "completato" di un esercizio: se tutte le serie sono fatte
+  // il blocco si schiarisce/rimpicciolisce con una spunta, così l'occhio cade
+  // subito su quelli ancora da fare.
+  refreshExDone(exName) {
+    const sid = this.sanitize(exName);
+    const block = [...document.querySelectorAll("#exercises-container .ex-block")]
+      .find(b => b.dataset.ex === exName);
+    if (!block) return;
+    const sets = this.groupByExercise(this.exercises)[exName] || [];
+    const allDone = sets.length > 0 && sets.every(s => this._done.has(s.id));
+    block.classList.toggle("ex-done", allDone);
+  },
+
+  refreshAllDone() {
+    Object.keys(this.groupByExercise(this.exercises)).forEach(n => this.refreshExDone(n));
   },
 
   renumberBlocks() {
@@ -1038,6 +1070,7 @@ const Session = {
     if (btn) btn.innerHTML = nowDone
       ? '<i class="ti ti-rotate-2"></i> Annulla'
       : '<i class="ti ti-check"></i> Serie fatta';
+    this.refreshExDone(exName);
 
     if (nowDone) {
       if (navigator.vibrate) navigator.vibrate(20);
