@@ -1087,9 +1087,11 @@ const Schede = {
       this._newProgram = null;
       document.getElementById("scheda-editor").style.display = "none";
       await this.load();
+      U.toast(this.editing ? "Seduta aggiornata" : "Seduta creata", "ok");
     } catch(e) {
       console.error(e);
       msg.textContent = "Errore nel salvataggio";
+      U.toast("Errore nel salvataggio", "err");
     }
   },
 
@@ -1098,6 +1100,7 @@ const Schede = {
     try {
       await API.deleteScheda(id);
       await this.load();
+      U.toast("Seduta eliminata", "ok");
     } catch(e) { console.error(e); U.alert("Errore eliminazione"); }
   },
 };

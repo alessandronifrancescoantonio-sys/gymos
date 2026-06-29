@@ -12,9 +12,26 @@ const API = {
       headers: { "Content-Type": "application/json" },
     };
     if (body) opts.body = JSON.stringify(body);
-    const res = await fetch(`${CONFIG.WORKER_URL}${path}`, opts);
-    if (!res.ok) throw new Error(`Notion API error: ${res.status}`);
+    let res;
+    try {
+      res = await fetch(`${CONFIG.WORKER_URL}${path}`, opts);
+    } catch (e) {
+      this._netToast("Nessuna connessione — riprova");
+      throw e;
+    }
+    if (!res.ok) {
+      this._netToast(`Errore server (${res.status})`);
+      throw new Error(`Notion API error: ${res.status}`);
+    }
     return res.json();
+  },
+
+  // Avviso di rete con debounce (evita raffiche di toast identici)
+  _netToast(msg) {
+    const now = Date.now();
+    if (this._lastNet && now - this._lastNet < 4000) return;
+    this._lastNet = now;
+    if (typeof U !== "undefined" && U.toast) U.toast(msg, "err", 3000);
   },
 
   // ─── QUERY DATABASE ───

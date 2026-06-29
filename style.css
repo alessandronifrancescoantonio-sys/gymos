@@ -5,6 +5,13 @@
   --accent:#FF3B2F; --green:#27D17F; --amber:#F5A623; --blue:#3B82F6; --red:#EF4444;
   --purple:#A78BFA; --pink:#F472B6;
   --radius:12px; --radius-sm:8px; --radius-lg:16px; --bottombar-h:74px;
+  /* Elevazione & movimento — sistema coerente */
+  --sh-1:0 1px 2px rgba(0,0,0,.25);
+  --sh-2:0 4px 14px rgba(0,0,0,.30);
+  --sh-3:0 10px 30px rgba(0,0,0,.40);
+  --ease:cubic-bezier(.22,.61,.36,1);
+  --ease-out:cubic-bezier(.16,1,.3,1);
+  --focus:0 0 0 2px var(--ink), 0 0 0 4px var(--accent);
 }
 * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
 html, body { height:100%; }
@@ -628,3 +635,76 @@ input { font-family:inherit; }
 .recent-sess-item.clickable { cursor:pointer; transition:border-color .15s, transform .1s; }
 .recent-sess-item.clickable:active { transform:scale(.99); border:1px solid var(--accent); }
 .rs-go { color:var(--dim); font-size:17px; flex-shrink:0; }
+
+/* ════════════════════════════════════════════════════════════════
+   POLISH LAYER — rifinitura professionale (additivo, in coda)
+   ════════════════════════════════════════════════════════════════ */
+
+/* Resa tipografica nitida + rendering testo */
+html { -webkit-text-size-adjust:100%; text-size-adjust:100%; }
+body { -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; text-rendering:optimizeLegibility; letter-spacing:.002em; }
+html { scroll-behavior:smooth; }
+:root { accent-color:var(--accent); }
+::selection { background:rgba(255,59,47,.30); color:#fff; }
+
+/* Accessibilità: anello di focus visibile solo da tastiera, mai col tocco */
+:focus { outline:none; }
+button:focus-visible, a:focus-visible, input:focus-visible,
+select:focus-visible, [tabindex]:focus-visible, [onclick]:focus-visible {
+  outline:none; box-shadow:var(--focus); border-radius:var(--radius-sm);
+}
+
+/* Target tattili comodi (≥44px) sugli elementi di navigazione/azione mobile */
+@media (max-width:860px) {
+  .nav-link, .bottom-nav .nav-link { min-height:48px; }
+  .btn-primary, .btn-secondary { min-height:44px; }
+}
+
+/* Elevazione coerente sulle superfici principali */
+.card, .ex-block, .prog-card, .seduta-card { box-shadow:var(--sh-1); }
+.modal, .app-modal-box, .rest-running, .rest-fab { box-shadow:var(--sh-3); }
+
+/* Pressione tattile uniforme su tutti i controlli cliccabili */
+button:active, .nav-link:active, .recent-sess-item:active { transform:scale(.98); }
+button { transition:transform .1s var(--ease), opacity .15s, background .15s, border-color .15s, box-shadow .15s; }
+
+/* Stato vuoto più curato (icona opzionale + respiro) */
+.empty-state { display:flex; flex-direction:column; align-items:center; gap:8px; padding:34px 20px; font-style:normal; }
+.empty-state i { font-size:30px; color:var(--ink4); }
+.empty-state .es-title { font-size:13px; font-weight:600; color:var(--ghost); font-style:normal; }
+.empty-state .es-sub { font-size:11.5px; color:var(--muted); }
+
+/* Skeleton di caricamento riutilizzabile */
+.skeleton { position:relative; overflow:hidden; background:var(--ink3); border-radius:var(--radius-sm); }
+.skeleton::after { content:""; position:absolute; inset:0;
+  background:linear-gradient(90deg, transparent, rgba(255,255,255,.05), transparent);
+  transform:translateX(-100%); animation:shimmer 1.3s infinite; }
+@keyframes shimmer { 100% { transform:translateX(100%); } }
+
+/* Toast non invasivo (feedback azioni) */
+#toast-wrap { position:fixed; left:0; right:0; bottom:calc(var(--bottombar-h) + 18px); z-index:600;
+  display:flex; flex-direction:column; align-items:center; gap:8px; pointer-events:none; padding:0 16px; }
+.toast { background:var(--ink4); color:var(--text); font-size:13px; font-weight:600;
+  padding:11px 16px; border-radius:100px; box-shadow:var(--sh-3); border:1px solid rgba(255,255,255,.06);
+  display:flex; align-items:center; gap:8px; max-width:92vw;
+  animation:toastIn .28s var(--ease-out) both; }
+.toast.out { animation:toastOut .25s var(--ease) both; }
+.toast i { font-size:16px; }
+.toast.ok i { color:var(--green); }
+.toast.err i { color:var(--red); }
+.toast.info i { color:var(--blue); }
+@keyframes toastIn { from{opacity:0; transform:translateY(14px) scale(.96)} to{opacity:1; transform:none} }
+@keyframes toastOut { to{opacity:0; transform:translateY(8px) scale(.97)} }
+
+/* Rispetto delle preferenze di movimento ridotto (accessibilità) */
+@media (prefers-reduced-motion:reduce) {
+  *, *::before, *::after { animation-duration:.001ms !important; animation-iteration-count:1 !important;
+    transition-duration:.001ms !important; scroll-behavior:auto !important; }
+}
+
+/* Safe-area: rispetta il notch/barra inferiore su iOS */
+@supports (padding:max(0px)) {
+  @media (max-width:860px) {
+    .page { padding-left:max(16px, env(safe-area-inset-left)); padding-right:max(16px, env(safe-area-inset-right)); }
+  }
+}

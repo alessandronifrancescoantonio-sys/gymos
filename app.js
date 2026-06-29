@@ -145,6 +145,21 @@ const U = {
   fmtV: v => v >= 1000 ? (v / 1000).toFixed(1) + "k kg" : Math.round(v) + " kg",
   vol:  (s, r, kg) => Math.round(s * r * (kg || 0)),
 
+  // ─── Toast non invasivo: U.toast("Salvato", "ok") | "err" | "info" ───
+  toast(msg, kind = "ok", ms = 2200) {
+    let wrap = document.getElementById("toast-wrap");
+    if (!wrap) { wrap = document.createElement("div"); wrap.id = "toast-wrap"; document.body.appendChild(wrap); }
+    const icon = kind === "err" ? "alert-triangle" : kind === "info" ? "info-circle" : "check";
+    const el = document.createElement("div");
+    el.className = `toast ${kind}`;
+    el.innerHTML = `<i class="ti ti-${icon}"></i><span>${msg}</span>`;
+    wrap.appendChild(el);
+    setTimeout(() => {
+      el.classList.add("out");
+      el.addEventListener("animationend", () => el.remove(), { once: true });
+    }, ms);
+  },
+
   // Un esercizio di una scheda può essere una stringa (vecchio formato) o
   // un oggetto { nome, serie } (nuovo formato). Questi helper li normalizzano.
   exName: item => typeof item === "string" ? item : ((item && item.nome) || ""),
