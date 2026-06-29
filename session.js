@@ -385,17 +385,31 @@ const Session = {
     const block = hd.parentElement;
     const willOpen = block.classList.contains("collapsed");
     if (willOpen) {
-      // FOCUS: apri solo questo, chiudi e "abbassa" tutti gli altri
+      // FOCUS: apri solo questo, chiudi e "spegni" (grigio) tutti gli altri
       document.querySelectorAll("#exercises-container .ex-block").forEach(b => {
         b.classList.add("collapsed");
         b.classList.toggle("ex-focused", b === block);
+        b.classList.toggle("ex-dimmed", b !== block);
       });
       block.classList.remove("collapsed");
-      block.scrollIntoView({ behavior: "smooth", block: "start" });
+      this.scrollToBlock(block);
     } else {
+      // chiudo l'esercizio aperto → niente più focus, tutti tornano normali
+      document.querySelectorAll("#exercises-container .ex-block").forEach(b => {
+        b.classList.remove("ex-focused", "ex-dimmed");
+      });
       block.classList.add("collapsed");
-      block.classList.remove("ex-focused");
     }
+  },
+
+  // Scorre fino al blocco tenendo conto dell'header sticky in cima
+  scrollToBlock(block) {
+    requestAnimationFrame(() => {
+      const header = document.querySelector(".sess-header");
+      const offset = (header ? header.offsetHeight : 0) + 10;
+      const y = block.getBoundingClientRect().top + window.scrollY - offset;
+      window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
+    });
   },
 
   // Aggiorna lo stato "completato" di un esercizio: se tutte le serie sono fatte

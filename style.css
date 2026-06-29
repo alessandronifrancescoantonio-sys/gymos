@@ -147,12 +147,11 @@ input { font-family:inherit; }
 .ex-chevron { color:var(--muted); font-size:18px; flex-shrink:0; transition:transform .2s; }
 .ex-block.collapsed .ex-chevron { transform:rotate(-90deg); }
 
-/* ─── Focus: esercizio aperto in primo piano, gli altri si abbassano ─── */
-.ex-block { transition:opacity .25s ease, transform .25s ease, filter .25s ease; }
-#exercises-container:has(.ex-block:not(.collapsed)) .ex-block.collapsed:not(.ex-focused) {
-  opacity:.45; transform:scale(.97);
-}
-#exercises-container:has(.ex-block:not(.collapsed)) .ex-block.collapsed:not(.ex-focused) .ex-sub { display:none; }
+/* ─── Focus: esercizio aperto in primo piano, gli altri "spenti" (grigi) ─── */
+.ex-block { transition:opacity .25s ease, transform .25s ease, filter .25s ease, background .25s ease, border-color .25s ease; }
+.ex-block.ex-dimmed { opacity:.5; transform:scale(.975); filter:grayscale(.85); background:var(--ink3); }
+.ex-block.ex-dimmed .ex-sub { display:none; }
+.ex-block.ex-focused { border-color:var(--accent); box-shadow:0 4px 18px rgba(0,0,0,.35); }
 
 /* ─── Esercizio completato: schiarito, compatto, con spunta ─── */
 .ex-done-check { display:none; color:var(--green,#22c55e); font-size:22px; flex-shrink:0; }
