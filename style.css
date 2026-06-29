@@ -23,7 +23,7 @@ input { font-family:inherit; }
 ::-webkit-scrollbar-track { background:transparent; }
 ::-webkit-scrollbar-thumb { background:var(--ink4); border-radius:10px; }
 
-.app-shell { display:flex; min-height:100vh; }
+.app-shell { display:flex; min-height:100vh; position:relative; z-index:1; }
 .sidebar { width:220px; flex-shrink:0; background:var(--ink2); border-right:1px solid var(--ink3); display:flex; flex-direction:column; position:fixed; left:0; top:0; height:100vh; z-index:100; }
 .sidebar-logo { padding:24px 20px 20px; border-bottom:1px solid var(--ink3); }
 .logo-text { font-family:'Bebas Neue',sans-serif; font-size:28px; letter-spacing:.06em; color:var(--text); }
@@ -707,4 +707,99 @@ button { transition:transform .1s var(--ease), opacity .15s, background .15s, bo
   @media (max-width:860px) {
     .page { padding-left:max(16px, env(safe-area-inset-left)); padding-right:max(16px, env(safe-area-inset-right)); }
   }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   SIGNATURE LAYER — identità visiva (ambient light, grana, vetro,
+   bagliori, motion). Tutto additivo: niente regole esistenti toccate.
+   ════════════════════════════════════════════════════════════════ */
+
+/* ── Luce ambientale: aurora che respira dietro a tutta l'interfaccia ── */
+body::before {
+  content:""; position:fixed; inset:-20vmax; z-index:0; pointer-events:none;
+  background:
+    radial-gradient(38vmax 38vmax at 12% -8%,  rgba(255,59,47,.16), transparent 60%),
+    radial-gradient(42vmax 42vmax at 92% 6%,   rgba(59,130,246,.13), transparent 62%),
+    radial-gradient(46vmax 46vmax at 78% 104%, rgba(167,139,250,.12), transparent 60%),
+    radial-gradient(40vmax 40vmax at 4% 96%,   rgba(39,209,127,.10), transparent 60%);
+  filter:blur(8px) saturate(1.05);
+  animation:auroraDrift 26s ease-in-out infinite alternate;
+}
+@keyframes auroraDrift {
+  0%   { transform:translate3d(-2%,-1%,0) scale(1);    opacity:.9; }
+  50%  { transform:translate3d(2%,2%,0)   scale(1.08); opacity:1; }
+  100% { transform:translate3d(1%,-2%,0)  scale(1.04); opacity:.92; }
+}
+
+/* ── Grana fotografica finissima: texture premium sul fondo ── */
+body::after {
+  content:""; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.04;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  mix-blend-mode:overlay;
+}
+@media (prefers-reduced-motion:reduce) { body::before { animation:none; } }
+
+/* ── Vetro smerigliato sulle barre fisse (chrome traslucido) ── */
+@supports (backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px)) {
+  .bottom-nav { background:rgba(18,18,21,.72); -webkit-backdrop-filter:blur(20px) saturate(1.3); backdrop-filter:blur(20px) saturate(1.3); }
+  .sidebar    { background:rgba(22,22,25,.80); -webkit-backdrop-filter:blur(16px) saturate(1.2); backdrop-filter:blur(16px) saturate(1.2); }
+  .app-modal-box, .modal { -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); }
+  @media (max-width:860px) {
+    .sess-header, .page-header {
+      background:rgba(13,13,15,.66); -webkit-backdrop-filter:blur(18px) saturate(1.25); backdrop-filter:blur(18px) saturate(1.25);
+    }
+  }
+}
+
+/* ── Bagliori sugli accenti (profondità luminosa) ── */
+.btn-primary { box-shadow:0 6px 20px rgba(255,59,47,.32), inset 0 1px 0 rgba(255,255,255,.12);
+  background-image:linear-gradient(180deg, rgba(255,255,255,.10), transparent 42%); }
+.btn-primary:hover { box-shadow:0 8px 26px rgba(255,59,47,.42), inset 0 1px 0 rgba(255,255,255,.14); }
+.nav-link.active { box-shadow:inset 0 0 0 1px rgba(255,59,47,.14), 0 0 22px -6px rgba(255,59,47,.5); }
+.rest-fab { box-shadow:0 10px 30px rgba(255,59,47,.5), inset 0 1px 0 rgba(255,255,255,.18); }
+.ex-block.ex-focused { box-shadow:var(--sh-2), 0 0 0 1px rgba(255,59,47,.35), 0 0 30px -10px rgba(255,59,47,.55); }
+
+/* ── Titoli con gradiente luminoso (firma tipografica) ── */
+@supports ((-webkit-background-clip:text) or (background-clip:text)) {
+  .page-title, .logo-text, .loading-logo {
+    background:linear-gradient(180deg, #FFFFFF 0%, #C9C9D6 78%, #9A9AAE 100%);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+  }
+  .page-title span, .logo-text span, .loading-logo span { -webkit-text-fill-color:var(--accent); }
+}
+
+/* ── Ingresso a cascata degli elementi quando la pagina si attiva ── */
+.page.active > .card,
+.page.active > .stat-grid > *,
+.page.active > .prog-card { animation:fadeUp .5s var(--ease-out) both; }
+.page.active > .card:nth-child(1){animation-delay:.02s}
+.page.active > .card:nth-child(2){animation-delay:.07s}
+.page.active > .card:nth-child(3){animation-delay:.12s}
+.page.active > .card:nth-child(4){animation-delay:.17s}
+.page.active > .card:nth-child(5){animation-delay:.22s}
+.page.active > .card:nth-child(n+6){animation-delay:.27s}
+
+/* ── Schermata di caricamento cinematografica ── */
+.loading-overlay { background:var(--ink); overflow:hidden; }
+.loading-overlay::before {
+  content:""; position:absolute; inset:-30vmax; pointer-events:none;
+  background:
+    radial-gradient(40vmax 40vmax at 30% 20%, rgba(255,59,47,.22), transparent 60%),
+    radial-gradient(46vmax 46vmax at 75% 85%, rgba(59,130,246,.18), transparent 62%);
+  animation:auroraDrift 14s ease-in-out infinite alternate; filter:blur(10px);
+}
+.loading-inner { position:relative; z-index:1; }
+.loading-logo {
+  position:relative; animation:logoRise .7s var(--ease-out) both, logoGlow 2.6s ease-in-out 0.7s infinite;
+}
+@keyframes logoRise { from { opacity:0; transform:translateY(14px); letter-spacing:.26em; } to { opacity:1; transform:none; } }
+@keyframes logoGlow {
+  0%,100% { filter:drop-shadow(0 0 0 rgba(255,59,47,0)); }
+  50%     { filter:drop-shadow(0 0 18px rgba(255,59,47,.45)); }
+}
+.loading-bar { box-shadow:0 0 16px -2px rgba(255,59,47,.4); }
+.loading-fill { background:linear-gradient(90deg, var(--accent), #FF7A5C); }
+@media (prefers-reduced-motion:reduce) {
+  .loading-overlay::before { animation:none; }
+  .loading-logo { animation:logoRise .4s ease both; }
 }
