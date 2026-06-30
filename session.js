@@ -517,6 +517,7 @@ const Session = {
     }
 
     function begin(e) {
+      if (self.viewMode) return;   // in sola lettura gli esercizi restano fissi
       active = true;
       scrollEl = getScroller();
       const rect = block.getBoundingClientRect();
