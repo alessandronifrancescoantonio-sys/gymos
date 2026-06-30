@@ -1380,6 +1380,12 @@ function saveSession()     { Session.saveSession();   }
 (function() {
   let _scheda = null;
 
+  // Avvio rapido dalla Home: porta in Sessione e apre subito il modale "nuova sessione"
+  Session.openNewFromHome = function() {
+    App.navigate("session");
+    Session.openNewModal();
+  };
+
   Session.openNewModal = async function() {
     _scheda = null;
     const modal = document.getElementById("new-sess-modal");
