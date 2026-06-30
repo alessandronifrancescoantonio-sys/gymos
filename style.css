@@ -822,6 +822,63 @@ body::after {
   .loading-logo { animation:logoRise .4s ease both; }
 }
 
+/* ════════════════════════════════════════════════════════════════
+   EDITOR SCHEDA — redesign estetico (creazione programma + esercizi)
+   ════════════════════════════════════════════════════════════════ */
+.scheda-editor-box { position:relative; border:1px solid rgba(255,255,255,.08);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06), var(--sh-3); }
+.scheda-editor-box::before {
+  content:""; position:absolute; left:0; right:0; top:0; height:150px; pointer-events:none; border-radius:inherit;
+  background:radial-gradient(120% 100% at 50% -45%, rgba(255,59,47,.18), transparent 70%);
+}
+.scheda-editor-box > * { position:relative; z-index:1; }
+.scheda-editor-box .modal-title { font-size:17px; }
+
+/* Sezioni con etichette più definite */
+.scheda-editor-box .field-lbl { color:var(--ghost); font-weight:600; }
+
+/* Card esercizio: spina colorata + materiale + profondità */
+.ex-editor-item {
+  position:relative; overflow:hidden;
+  background:var(--ink2);
+  background-image:linear-gradient(180deg, rgba(255,255,255,.045), transparent 48%);
+  border:1px solid rgba(255,255,255,.08); border-radius:13px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05), 0 3px 12px rgba(0,0,0,.28);
+  padding:12px 13px 12px 16px; gap:11px;
+}
+.ex-editor-item::before {
+  content:""; position:absolute; left:0; top:0; bottom:0; width:3px;
+  background:linear-gradient(var(--accent), #FF8A66);
+}
+.ex-editor-list { gap:9px; }
+.ex-editor-name { font-size:14.5px; }
+.ex-editor-grip { font-size:17px; }
+.ex-editor-del { width:28px; height:28px; border-radius:8px; }
+
+/* Striscia numerica unificata (serie · rep · rec · rir in un pannello) */
+.ex-editor-fields {
+  padding:10px 12px; margin:0; gap:6px 16px;
+  background:rgba(0,0,0,.24); border:1px solid rgba(255,255,255,.05); border-radius:11px;
+  justify-content:flex-start;
+}
+.ex-editor-f { color:var(--dim); gap:7px; }
+.ex-editor-f input { background:var(--ink); border:1px solid var(--ink4); }
+.ex-editor-f input:focus { border-color:var(--accent); box-shadow:0 0 0 2px rgba(255,59,47,.18); }
+.ex-editor-sets button { background:var(--ink); }
+.ex-editor-sets span { font-size:15px; }
+
+/* Tecnica di intensità: allineata a tutta larghezza, coerente col resto */
+.ed-tech { margin-left:0; }
+.ed-tech-toggle { background:rgba(0,0,0,.22); }
+
+/* Riga "aggiungi esercizio" più definita */
+.ex-add-row .ex-add-btn { box-shadow:0 4px 14px rgba(255,59,47,.3), inset 0 1px 0 rgba(255,255,255,.14); }
+
+/* Swatch colore: tondi, ombra, ring di selezione luminoso */
+.color-picker { gap:10px; }
+.color-swatch { width:32px; height:32px; border-radius:50%; box-shadow:0 2px 7px rgba(0,0,0,.35); }
+.color-swatch.on { border-color:#fff; box-shadow:0 0 0 3px var(--ink2), 0 0 12px rgba(255,255,255,.28); transform:scale(1.06); }
+
 /* ── Materiale & profondità su tutte le superfici (sheen + bordo-luce + ombra) ── */
 .card, .stat-card, .semaforo-card, .quick-link, .ex-block,
 .prog-card, .seduta-card, .app-modal-box, .recent-sess-item {
