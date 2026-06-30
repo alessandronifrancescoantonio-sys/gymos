@@ -575,6 +575,22 @@
   </div>
 </div>
 
+<!-- ARCHIVIO SESSIONI (ricerca + filtri + raggruppamento per mese) -->
+<div class="archive-overlay" id="sessions-archive" style="display:none" onclick="Dashboard.closeArchive(event)">
+  <div class="archive-box">
+    <div class="archive-head">
+      <div class="archive-title"><i class="ti ti-history"></i> Tutte le sessioni</div>
+      <button class="archive-close" onclick="Dashboard.closeArchive()" aria-label="Chiudi"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="archive-search">
+      <i class="ti ti-search"></i>
+      <input id="archive-q" type="text" placeholder="Cerca per nome o mese (es. Full Body, Giugno)…" oninput="Dashboard.renderArchive()">
+    </div>
+    <div class="archive-chips" id="archive-chips"></div>
+    <div class="archive-list" id="archive-list"></div>
+  </div>
+</div>
+
 <script src="config.js"></script>
 <script src="api.js"></script>
 <script src="session.js"></script>

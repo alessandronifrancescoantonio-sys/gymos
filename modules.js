@@ -437,10 +437,7 @@ const Dashboard = {
       list.innerHTML = '<div class="empty-state">Nessuna sessione registrata. Vai su Sessione per iniziare!</div>';
       return;
     }
-    const LIMIT = 4;
-    const showAll = !!this._showAllRecent;
-    const shown = showAll ? done : done.slice(0, LIMIT);
-    shown.forEach(s => {
+    done.slice(0, 4).forEach(s => {
       const item = document.createElement("div");
       item.className = "recent-sess-item clickable";
       item.innerHTML = `
@@ -455,16 +452,84 @@ const Dashboard = {
       item.onclick = () => Session.openById(s.id);
       list.appendChild(item);
     });
-    if (done.length > LIMIT) {
+    if (done.length > 4) {
       const more = document.createElement("button");
       more.className = "recent-more-btn";
-      more.innerHTML = showAll
-        ? '<i class="ti ti-chevron-up"></i> Mostra meno'
-        : `<i class="ti ti-chevron-down"></i> Vedi tutte (${done.length})`;
-      more.onclick = () => { this._showAllRecent = !this._showAllRecent; this.buildRecentSessions(this._recentSessions); };
+      more.innerHTML = '<i class="ti ti-search"></i> Cerca tra tutte le sessioni';
+      more.onclick = () => Dashboard.openArchive();
       list.appendChild(more);
     }
   },
+
+  // ─── Archivio sessioni: ricerca + filtri per scheda + raggruppamento per mese ───
+  _archiveAll: [],
+  _archiveFilter: "",
+
+  _esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); },
+  _typeOf(s) { return s.type || s.name || "—"; },
+  _monthLabel(date) {
+    const M = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
+    const d = new Date((date || "") + "T12:00:00");
+    return isNaN(d) ? "—" : M[d.getMonth()] + " " + d.getFullYear();
+  },
+
+  async openArchive() {
+    const modal = document.getElementById("sessions-archive");
+    if (!modal) return;
+    modal.style.display = "flex";
+    const listEl = document.getElementById("archive-list");
+    listEl.innerHTML = '<div class="empty-state">Caricamento…</div>';
+    let all = [];
+    try { all = await API.getWorkoutSessions(100); } catch (e) { all = this._recentSessions || []; }
+    this._archiveAll = all.filter(s => s.done);
+    this._archiveFilter = "";
+    const q = document.getElementById("archive-q");
+    if (q) q.value = "";
+    // chip per ogni scheda presente, in ordine di frequenza
+    const counts = {};
+    this._archiveAll.forEach(s => { const t = this._typeOf(s); counts[t] = (counts[t] || 0) + 1; });
+    const types = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
+    const chips = document.getElementById("archive-chips");
+    chips.innerHTML =
+      `<button class="arch-chip on" onclick="Dashboard.setArchiveFilter('', this)">Tutte</button>` +
+      types.map(t => `<button class="arch-chip" onclick="Dashboard.setArchiveFilter(this.dataset.t, this)" data-t="${this._esc(t)}">${this._esc(t)} <span>${counts[t]}</span></button>`).join("");
+    this.renderArchive();
+  },
+
+  setArchiveFilter(t, btn) {
+    this._archiveFilter = t || "";
+    document.querySelectorAll("#archive-chips .arch-chip").forEach(c => c.classList.remove("on"));
+    if (btn) btn.classList.add("on");
+    this.renderArchive();
+  },
+
+  renderArchive() {
+    const listEl = document.getElementById("archive-list");
+    if (!listEl) return;
+    const q = (document.getElementById("archive-q").value || "").toLowerCase().trim();
+    let items = this._archiveAll.slice();
+    if (this._archiveFilter) items = items.filter(s => this._typeOf(s) === this._archiveFilter);
+    if (q) items = items.filter(s =>
+      (s.name || "").toLowerCase().includes(q) ||
+      U.fmtDate(s.date).toLowerCase().includes(q) ||
+      this._monthLabel(s.date).toLowerCase().includes(q) ||
+      (s.date || "").includes(q));
+    items.sort((a, b) => new Date(b.date) - new Date(a.date));
+    if (!items.length) { listEl.innerHTML = '<div class="empty-state">Nessuna sessione trovata.</div>'; return; }
+    let html = "", curMonth = null;
+    items.forEach(s => {
+      const m = this._monthLabel(s.date);
+      if (m !== curMonth) { curMonth = m; html += `<div class="arch-month">${m}</div>`; }
+      html += `<button class="recent-sess-item clickable arch-item" onclick="Dashboard.openArchived('${s.id}')">
+        <div class="rs-icon"><i class="ti ti-barbell"></i></div>
+        <div class="rs-main"><div class="rs-name">${this._esc(s.name)}</div><div class="rs-date">${U.fmtDate(s.date)}</div></div>
+        <i class="ti ti-chevron-right rs-go"></i></button>`;
+    });
+    listEl.innerHTML = html;
+  },
+
+  openArchived(id) { this.closeArchive(); Session.openById(id); },
+  closeArchive(e) { if (!e || e.target.id === "sessions-archive") document.getElementById("sessions-archive").style.display = "none"; },
 
   buildWeekSplit(sessions) {
     const days   = ["Dom","Lun","Mar","Mer","Gio","Ven","Sab"];
