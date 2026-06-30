@@ -156,9 +156,9 @@ input { font-family:inherit; }
 
 /* ─── Focus: esercizio aperto in primo piano, gli altri "spenti" (grigi) ─── */
 .ex-block { transition:opacity .25s ease, transform .25s ease, filter .25s ease, background .25s ease, border-color .25s ease; }
-.ex-block.ex-dimmed { opacity:.5; transform:scale(.97); filter:grayscale(.7) brightness(.86); }
+.ex-block.ex-dimmed { opacity:.42; transform:scale(.955); filter:grayscale(.85) brightness(.8); }
 .ex-block.ex-dimmed .ex-sub { display:none; }
-.ex-block.ex-focused { position:relative; z-index:2; border-color:var(--accent); transform:scale(1.008); }
+.ex-block.ex-focused { position:relative; z-index:2; border-color:var(--accent); transform:scale(1.012); }
 
 /* ─── Esercizio completato: schiarito, compatto, con spunta ─── */
 .ex-done-check { display:none; color:var(--green,#22c55e); font-size:22px; flex-shrink:0; }
