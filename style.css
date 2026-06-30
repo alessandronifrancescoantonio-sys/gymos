@@ -831,6 +831,14 @@ body::after {
   .loading-logo { animation:logoRise .4s ease both; }
 }
 
+/* Riga informativa nell'editor scheda (ordine = consiglio) */
+.editor-hint { display:flex; gap:8px; align-items:flex-start; margin:0 0 16px;
+  padding:10px 12px; border-radius:var(--radius-sm);
+  background:rgba(59,130,246,.10); border:1px solid rgba(59,130,246,.22);
+  font-size:11.5px; line-height:1.45; color:var(--text2); }
+.editor-hint i { color:var(--blue); font-size:15px; flex-shrink:0; margin-top:1px; }
+.editor-hint b { color:var(--text); font-weight:700; }
+
 /* Tile "Allenati ora" nella Home: avvio rapido nuova sessione (azione) */
 .stat-newsess { background-image:linear-gradient(180deg, rgba(255,59,47,.14), rgba(255,255,255,0) 60%) !important;
   border-color:rgba(255,59,47,.4) !important; box-shadow:inset 0 1px 0 rgba(255,255,255,.06), 0 6px 18px -8px rgba(255,59,47,.4) !important; }

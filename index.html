@@ -442,7 +442,7 @@
       <div>
         <div class="eyebrow">Allenamento</div>
         <h1 class="page-title">I miei programmi</h1>
-        <div class="page-meta">Programmi → sedute → esercizi. Scegli quale programma è attivo.</div>
+        <div class="page-meta">Programmi → sedute → esercizi. L'ordine delle sedute è quello consigliato per le tue sessioni.</div>
       </div>
       <div class="header-actions">
         <button class="btn-primary" onclick="Schede.newProgram()"><i class="ti ti-plus"></i>Nuovo programma</button>
@@ -455,6 +455,10 @@
   <div class="modal-overlay" id="scheda-editor" style="display:none" onclick="Schede.closeEditor(event)">
     <div class="modal-box scheda-editor-box">
       <div class="modal-title" id="scheda-editor-title"><i class="ti ti-clipboard-list"></i>Nuova scheda</div>
+      <div class="editor-hint">
+        <i class="ti ti-info-circle"></i>
+        <span>L'ordine in cui crei le sedute è l'ordine con cui ti verranno <b>consigliate</b> quando crei una sessione. È solo un suggerimento: poi alleni quello che vuoi.</span>
+      </div>
       <div class="field" style="margin-bottom:14px">
         <label class="field-lbl">Nome scheda</label>
         <input class="field-inp" type="text" id="sc-nome" placeholder="es. Full Body 1">
