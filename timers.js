@@ -170,26 +170,14 @@ const RestTimer = {
       if (ctx.state === "suspended") ctx.resume();
       const start = ctx.currentTime + Math.max(0, secs);
       this._scheduled = [];
-      // keep-alive: suono sub-udibile continuo fino a fine allarme
+      // keep-alive: suono sub-udibile fino a poco dopo i rintocchi
       const ka = ctx.createOscillator(), kag = ctx.createGain();
       kag.gain.value = 0.0006; ka.frequency.value = 18;
       ka.connect(kag); kag.connect(ctx.destination);
-      ka.start(ctx.currentTime); ka.stop(start + 21);
+      ka.start(ctx.currentTime); ka.stop(start + 2);
       this._scheduled.push(ka);
-      // 14 "bursts" di 3 toni ascendenti, ogni 1.5s (≈20s di allarme)
-      for (let i = 0; i < 14; i++) {
-        const t = start + i * 1.5;
-        [[0, 880], [0.22, 1100], [0.44, 1320]].forEach(p => {
-          const o = ctx.createOscillator(), g = ctx.createGain();
-          o.type = "triangle"; o.frequency.value = p[1];
-          o.connect(g); g.connect(ctx.destination);
-          g.gain.setValueAtTime(0.0001, t + p[0]);
-          g.gain.exponentialRampToValueAtTime(0.6, t + p[0] + 0.02);
-          g.gain.exponentialRampToValueAtTime(0.0001, t + p[0] + 0.30);
-          o.start(t + p[0]); o.stop(t + p[0] + 0.31);
-          this._scheduled.push(o);
-        });
-      }
+      // 3 rintocchi all'istante di fine (anche a schermo spento)
+      this._scheduleBurst(ctx, start).forEach(o => this._scheduled.push(o));
       this._audioScheduled = true;
     } catch (e) { this._audioScheduled = false; }
   },
@@ -285,34 +273,32 @@ const RestTimer = {
     } catch(e) {}
   },
   // Suona un singolo "burst" di 3 toni ascendenti (più udibile sopra la musica)
-  _burst() {
+  // 3 rintocchi (toni) a partire dall'istante "base" del contesto audio.
+  // Restituisce gli oscillatori creati (per poterli fermare se serve).
+  _scheduleBurst(ctx, base) {
+    const made = [];
+    const tone = (t) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = "triangle"; o.frequency.value = 880;   // rintocco chiaro, costante
+      o.connect(g); g.connect(ctx.destination);
+      g.gain.setValueAtTime(0.0001, base + t);
+      g.gain.exponentialRampToValueAtTime(0.6, base + t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, base + t + 0.34);
+      o.start(base + t); o.stop(base + t + 0.36);
+      made.push(o);
+    };
+    tone(0); tone(0.5); tone(1.0);   // 3 rintocchi distinti (~1.3s totali)
+    return made;
+  },
+  // Suono dal vivo (riserva quando l'audio programmato non è disponibile)
+  beep() {
+    this.stopAlarm();
     try {
       const ctx = this.audioCtx || new (window.AudioContext || window.webkitAudioContext)();
       if (ctx.state === "suspended") ctx.resume();
       this.audioCtx = ctx;
-      const tone = (t, f) => {
-        const o = ctx.createOscillator(), g = ctx.createGain();
-        o.type = "triangle"; o.frequency.value = f;   // triangle = più ricco/percepibile
-        o.connect(g); g.connect(ctx.destination);
-        g.gain.setValueAtTime(0.0001, ctx.currentTime + t);
-        g.gain.exponentialRampToValueAtTime(0.6, ctx.currentTime + t + 0.02);   // volume più alto
-        g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + t + 0.30);
-        o.start(ctx.currentTime + t); o.stop(ctx.currentTime + t + 0.31);
-      };
-      tone(0, 880); tone(0.22, 1100); tone(0.44, 1320);
-    } catch(e) {}
-  },
-  // Allarme ripetuto: continua a suonare/vibrare finché non si tocca lo schermo
-  // (max ~20s di sicurezza), così non lo si perde quando ci si allena con la musica.
-  beep() {
-    this.stopAlarm();
-    this._alarmStart = Date.now();
-    this._burst();
-    this._alarmInt = setInterval(() => {
-      if (Date.now() - this._alarmStart > 20000) { this.stopAlarm(); return; }
-      this._burst();
-      if (navigator.vibrate) navigator.vibrate([250, 120, 250]);
-    }, 1500);
+      this._scheduleBurst(ctx, ctx.currentTime);
+    } catch (e) {}
   },
   stopAlarm() {
     if (this._alarmInt) { clearInterval(this._alarmInt); this._alarmInt = null; }

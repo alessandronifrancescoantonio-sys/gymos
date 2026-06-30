@@ -13,13 +13,15 @@ const Session = {
   selectedScheda: null,
 
   _pendingId: null,
-  _pendingView: false,
-  viewMode: false,   // sola lettura: nessuna modifica accidentale a kg/rep/serie
+  _pendingHistory: false,   // la prossima loadSession arriva dallo storico?
+  _fromHistory: false,      // la sessione corrente è stata aperta dallo storico
+  viewMode: false,          // sola lettura: nessuna modifica accidentale a kg/rep/serie
 
-  // Apre una sessione specifica dalla Home (Sessioni recenti) in SOLA LETTURA
+  // Apre una sessione specifica dalla Home (Sessioni recenti) in SOLA LETTURA.
+  // Il toggle view/edit appare SOLO in questo caso (sessioni passate).
   openById(id) {
     this._pendingId = id;
-    this._pendingView = true;   // dalla Home si apre in visualizzazione
+    this._pendingHistory = true;
     App.navigate("session");
   },
 
@@ -38,6 +40,8 @@ const Session = {
     document.body.classList.toggle("session-view", this.viewMode);
     const btn = document.getElementById("view-toggle");
     if (btn) {
+      // il toggle esiste SOLO per le sessioni passate aperte dalla Home
+      btn.style.display = this._fromHistory ? "" : "none";
       btn.classList.toggle("is-view", this.viewMode);
       btn.innerHTML = this.viewMode
         ? '<i class="ti ti-pencil"></i><span class="vt-label">Abilita modifica</span>'
@@ -80,9 +84,10 @@ const Session = {
 
   async loadSession(id) {
     this.activeId = id;
-    // Sola lettura se aperta dalla Home (Sessioni recenti); altrimenti modifica
-    this.viewMode = this._pendingView === true;
-    this._pendingView = false;
+    // Aperta dallo storico (Home)? → sola lettura + toggle. Altrimenti modifica, niente toggle.
+    this._fromHistory = this._pendingHistory === true;
+    this._pendingHistory = false;
+    this.viewMode = this._fromHistory;
     const sess = this.sessions.find(s => s.id === id);
     if (!sess) return;
 
