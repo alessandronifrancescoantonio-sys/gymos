@@ -174,7 +174,7 @@ const RestTimer = {
       const ka = ctx.createOscillator(), kag = ctx.createGain();
       kag.gain.value = 0.0006; ka.frequency.value = 18;
       ka.connect(kag); kag.connect(ctx.destination);
-      ka.start(ctx.currentTime); ka.stop(start + 2);
+      ka.start(ctx.currentTime); ka.stop(start + 6);
       this._scheduled.push(ka);
       // 3 rintocchi all'istante di fine (anche a schermo spento)
       this._scheduleBurst(ctx, start).forEach(o => this._scheduled.push(o));
@@ -287,7 +287,7 @@ const RestTimer = {
       o.start(base + t); o.stop(base + t + 0.36);
       made.push(o);
     };
-    tone(0); tone(0.5); tone(1.0);   // 3 rintocchi distinti (~1.3s totali)
+    for (let i = 0; i < 9; i++) tone(i * 0.5);   // 9 rintocchi distinti (~4.4s totali)
     return made;
   },
   // Suono dal vivo (riserva quando l'audio programmato non è disponibile)
