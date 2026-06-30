@@ -1404,23 +1404,54 @@ function saveSession()     { Session.saveSession();   }
       await App.loadSchede();
     }
 
+    // Trova l'ultimo allenamento COMPLETATO e suggerisci il prossimo in rotazione
+    var sessList = (Session.sessions && Session.sessions.length) ? Session.sessions : [];
+    if (!sessList.length) { try { sessList = await API.getWorkoutSessions(20); } catch (e) { sessList = []; } }
+    var doneSorted = sessList.filter(function(s){ return s.done; })
+      .sort(function(a,b){ return new Date(b.date) - new Date(a.date); });
+    var lastDone = doneSorted[0] || null;
+    var lastType = lastDone ? lastDone.type : null;
+    var names    = Object.keys(CONFIG.SCHEDE);
+    var nextName = null;
+    if (lastType && names.indexOf(lastType) !== -1) {
+      nextName = names[(names.indexOf(lastType) + 1) % names.length];
+    }
+    function relDay(ds) {
+      if (!ds) return "";
+      var d = new Date(ds), n = new Date();
+      var diff = Math.floor((new Date(n.getFullYear(), n.getMonth(), n.getDate())
+        - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 86400000);
+      if (diff <= 0) return "oggi";
+      if (diff === 1) return "ieri";
+      return diff + " giorni fa";
+    }
+
     wrap.innerHTML = "";
     Object.entries(CONFIG.SCHEDE).forEach(function(entry) {
       var name = entry[0];
       var cfg  = entry[1];
       var btn  = document.createElement("button");
       btn.className   = "scheda-pill";
-      btn.textContent = name;
       btn.type        = "button";
+      btn.dataset.name = name;
+      var badge = "";
+      if (name === lastType) {
+        btn.classList.add("is-last");
+        badge = '<span class="pill-badge last"><i class="ti ti-history"></i>ultimo · ' + relDay(lastDone.date) + '</span>';
+      } else if (name === nextName) {
+        btn.classList.add("is-next");
+        badge = '<span class="pill-badge next"><i class="ti ti-arrow-right"></i>consigliato</span>';
+      }
+      btn.innerHTML = '<span class="pill-name">' + name + '</span>' + badge;
       btn.onclick     = function() {
         wrap.querySelectorAll(".scheda-pill").forEach(function(b) {
+          b.classList.remove("on");
           b.style.background  = "";
           b.style.borderColor = "";
-          b.style.color       = "";
         });
-        btn.style.background  = cfg.color + "33";
+        btn.classList.add("on");
+        btn.style.background  = cfg.color + "22";
         btn.style.borderColor = cfg.color;
-        btn.style.color       = cfg.color;
         _scheda = name;
         document.getElementById("modal-msg").textContent = "Selezionato: " + name;
       };
@@ -1428,6 +1459,12 @@ function saveSession()     { Session.saveSession();   }
     });
     if (!Object.keys(CONFIG.SCHEDE).length) {
       wrap.innerHTML = '<div style="font-size:12px;color:var(--dim)">Nessuna scheda. Creane una nella sezione Schede.</div>';
+    }
+    // pre-seleziona il consigliato così basta premere "Crea e inizia"
+    if (nextName) {
+      var pre = [].slice.call(wrap.querySelectorAll(".scheda-pill"))
+        .find(function(b){ return b.dataset.name === nextName; });
+      if (pre) pre.click();
     }
 
     document.getElementById("modal-confirm-btn").onclick = function() {

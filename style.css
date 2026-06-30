@@ -256,8 +256,16 @@ input { font-family:inherit; }
 .modal-title i { color:var(--accent); font-size:22px; }
 .modal-sub { font-size:12px; color:var(--dim); margin-bottom:20px; }
 .modal-schede { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:22px; }
-.scheda-pill { padding:10px 16px; border-radius:100px; border:1.5px solid var(--ink4); background:transparent; font-size:12px; font-weight:600; color:var(--dim); transition:all .15s; }
+.scheda-pill { display:inline-flex; align-items:center; gap:8px; padding:10px 14px; border-radius:100px; border:1.5px solid var(--ink4); background:transparent; font-size:12px; font-weight:600; color:var(--dim); transition:all .15s; }
 .scheda-pill:active { transform:scale(.96); }
+.scheda-pill.on { color:var(--text); }
+.scheda-pill.is-last { opacity:.72; }
+.scheda-pill.is-next { border-color:rgba(39,209,127,.45); }
+.pill-badge { display:inline-flex; align-items:center; gap:3px; font-size:9px; font-weight:700;
+  text-transform:uppercase; letter-spacing:.03em; padding:2px 7px; border-radius:100px; }
+.pill-badge i { font-size:10px; }
+.pill-badge.last { color:var(--amber); background:rgba(245,166,35,.15); border:1px solid rgba(245,166,35,.3); }
+.pill-badge.next { color:var(--green); background:rgba(39,209,127,.16); border:1px solid rgba(39,209,127,.35); }
 .modal-actions { display:flex; align-items:center; gap:10px; }
 .btn-cancel { background:transparent; font-size:12px; color:var(--muted); padding:10px 4px; transition:color .15s; }
 .btn-cancel:active { color:var(--text); }
