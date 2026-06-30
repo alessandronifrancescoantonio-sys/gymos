@@ -157,6 +157,18 @@
 
   <!-- ═══ SESSIONE ═══ -->
   <section class="page" id="page-session">
+    <!-- Schermata iniziale: nessuna sessione caricata, solo il pulsante per crearne una -->
+    <div class="session-landing" id="session-landing">
+      <div class="sl-card">
+        <div class="sl-icon"><i class="ti ti-barbell"></i></div>
+        <h2 class="sl-title">Pronto ad allenarti?</h2>
+        <p class="sl-sub">Scegli la scheda di oggi e parti. Le sessioni già fatte le trovi nella Home.</p>
+        <button class="sl-btn" onclick="Session.openNewModal()">
+          <i class="ti ti-plus"></i> Inizia un nuovo allenamento
+        </button>
+      </div>
+    </div>
+
     <div class="sess-header">
       <div class="sess-header-top">
         <span class="eyebrow">Allenamento</span>

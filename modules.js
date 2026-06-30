@@ -428,17 +428,19 @@ const Dashboard = {
   buildRecentSessions(sessions) {
     const list = document.getElementById("today-checklist");
     if (!list) return;
+    this._recentSessions = sessions;   // per il toggle "vedi tutte / mostra meno"
     list.innerHTML = "";
-    const done = sessions.filter(s => s.done).slice(0, 5);
-    if (!done.length) {
-      list.innerHTML = '<div class="empty-state">Nessuna sessione registrata. Vai su Sessione per iniziare!</div>';
-      const prog = document.querySelector(".checklist-progress");
-      if (prog) prog.style.display = "none";
-      return;
-    }
     const prog = document.querySelector(".checklist-progress");
     if (prog) prog.style.display = "none";
-    done.forEach(s => {
+    const done = sessions.filter(s => s.done);
+    if (!done.length) {
+      list.innerHTML = '<div class="empty-state">Nessuna sessione registrata. Vai su Sessione per iniziare!</div>';
+      return;
+    }
+    const LIMIT = 4;
+    const showAll = !!this._showAllRecent;
+    const shown = showAll ? done : done.slice(0, LIMIT);
+    shown.forEach(s => {
       const item = document.createElement("div");
       item.className = "recent-sess-item clickable";
       item.innerHTML = `
@@ -453,6 +455,15 @@ const Dashboard = {
       item.onclick = () => Session.openById(s.id);
       list.appendChild(item);
     });
+    if (done.length > LIMIT) {
+      const more = document.createElement("button");
+      more.className = "recent-more-btn";
+      more.innerHTML = showAll
+        ? '<i class="ti ti-chevron-up"></i> Mostra meno'
+        : `<i class="ti ti-chevron-down"></i> Vedi tutte (${done.length})`;
+      more.onclick = () => { this._showAllRecent = !this._showAllRecent; this.buildRecentSessions(this._recentSessions); };
+      list.appendChild(more);
+    }
   },
 
   buildWeekSplit(sessions) {

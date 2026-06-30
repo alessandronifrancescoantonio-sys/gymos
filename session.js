@@ -59,16 +59,28 @@ const Session = {
         this.sessions = await API.getWorkoutSessions(50);
       }
       this.buildSelect();
-      const id = (target && this.sessions.find(s => s.id === target))
-        ? target
-        : (this.sessions[0] && this.sessions[0].id);
-      if (id) {
-        this.activeId = id;
+      if (target && this.sessions.find(s => s.id === target)) {
+        // apertura specifica (dalla Home → sessione passata)
+        this.activeId = target;
         const sel = document.getElementById("sess-select");
-        if (sel) sel.value = id;
-        await this.loadSession(id);
+        if (sel) sel.value = target;
+        await this.loadSession(target);
+      } else {
+        // navigazione normale → schermata iniziale: solo il pulsante "nuovo allenamento"
+        this.showLanding();
       }
-    } catch(e) { console.error("Session.load:", e); }
+    } catch(e) { console.error("Session.load:", e); this.showLanding(); }
+  },
+
+  // Mostra la schermata iniziale (nessuna sessione caricata)
+  showLanding() {
+    this.activeId = null;
+    this._fromHistory = false;
+    this.viewMode = false;
+    const page = document.getElementById("page-session");
+    if (page) page.classList.add("session-empty");
+    document.body.classList.add("sess-landing");
+    document.body.classList.remove("session-view");
   },
 
   buildSelect() {
@@ -84,6 +96,10 @@ const Session = {
 
   async loadSession(id) {
     this.activeId = id;
+    // esci dalla schermata iniziale: mostra il contenuto della sessione
+    const _pg = document.getElementById("page-session");
+    if (_pg) _pg.classList.remove("session-empty");
+    document.body.classList.remove("sess-landing");
     // Aperta dallo storico (Home)? → sola lettura + toggle. Altrimenti modifica, niente toggle.
     this._fromHistory = this._pendingHistory === true;
     this._pendingHistory = false;
@@ -1361,13 +1377,11 @@ const Session = {
         }
         await API.update(this.activeId, props);
       }
-      btn.innerHTML = '<i class="ti ti-circle-check"></i>Salvato!';
-      btn.style.background = "var(--green)";
-      setTimeout(() => {
-        btn.innerHTML = '<i class="ti ti-device-floppy"></i>Salva sessione';
-        btn.style.background = "";
-        btn.disabled = false;
-      }, 2000);
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-device-floppy"></i>Salva'; btn.style.background = ""; }
+      U.toast("Allenamento salvato 💪", "ok");
+      // aggiorna l'elenco e torna alla schermata iniziale (pronto per il prossimo)
+      try { this.sessions = await API.getWorkoutSessions(20); this.buildSelect(); } catch(_) {}
+      this.showLanding();
     } catch(e) {
       console.error(e);
       btn.innerHTML = '<i class="ti ti-alert-circle"></i>Errore';
