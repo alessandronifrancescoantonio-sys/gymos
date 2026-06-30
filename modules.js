@@ -366,6 +366,17 @@ const Dashboard = {
     } catch(e) { console.error("Dashboard.load:", e); }
   },
 
+  // Anima un anello SVG di progresso (frazione 0..1)
+  setRing(id, frac) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const r = el.r.baseVal.value;
+    const C = 2 * Math.PI * r;
+    const f = Math.max(0, Math.min(1, frac || 0));
+    el.style.strokeDasharray = C.toFixed(2);
+    el.style.strokeDashoffset = (C * (1 - f)).toFixed(2);
+  },
+
   buildStats(sessions, checkins, sleepData, habits, todayHabit) {
     const thisWeek = sessions.filter(s => {
       if (!s.date) return false;
@@ -378,8 +389,11 @@ const Dashboard = {
 
     // Denominatore = numero di sedute del programma attivo (obiettivo settimanale)
     const target = Object.keys(CONFIG.SCHEDE || {}).length || thisWeek.length;
-    document.getElementById("d-sessions").textContent = thisWeek.filter(s => s.done).length + "/" + target;
-    document.getElementById("d-sessions-sub").textContent = "completate questa settimana";
+    const done = thisWeek.filter(s => s.done).length;
+    document.getElementById("d-sessions").textContent = done + "/" + target;
+    document.getElementById("d-sessions-sub").textContent = done >= target && target > 0
+      ? "settimana completata 🔥" : "completate questa settimana";
+    this.setRing("d-sessions-ring", target ? done / target : 0);
 
     const last = checkins[checkins.length - 1];
     if (last) {

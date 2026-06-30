@@ -735,19 +735,18 @@ button { transition:transform .1s var(--ease), opacity .15s, background .15s, bo
 
 /* ── Luce ambientale: aurora che respira dietro a tutta l'interfaccia ── */
 body::before {
-  content:""; position:fixed; inset:-20vmax; z-index:0; pointer-events:none;
+  content:""; position:fixed; inset:0; z-index:0; pointer-events:none;
   background:
-    radial-gradient(38vmax 38vmax at 12% -8%,  rgba(255,59,47,.16), transparent 60%),
-    radial-gradient(42vmax 42vmax at 92% 6%,   rgba(59,130,246,.13), transparent 62%),
-    radial-gradient(46vmax 46vmax at 78% 104%, rgba(167,139,250,.12), transparent 60%),
-    radial-gradient(40vmax 40vmax at 4% 96%,   rgba(39,209,127,.10), transparent 60%);
-  filter:blur(8px) saturate(1.05);
-  animation:auroraDrift 26s ease-in-out infinite alternate;
+    radial-gradient(135% 70% at 50% -18%, rgba(255,59,47,.26), rgba(255,59,47,.07) 26%, transparent 52%),
+    radial-gradient(90% 55% at 108% -6%,  rgba(255,120,90,.16), transparent 46%),
+    radial-gradient(85% 60% at -8% 8%,    rgba(59,130,246,.14), transparent 48%),
+    radial-gradient(90% 70% at 50% 118%,  rgba(167,139,250,.12), transparent 55%);
+  animation:auroraDrift 24s ease-in-out infinite alternate;
 }
 @keyframes auroraDrift {
-  0%   { transform:translate3d(-2%,-1%,0) scale(1);    opacity:.9; }
-  50%  { transform:translate3d(2%,2%,0)   scale(1.08); opacity:1; }
-  100% { transform:translate3d(1%,-2%,0)  scale(1.04); opacity:.92; }
+  0%   { transform:translate3d(-1.5%,-1%,0) scale(1);    opacity:.92; }
+  50%  { transform:translate3d(1.5%,1.5%,0) scale(1.06); opacity:1; }
+  100% { transform:translate3d(1%,-1.5%,0)  scale(1.03); opacity:.95; }
 }
 
 /* ── Grana fotografica finissima: texture premium sul fondo ── */
@@ -822,3 +821,50 @@ body::after {
   .loading-overlay::before { animation:none; }
   .loading-logo { animation:logoRise .4s ease both; }
 }
+
+/* ── Materiale & profondità su tutte le superfici (sheen + bordo-luce + ombra) ── */
+.card, .stat-card, .semaforo-card, .quick-link, .ex-block,
+.prog-card, .seduta-card, .app-modal-box, .recent-sess-item {
+  background-image:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,0) 46%);
+  border-color:rgba(255,255,255,.08);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06), var(--sh-2);
+}
+/* superfici annidate (dentro una card) restano piatte per non sporcare */
+.card .stat-card, .card .day-pill { box-shadow:none; }
+
+/* I numeri grandi diventano protagonisti: bianco brillante + leggero glow */
+.stat-val { color:#FFFFFF; text-shadow:0 1px 18px rgba(255,255,255,.06); }
+
+/* Il riquadro recovery e le scorciatoie più vivi */
+.semaforo-card { position:relative; overflow:hidden; }
+.semaforo-card::after {
+  content:""; position:absolute; right:-30%; top:-60%; width:60%; height:220%;
+  background:radial-gradient(closest-side, rgba(39,209,127,.16), transparent 70%);
+  pointer-events:none;
+}
+.quick-link { background-image:linear-gradient(180deg, rgba(255,59,47,.10), rgba(255,255,255,0) 60%); }
+.quick-link:active { background-image:linear-gradient(180deg, rgba(255,59,47,.16), rgba(255,255,255,0) 60%); }
+
+/* ── Card-hero con anello di progresso (elemento focale della dashboard) ── */
+.stat-hero { grid-column:1 / -1; display:flex; align-items:center; gap:18px; padding:18px 20px; }
+.ring-wrap { position:relative; width:84px; height:84px; flex-shrink:0; }
+.ring { width:84px; height:84px; transform:rotate(-90deg); display:block; }
+.ring-bg { fill:none; stroke:var(--ink4); stroke-width:6.5; }
+.ring-fg { fill:none; stroke:url(#ringGrad); stroke-width:6.5; stroke-linecap:round;
+  stroke-dasharray:214; stroke-dashoffset:214;
+  transition:stroke-dashoffset 1.1s var(--ease-out);
+  filter:drop-shadow(0 0 7px rgba(255,59,47,.55)); }
+.ring-center { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; }
+.ring-center .stat-val { font-size:25px; }
+.stat-hero-main { flex:1; min-width:0; }
+.stat-hero-main .stat-label { font-size:11px; margin-bottom:6px; }
+.stat-hero-main .stat-sub { font-size:11px; color:var(--ghost); }
+
+/* Stagger anche per le card della dashboard (sono dentro .dash-grid) */
+.page.active .dash-grid > * { animation:fadeUp .5s var(--ease-out) both; }
+.page.active .dash-grid > *:nth-child(1){animation-delay:.02s}
+.page.active .dash-grid > *:nth-child(2){animation-delay:.07s}
+.page.active .dash-grid > *:nth-child(3){animation-delay:.12s}
+.page.active .dash-grid > *:nth-child(4){animation-delay:.17s}
+.page.active .dash-grid > *:nth-child(5){animation-delay:.22s}
+.page.active .dash-grid > *:nth-child(n+6){animation-delay:.27s}

@@ -90,10 +90,24 @@
 
       <!-- Stat cards -->
       <div class="stats-row">
-        <div class="stat-card">
-          <div class="stat-label"><i class="ti ti-barbell"></i>Sessioni settimana</div>
-          <div class="stat-val" id="d-sessions">—</div>
-          <div class="stat-sub" id="d-sessions-sub"></div>
+        <div class="stat-card stat-hero">
+          <div class="ring-wrap">
+            <svg class="ring" viewBox="0 0 80 80" aria-hidden="true">
+              <defs>
+                <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="#FF3B2F"/>
+                  <stop offset="1" stop-color="#FF8A66"/>
+                </linearGradient>
+              </defs>
+              <circle class="ring-bg" cx="40" cy="40" r="34"/>
+              <circle class="ring-fg" id="d-sessions-ring" cx="40" cy="40" r="34"/>
+            </svg>
+            <div class="ring-center"><span class="stat-val" id="d-sessions">—</span></div>
+          </div>
+          <div class="stat-hero-main">
+            <div class="stat-label"><i class="ti ti-barbell"></i>Sessioni settimana</div>
+            <div class="stat-sub" id="d-sessions-sub"></div>
+          </div>
         </div>
         <div class="stat-card stat-clickable" onclick="App.navigate('body')">
           <div class="stat-label"><i class="ti ti-scale"></i>Peso attuale</div>
