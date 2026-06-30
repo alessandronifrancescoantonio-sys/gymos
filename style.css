@@ -156,9 +156,9 @@ input { font-family:inherit; }
 
 /* ─── Focus: esercizio aperto in primo piano, gli altri "spenti" (grigi) ─── */
 .ex-block { transition:opacity .25s ease, transform .25s ease, filter .25s ease, background .25s ease, border-color .25s ease; }
-.ex-block.ex-dimmed { opacity:.5; transform:scale(.975); filter:grayscale(.85); background:var(--ink3); }
+.ex-block.ex-dimmed { opacity:.32; transform:scale(.92); filter:grayscale(1) blur(1.4px) brightness(.7); }
 .ex-block.ex-dimmed .ex-sub { display:none; }
-.ex-block.ex-focused { border-color:var(--accent); box-shadow:0 4px 18px rgba(0,0,0,.35); }
+.ex-block.ex-focused { position:relative; z-index:2; border-color:var(--accent); transform:scale(1.015); }
 
 /* ─── Esercizio completato: schiarito, compatto, con spunta ─── */
 .ex-done-check { display:none; color:var(--green,#22c55e); font-size:22px; flex-shrink:0; }
@@ -775,7 +775,8 @@ body::after {
 .btn-primary:hover { box-shadow:0 8px 26px rgba(255,59,47,.42), inset 0 1px 0 rgba(255,255,255,.14); }
 .nav-link.active { box-shadow:inset 0 0 0 1px rgba(255,59,47,.14), 0 0 22px -6px rgba(255,59,47,.5); }
 .rest-fab { box-shadow:0 10px 30px rgba(255,59,47,.5), inset 0 1px 0 rgba(255,255,255,.18); }
-.ex-block.ex-focused { box-shadow:var(--sh-2), 0 0 0 1px rgba(255,59,47,.35), 0 0 30px -10px rgba(255,59,47,.55); }
+.ex-block.ex-focused { box-shadow:0 0 0 1.5px var(--accent), 0 12px 34px -8px rgba(255,59,47,.5), 0 10px 40px -12px rgba(0,0,0,.65);
+  background-image:linear-gradient(180deg, rgba(255,59,47,.07), transparent 42%); }
 
 /* ── Titoli con gradiente luminoso (firma tipografica) ── */
 @supports ((-webkit-background-clip:text) or (background-clip:text)) {
