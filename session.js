@@ -13,11 +13,36 @@ const Session = {
   selectedScheda: null,
 
   _pendingId: null,
+  _pendingView: false,
+  viewMode: false,   // sola lettura: nessuna modifica accidentale a kg/rep/serie
 
-  // Apre una sessione specifica dalla Home (Sessioni recenti)
+  // Apre una sessione specifica dalla Home (Sessioni recenti) in SOLA LETTURA
   openById(id) {
     this._pendingId = id;
+    this._pendingView = true;   // dalla Home si apre in visualizzazione
     App.navigate("session");
+  },
+
+  // Attiva/disattiva la modalità sola lettura
+  toggleViewMode() {
+    this.viewMode = !this.viewMode;
+    this.applyViewMode();
+    U.toast(this.viewMode ? "Sola visualizzazione — modifiche bloccate" : "Modifica attiva",
+            this.viewMode ? "info" : "ok");
+  },
+
+  // Applica lo stato view/edit al DOM (classe sulla pagina + etichetta del bottone)
+  applyViewMode() {
+    const page = document.getElementById("page-session");
+    if (page) page.classList.toggle("view-mode", this.viewMode);
+    document.body.classList.toggle("session-view", this.viewMode);
+    const btn = document.getElementById("view-toggle");
+    if (btn) {
+      btn.classList.toggle("is-view", this.viewMode);
+      btn.innerHTML = this.viewMode
+        ? '<i class="ti ti-pencil"></i><span class="vt-label">Abilita modifica</span>'
+        : '<i class="ti ti-lock"></i><span class="vt-label">Blocca</span>';
+    }
   },
 
   async load() {
@@ -55,6 +80,9 @@ const Session = {
 
   async loadSession(id) {
     this.activeId = id;
+    // Sola lettura se aperta dalla Home (Sessioni recenti); altrimenti modifica
+    this.viewMode = this._pendingView === true;
+    this._pendingView = false;
     const sess = this.sessions.find(s => s.id === id);
     if (!sess) return;
 
@@ -96,6 +124,7 @@ const Session = {
 
     this.renderExercises();
     this.updateStats();
+    this.applyViewMode();
   },
 
   groupByExercise(entries) {
@@ -748,6 +777,7 @@ const Session = {
 
   // ─── AGGIUNGI SERIE ───
   async addSet(exName) {
+    if (this.viewMode) return;
     const grouped  = this.groupByExercise(this.exercises);
     const existing = grouped[exName] || [];
     const last     = existing[existing.length - 1];
@@ -829,6 +859,7 @@ const Session = {
 
   // ─── RIMUOVI SERIE ───
   async removeSet(id, exName) {
+    if (this.viewMode) return;
     if (!await U.confirm("Rimuovere questa serie?", { danger: true, okText: "Rimuovi" })) return;
     // Rimuovi da UI
     const row = document.getElementById(`setrow-${id}`);
@@ -876,6 +907,7 @@ const Session = {
   },
 
   async addExercise() {
+    if (this.viewMode) return;
     const name = await U.prompt("Nuovo esercizio", { placeholder: "Es. Curl manubri" });
     if (!name || !name.trim()) return;
     const exName = name.trim();
@@ -895,6 +927,7 @@ const Session = {
   },
 
   async deleteExercise(exName) {
+    if (this.viewMode) return;
     if (!await U.confirm(`Rimuovere "${exName}" dalla sessione e dalla scheda?`, { danger: true, okText: "Rimuovi" })) return;
     const sets = this.groupByExercise(this.exercises)[exName] || [];
     this.setSyncState("saving");
@@ -1055,6 +1088,7 @@ const Session = {
   },
 
   adjSet(id, field, delta, exName) {
+    if (this.viewMode) return;
     const set = this.exercises.find(e => e.id === id);
     if (!set) return;
     if (field === "r") set.reps = Math.max(0, (set.reps || 0) + delta);
@@ -1064,6 +1098,7 @@ const Session = {
 
   // Inserimento manuale: tocca il numero (kg o rep) e scrivi il valore esatto
   editVal(id, field, exName) {
+    if (this.viewMode) return;
     const span = document.getElementById(`${field === "k" ? "kg" : "rep"}-${id}`);
     if (!span || span.querySelector("input")) return;
     const set = this.exercises.find(e => e.id === id);
@@ -1101,6 +1136,7 @@ const Session = {
   // "Serie fatta": segna completata, chiude la serie, apre la successiva e avvia
   // il timer di recupero con il tempo dell'esercizio (o 90s di default).
   completeSet(id, exName) {
+    if (this.viewMode) return;
     const card = document.getElementById(`setrow-${id}`);
     if (!card) return;
     const nowDone = !this._done.has(id);
@@ -1197,6 +1233,7 @@ const Session = {
   },
 
   updateRR(exName, field, val) {
+    if (this.viewMode) return;
     const grouped = this.groupByExercise(this.exercises);
     const sets = grouped[exName] || [];
     sets.forEach(s => {
@@ -1221,6 +1258,7 @@ const Session = {
 
   // Recupero tra le serie (in header, come il rep range): salvato su tutte le serie
   updateRest(exName, val) {
+    if (this.viewMode) return;
     const sets = this.groupByExercise(this.exercises)[exName] || [];
     const v = (val === "" ? null : Number(val));
     sets.forEach(s => { s.recupero = v; });
@@ -1239,6 +1277,7 @@ const Session = {
 
   // RIR (reps in reserve) per esercizio, in header come il rep range
   updateRIR(exName, val) {
+    if (this.viewMode) return;
     const sets = this.groupByExercise(this.exercises)[exName] || [];
     const v = (val === "" ? null : Number(val));
     sets.forEach(s => { s.rir = v; });
@@ -1284,6 +1323,7 @@ const Session = {
   },
 
   async saveNote(id, note) {
+    if (this.viewMode) return;
     const set = this.exercises.find(e => e.id === id);
     if (set) set.note = note;
     this.setSyncState("saving");
@@ -1297,6 +1337,7 @@ const Session = {
   },
 
   async saveSession() {
+    if (this.viewMode) { U.toast("Sei in sola visualizzazione — sblocca per salvare", "info"); return; }
     const btn = document.querySelector(".btn-primary");
     btn.disabled = true;
     btn.innerHTML = '<i class="ti ti-loader"></i>Salvataggio...';

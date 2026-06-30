@@ -823,6 +823,50 @@ body::after {
 }
 
 /* ════════════════════════════════════════════════════════════════
+   MODALITÀ VISUALIZZAZIONE / MODIFICA (sessione)
+   ════════════════════════════════════════════════════════════════ */
+.view-toggle { display:inline-flex; align-items:center; gap:6px; flex-shrink:0;
+  padding:0 13px; min-height:44px; border-radius:var(--radius-sm);
+  background:var(--ink3); border:1px solid var(--ink4); color:var(--text2);
+  font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.03em;
+  transition:transform .1s, background .15s, border-color .15s, color .15s; }
+.view-toggle i { font-size:15px; }
+.view-toggle:active { transform:scale(.96); }
+/* stato "sola lettura": ambra, ben evidente */
+.view-toggle.is-view { background:rgba(245,166,35,.14); border-color:rgba(245,166,35,.45);
+  color:var(--amber); box-shadow:0 0 18px -6px rgba(245,166,35,.5); }
+
+/* Banner discreto in alto quando si è in sola lettura */
+#page-session.view-mode .sess-title-main::after {
+  content:"Sola visualizzazione"; display:inline-block; margin-top:5px;
+  font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em;
+  color:var(--amber); background:rgba(245,166,35,.12); border:1px solid rgba(245,166,35,.3);
+  padding:2px 9px; border-radius:100px; }
+
+/* In sola lettura: via i controlli di modifica (restano i valori, leggibili) */
+#page-session.view-mode .drag-handle,
+#page-session.view-mode .adj,
+#page-session.view-mode .rm-set-btn,
+#page-session.view-mode .add-set-row,
+#page-session.view-mode .set-done-btn,
+#page-session.view-mode .del-ex-btn,
+#page-session.view-mode .add-ex-btn,
+#page-session.view-mode .ex-tech-toggle,
+#page-session.view-mode .sess-save-desktop,
+body.session-view .bn-save { display:none !important; }
+
+/* I valori restano visibili ma non toccabili; le note vuote spariscono */
+#page-session.view-mode .stepper-row { justify-content:center; gap:12px; }
+#page-session.view-mode .stepper-val { pointer-events:none; }
+/* i campi target/rec/RIR diventano testo semplice (niente look "casella") */
+#page-session.view-mode .rr-in-sm { pointer-events:none; background:transparent;
+  border-color:transparent; color:var(--text2); box-shadow:none; }
+body.session-view .rest-fab { display:none !important; }
+#page-session.view-mode .note-inp { pointer-events:none; background:transparent;
+  border-color:transparent; padding-left:0; color:var(--text2); }
+#page-session.view-mode .note-inp:placeholder-shown { display:none; }
+
+/* ════════════════════════════════════════════════════════════════
    EDITOR SCHEDA — redesign estetico (creazione programma + esercizi)
    ════════════════════════════════════════════════════════════════ */
 .scheda-editor-box { position:relative; border:1px solid rgba(255,255,255,.08);

@@ -171,6 +171,9 @@
           <select class="sess-select" id="sess-select" onchange="switchSession(this.value)"></select>
           <i class="ti ti-chevron-down sess-select-icon"></i>
         </div>
+        <button class="view-toggle" id="view-toggle" onclick="Session.toggleViewMode()" aria-label="Modalità modifica/visualizzazione">
+          <i class="ti ti-lock"></i><span class="vt-label">Blocca</span>
+        </button>
         <button class="sess-new-btn" onclick="Session.openNewModal()" aria-label="Nuova sessione">
           <i class="ti ti-plus"></i>
         </button>
