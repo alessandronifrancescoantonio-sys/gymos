@@ -163,6 +163,9 @@ input { font-family:inherit; }
 /* ─── Esercizio completato: schiarito, compatto, con spunta ─── */
 .ex-done-check { display:none; color:var(--green,#22c55e); font-size:22px; flex-shrink:0; }
 .ex-block.ex-done .ex-done-check { display:inline-block; }
+/* "Da fare": indicatore rosso speculare alla spunta verde (sparisce a completato) */
+.ex-todo-check { display:inline-block; color:var(--accent); font-size:22px; flex-shrink:0; }
+.ex-block.ex-done .ex-todo-check { display:none; }
 .ex-block.ex-done.collapsed { opacity:.5; }
 .ex-block.ex-done.collapsed .ex-name { text-decoration:line-through; text-decoration-color:var(--muted); }
 .ex-block.ex-done.collapsed .ex-setcount { display:none; }

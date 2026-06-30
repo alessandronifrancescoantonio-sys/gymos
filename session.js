@@ -213,6 +213,7 @@ const Session = {
             </div>
           </div>
           <span class="ex-setcount" id="setcount-${sid}">${sets.length}<small>serie</small></span>
+          <i class="ti ti-circle-dot ex-todo-check"></i>
           <i class="ti ti-circle-check-filled ex-done-check"></i>
           <i class="ti ti-chevron-down ex-chevron"></i>
         </div>
