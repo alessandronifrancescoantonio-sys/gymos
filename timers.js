@@ -111,6 +111,8 @@ const RestTimer = {
   wakeLock:  null,
   audioCtx:  null,
   _notifAsked: false,
+  _scheduled: [],
+  _audioScheduled: false,
 
   openPicker() {
     document.getElementById("rest-picker").style.display = "flex";
@@ -132,6 +134,9 @@ const RestTimer = {
     this.requestWake();
     // Prepara l'audio durante il tocco dell'utente (così il beep finale suona)
     this.primeAudio();
+    // Programma il suono di fine IN ANTICIPO nel motore audio: così squilla
+    // all'ora giusta anche a schermo spento (il tick JS lì sarebbe sospeso).
+    this.scheduleAlarm(seconds);
     // Chiedi una volta il permesso notifiche (per l'avviso a schermo spento)
     this.ensureNotif();
 
@@ -149,6 +154,49 @@ const RestTimer = {
     this.total = Math.max(this.total, Math.round((this.endAt - Date.now()) / 1000));
     this.remaining = Math.round((this.endAt - Date.now()) / 1000);
     this.updateDisplay();
+    // riprogramma il suono in base al nuovo istante di fine
+    this.scheduleAlarm(Math.round((this.endAt - Date.now()) / 1000));
+  },
+
+  // Programma l'allarme sonoro IN ANTICIPO nel WebAudio (suona anche a schermo
+  // spento) + un oscillatore "keep-alive" quasi muto che tiene attivo il
+  // contesto audio in background, così gli eventi programmati partono davvero.
+  scheduleAlarm(secs) {
+    this.stopScheduled();
+    this._audioScheduled = false;
+    try {
+      const ctx = this.audioCtx;
+      if (!ctx) return;
+      if (ctx.state === "suspended") ctx.resume();
+      const start = ctx.currentTime + Math.max(0, secs);
+      this._scheduled = [];
+      // keep-alive: suono sub-udibile continuo fino a fine allarme
+      const ka = ctx.createOscillator(), kag = ctx.createGain();
+      kag.gain.value = 0.0006; ka.frequency.value = 18;
+      ka.connect(kag); kag.connect(ctx.destination);
+      ka.start(ctx.currentTime); ka.stop(start + 21);
+      this._scheduled.push(ka);
+      // 14 "bursts" di 3 toni ascendenti, ogni 1.5s (≈20s di allarme)
+      for (let i = 0; i < 14; i++) {
+        const t = start + i * 1.5;
+        [[0, 880], [0.22, 1100], [0.44, 1320]].forEach(p => {
+          const o = ctx.createOscillator(), g = ctx.createGain();
+          o.type = "triangle"; o.frequency.value = p[1];
+          o.connect(g); g.connect(ctx.destination);
+          g.gain.setValueAtTime(0.0001, t + p[0]);
+          g.gain.exponentialRampToValueAtTime(0.6, t + p[0] + 0.02);
+          g.gain.exponentialRampToValueAtTime(0.0001, t + p[0] + 0.30);
+          o.start(t + p[0]); o.stop(t + p[0] + 0.31);
+          this._scheduled.push(o);
+        });
+      }
+      this._audioScheduled = true;
+    } catch (e) { this._audioScheduled = false; }
+  },
+  stopScheduled() {
+    if (this._scheduled) this._scheduled.forEach(o => { try { o.stop(0); } catch (e) {} });
+    this._scheduled = [];
+    this._audioScheduled = false;
   },
 
   updateDisplay() {
@@ -179,9 +227,12 @@ const RestTimer = {
     const fab = document.getElementById("rest-fab");
     if (fab) fab.style.visibility = "";
 
-    // Avvisi: vibrazione forte + suono + notifica + flash rosso a tutto schermo
+    // Avvisi: vibrazione forte + notifica + flash rosso a tutto schermo
     if (navigator.vibrate) navigator.vibrate([300, 120, 300, 120, 500]);
-    this.beep();
+    // Il suono è già stato PROGRAMMATO in anticipo (scheduleAlarm) e parte anche
+    // a schermo spento; suono dal vivo solo come riserva se la programmazione è
+    // fallita (es. audio non sbloccato).
+    if (!this._audioScheduled) this.beep();
     this.notify();
     this.showFinished();
   },
@@ -198,13 +249,15 @@ const RestTimer = {
     const o = document.getElementById("rest-finished");
     if (o) o.style.display = "none";
     clearTimeout(this._finTo);
-    this.stopAlarm();   // toccando lo schermo si zittisce l'allarme
+    this.stopAlarm();        // zittisce l'allarme dal vivo
+    this.stopScheduled();    // e ferma gli eventi sonori programmati rimasti
   },
 
   stop() {
     clearInterval(this.interval);
     this.interval = null;
     this.stopAlarm();
+    this.stopScheduled();
     this.releaseWake();
     document.getElementById("rest-running").style.display = "none";
     const fab = document.getElementById("rest-fab");
