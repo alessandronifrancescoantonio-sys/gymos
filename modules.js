@@ -361,7 +361,6 @@ const Dashboard = {
       this.buildStats(sessions, checkins, sleepData, habits, todayHabit);
       this.buildWeekSplit(sessions);
       this.buildRecentSessions(sessions);
-      this.buildPRs(sessions);
       this.buildSemaforo(sleepData);
     } catch(e) { console.error("Dashboard.load:", e); }
   },
@@ -598,11 +597,6 @@ const Dashboard = {
       };
       list.appendChild(item);
     });
-  },
-
-  buildPRs(sessions) {
-    const wrap = document.getElementById("recent-prs");
-    wrap.innerHTML = '<div class="empty-state">Carica i PR dalla sezione Progressioni</div>';
   },
 
   buildSemaforo(sleepData) {
