@@ -491,6 +491,9 @@ input { font-family:inherit; }
 .prog-count { font-size:11px; color:var(--dim); background:var(--ink3); padding:3px 9px; border-radius:100px; flex-shrink:0; }
 .prog-activate { font-size:11px; font-weight:600; color:var(--ghost); background:var(--ink3); border:1px solid var(--ink4); padding:6px 10px; border-radius:100px; flex-shrink:0; }
 .prog-activate:active { border-color:var(--accent); color:var(--accent); }
+.prog-rename { width:30px; height:30px; border-radius:8px; background:transparent; border:1px solid transparent; color:var(--dim); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.prog-rename:active { border-color:var(--accent); color:var(--accent); transform:scale(.94); }
+.prog-rename i { font-size:14px; }
 .prog-body { display:none; padding:0 14px 14px; flex-direction:column; gap:10px; }
 .prog-body.open { display:flex; }
 /* Seduta in stile lista Apple: header pulito + lista esercizi su righe allineate */

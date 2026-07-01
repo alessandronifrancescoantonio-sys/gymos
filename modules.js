@@ -932,7 +932,7 @@ const Schede = {
       wrap.innerHTML = '<div class="empty-state">Nessun programma. Crea il primo con "Nuovo programma"!</div>';
       return;
     }
-    if (!this._expanded) this._expanded = new Set([App.activeProgram]);
+    if (!this._expanded) this._expanded = new Set();   // di base tutti i programmi chiusi
 
     names.forEach(pg => {
       const sedute   = programmi[pg];
@@ -945,6 +945,7 @@ const Schede = {
         <div class="prog-head" onclick="Schede.toggleProgram('${pgEsc}')">
           <i class="ti ti-chevron-right prog-chev${open ? " open" : ""}"></i>
           <div class="prog-name">${pg}</div>
+          <button class="prog-rename" onclick="event.stopPropagation();Schede.renameProgram('${pgEsc}')" aria-label="Rinomina programma"><i class="ti ti-pencil"></i></button>
           ${isActive ? '<span class="prog-active-badge"><i class="ti ti-check"></i>Attiva</span>' : ""}
           <span class="prog-count">${sedute.length} sed.</span>
           ${isActive ? "" : `<button class="prog-activate" onclick="event.stopPropagation();Schede.setActive('${pgEsc}')">Rendi attiva</button>`}
@@ -997,6 +998,21 @@ const Schede = {
     if (!name || !name.trim()) return;
     this._newProgram = name.trim();
     this.openEditor();   // crea la prima seduta di questo programma
+  },
+
+  // Rinomina un programma: aggiorna il campo "Programma" su tutte le sue sedute
+  async renameProgram(pg) {
+    const name = await U.prompt("Rinomina programma", { value: pg, okText: "Salva" });
+    const newName = (name || "").trim();
+    if (!newName || newName === pg) return;
+    const sedute = (App.programmi && App.programmi[pg]) || [];
+    try {
+      await Promise.all(sedute.map(s => API.updateScheda(s.id, { programma: newName })));
+      if (this._expanded && this._expanded.has(pg)) { this._expanded.delete(pg); this._expanded.add(newName); }
+      if (App.activeProgram === pg) App.activeProgram = newName;
+      await this.load();
+      U.toast("Programma rinominato", "ok");
+    } catch(e) { console.error(e); U.toast("Errore nel rinominare", "err"); }
   },
 
   addSeduta(pg) {
