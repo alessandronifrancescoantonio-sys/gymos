@@ -16,6 +16,7 @@ const Session = {
   _pendingHistory: false,   // la prossima loadSession arriva dallo storico?
   _fromHistory: false,      // la sessione corrente è stata aperta dallo storico
   viewMode: false,          // sola lettura: nessuna modifica accidentale a kg/rep/serie
+  sessionDone: false,       // la sessione caricata è già salvata/completata
 
   // Apre una sessione specifica dalla Home (Sessioni recenti) in SOLA LETTURA.
   // Il toggle view/edit appare SOLO in questo caso (sessioni passate).
@@ -106,6 +107,7 @@ const Session = {
     this.viewMode = this._fromHistory;
     const sess = this.sessions.find(s => s.id === id);
     if (!sess) return;
+    this.sessionDone = sess.done === true;   // sessione già salvata/completata
 
     document.getElementById("sess-title").textContent = sess.name.toUpperCase();
     document.getElementById("sess-meta").textContent =
@@ -495,8 +497,12 @@ const Session = {
       .find(b => b.dataset.ex === exName);
     if (!block) return;
     const sets = this.groupByExercise(this.exercises)[exName] || [];
-    const allDone = sets.length > 0 && sets.every(s => this._done.has(s.id));
-    block.classList.toggle("ex-done", allDone);
+    // Durante l'allenamento: completato = tutte le serie con "Serie fatta" (_done).
+    // Su una sessione GIÀ SALVATA (done): completato = ha dati reali (rep registrate),
+    // perché il flag locale "_done" non c'è quando la riapri (magari da altro device).
+    const doneViaTracking = sets.length > 0 && sets.every(s => this._done.has(s.id));
+    const doneViaData     = this.sessionDone && sets.some(s => (s.reps || 0) > 0);
+    block.classList.toggle("ex-done", doneViaTracking || doneViaData);
   },
 
   refreshAllDone() {
@@ -738,7 +744,7 @@ const Session = {
   },
 
   buildSetRow(set, si, prevSet, exName, rrMin, rrMax, prevMax, total, expanded) {
-    const done = !!(this._done && this._done.has(set.id));
+    const done = !!((this._done && this._done.has(set.id)) || (this.sessionDone && (set.reps || 0) > 0));
     const row = document.createElement("div");
     row.className = "set-card" + (expanded ? "" : " set-collapsed") + (done ? " set-done" : "");
     row.id = `setrow-${set.id}`;
