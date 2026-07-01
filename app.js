@@ -247,24 +247,27 @@ const U = {
     if (ctx2.tooltip.opacity === 0) { ttEl.style.display = "none"; return; }
     const idx = ctx2.tooltip.dataPoints[0].dataIndex;
     ttEl.innerHTML = buildContent(idx);
-    const wrap = document.querySelector(wrapSelector);
+
+    // Il contenitore di riferimento è SEMPRE quello che racchiude il canvas
+    // (position:relative). caretX/caretY sono relativi al canvas → coordinate
+    // coerenti. Sposto la tooltip dentro a quel contenitore così il suo
+    // position:absolute si calcola rispetto ad esso (prima usciva fuori schermo).
+    const wrap = (ctx2.chart && ctx2.chart.canvas && ctx2.chart.canvas.parentElement)
+      || document.querySelector(wrapSelector);
     if (!wrap) return;
+    if (ttEl.parentElement !== wrap) wrap.appendChild(ttEl);
 
-    // Mostra (display block) per misurare la larghezza reale
     ttEl.style.display = "block";
-    const ttW = ttEl.offsetWidth;
-    const ttH = ttEl.offsetHeight;
-    const wrapW = wrap.offsetWidth;
+    const ttW = ttEl.offsetWidth, ttH = ttEl.offsetHeight, wrapW = wrap.offsetWidth;
 
-    // Centrato orizzontalmente sopra il punto
+    // Centrata orizzontalmente sul punto, senza uscire dai bordi (6px di margine)
     let left = ctx2.tooltip.caretX - ttW / 2;
-    // Clamp: non esce dai bordi (8px di margine)
-    if (left < 8) left = 8;
-    if (left + ttW > wrapW - 8) left = wrapW - ttW - 8;
+    if (left < 6) left = 6;
+    if (left + ttW > wrapW - 6) left = wrapW - ttW - 6;
 
-    // Sopra il punto; se non c'è spazio sopra, sotto
-    let top = ctx2.tooltip.caretY - ttH - 14;
-    if (top < 0) top = ctx2.tooltip.caretY + 14;
+    // Sopra il punto; se non c'è spazio, subito sotto
+    let top = ctx2.tooltip.caretY - ttH - 12;
+    if (top < 4) top = ctx2.tooltip.caretY + 16;
 
     ttEl.style.left = left + "px";
     ttEl.style.top  = top + "px";
