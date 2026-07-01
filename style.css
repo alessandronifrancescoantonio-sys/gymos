@@ -1055,3 +1055,38 @@ body.session-view .rest-fab { display:none !important; }
 .page.active .dash-grid > *:nth-child(4){animation-delay:.17s}
 .page.active .dash-grid > *:nth-child(5){animation-delay:.22s}
 .page.active .dash-grid > *:nth-child(n+6){animation-delay:.27s}
+
+/* ════════════════════════════════════════════════════════════════
+   PERFORMANCE & MOTION — reattività, fluidità, dinamismo (additivo)
+   ════════════════════════════════════════════════════════════════ */
+
+/* VELOCITÀ: tap immediati (niente ritardo di 300ms, niente doppio-tap zoom) */
+button, a, .clickable, .stat-clickable, .recent-sess-item, .nav-link, .bn-link,
+.scheda-pill, .arch-chip, .arch-item, .color-swatch, .day-pill, .quick-link,
+.set-hd, .ex-hd { touch-action:manipulation; }
+
+/* OTTIMIZZAZIONE: hint alla GPU per gli strati animati (meno jank/consumo) */
+body::before, body::after { will-change:transform, opacity; }
+.ring-fg, #rest-ring-fg, .loading-fill { will-change:stroke-dashoffset; }
+.rest-running, .rest-fab, .toast { will-change:transform, opacity; }
+
+/* OTTIMIZZAZIONE: l'archivio (fino a 100 voci) renderizza solo ciò che è a schermo */
+.arch-item { content-visibility:auto; contain-intrinsic-size:0 62px; }
+
+/* TRANSIZIONI: ingresso morbido dei modali (overlay in dissolvenza + box che sale) */
+.modal-overlay, .app-modal-overlay { animation:fadeIn .18s ease; }
+.modal-box, .app-modal-box { animation:modalPop .26s var(--ease-out) both; }
+@keyframes modalPop { from { opacity:0; transform:translateY(12px) scale(.975); } to { opacity:1; transform:none; } }
+
+/* TRANSIZIONI + DINAMICITÀ: apertura fluida di esercizi e serie */
+.ex-block:not(.collapsed) > .ex-body { animation:revealY .28s var(--ease-out); }
+.set-card:not(.set-collapsed) > .set-body { animation:revealY .22s var(--ease-out); }
+@keyframes revealY { from { opacity:0; transform:translateY(-7px); } to { opacity:1; transform:none; } }
+
+/* DINAMICITÀ: pressione più viva su card e voci di lista */
+.recent-sess-item.clickable:active, .arch-item:active, .stat-clickable:active,
+.seduta-card:active, .scheda-pill:active { transform:scale(.985); }
+
+@media (prefers-reduced-motion:reduce) {
+  .modal-box, .app-modal-box, .ex-block > .ex-body, .set-card > .set-body { animation:none !important; }
+}
