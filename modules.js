@@ -56,46 +56,71 @@ const Progression = {
     document.getElementById("prog-ex-name").textContent = this.activeEx;
     try {
       this.history = await API.getExerciseHistory(this.activeEx);
+      this.sessions = this.groupSessions();
       this.buildChart();
-      this.buildTable();
+      this.buildSessions();
     } catch(e) { console.error("Progression.loadHistory:", e); }
   },
 
+  _esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); },
+
+  // Raggruppa le righe (una per serie) in SESSIONI, con tutte le serie ordinate,
+  // scartando quelle vuote (rep 0). Calcola top set, volume e record (PR).
+  groupSessions() {
+    const groups = {};
+    (this.history || []).forEach(r => {
+      // una sessione = un giorno (il nome scheda non è univoco tra sessioni diverse)
+      const key = String(r.date);
+      const setLabel = (r.name || "").split(" – ").pop() || "";
+      const m = setLabel.match(/S(\d+)/);
+      if (!groups[key]) groups[key] = { key, date: r.date, series: [], note: "" };
+      const g = groups[key];
+      g.series.push({ n: m ? parseInt(m[1]) : g.series.length + 1, reps: r.reps || 0, kg: r.kg || 0 });
+      if (r.note && !g.note) g.note = r.note;
+    });
+    let out = Object.values(groups).map(g => {
+      g.series = g.series.filter(s => s.reps > 0).sort((a, b) => a.n - b.n);
+      g.topKg   = g.series.length ? Math.max(...g.series.map(s => s.kg)) : 0;
+      g.topReps = g.series.length ? Math.max(...g.series.map(s => s.reps)) : 0;
+      g.volume  = g.series.reduce((t, s) => t + s.reps * (s.kg || 0), 0);
+      g.repsTot = g.series.reduce((t, s) => t + s.reps, 0);
+      return g;
+    }).filter(g => g.series.length)
+      .sort((a, b) => new Date(a.date) - new Date(b.date));   // dal più vecchio al più recente
+    // Record: il top set supera il massimo di TUTTE le sessioni precedenti
+    let running = 0;
+    out.forEach((g, i) => { g.isPR = i > 0 && g.topKg > running && g.topKg > 0; running = Math.max(running, g.topKg); });
+    return out;
+  },
+
   buildChart() {
-    const h = this.history;
-    if (!h.length) return;
-    const color   = CONFIG.SCHEDE[this.activeScheda].color;
-    const labels  = h.map(s => U.fmtDate(s.date));
-    const data    = h.map(s => s.kg || s.reps);
-    const isBW    = h.every(s => !s.kg);
-    const minD    = Math.min(...data), maxD = Math.max(...data);
-    const pad     = (maxD - minD) * 0.3 || 3;
-    const maxPrev = i => i === 0 ? -Infinity : Math.max(...h.slice(0, i).map(s => s.kg || 0));
-
-    const ptColors = h.map((s, i) => (i > 0 && s.kg > maxPrev(i)) ? "#F59E0B" : color);
-    const ptRadius = h.map((s, i) => (i > 0 && s.kg > maxPrev(i)) ? 8 : 5);
+    const s = this.sessions || [];
+    const canvas = document.getElementById("prog-chart");
+    if (this.chart) { this.chart.destroy(); this.chart = null; }
+    if (!s.length || !canvas) return;
+    const color = CONFIG.SCHEDE[this.activeScheda].color;
+    const isBW  = s.every(g => g.topKg === 0);
+    const labels = s.map(g => U.fmtDate(g.date));
+    const data   = s.map(g => isBW ? g.topReps : g.topKg);
+    const minD = Math.min(...data), maxD = Math.max(...data);
+    const pad  = (maxD - minD) * 0.3 || 3;
+    const ptColors = s.map(g => g.isPR ? "#F59E0B" : color);
+    const ptRadius = s.map(g => g.isPR ? 8 : 5);
     const ttEl = document.getElementById("prog-tt");
-
-    if (this.chart) this.chart.destroy();
-    const ctx = document.getElementById("prog-chart").getContext("2d");
     const opts = U.baseChartOptions(ttEl, idx => {
-      const s = h[idx];
-      const isPR = idx > 0 && s.kg > maxPrev(idx);
-      const prTag = isPR ? '<span class="tt-pr">PR</span>' : "";
-      const noteHTML = s.note ? `<div class="tt-note">${s.note}</div>` : "";
+      const g = s[idx];
+      const prTag = g.isPR ? '<span class="tt-pr">Record</span>' : "";
+      const setsStr = g.series.map(x => isBW ? x.reps + "r" : U.fmt(x.kg) + "×" + x.reps).join("  ");
       return `
-        <div class="tt-date">Wk ${U.weekNum(s.date)} — ${U.fmtDate(s.date)}</div>
-        <div class="tt-main" style="color:${color}">${isBW ? s.reps + " rep" : U.fmt(s.kg) + " kg"}${prTag}</div>
-        <div class="tt-sub">${s.sets}×${s.reps} rep · vol ${U.fmtV(U.vol(s.sets, s.reps, s.kg))}</div>
-        ${noteHTML}
+        <div class="tt-date">Sett. ${U.weekNum(g.date)} — ${U.fmtDate(g.date)}</div>
+        <div class="tt-main" style="color:${color}">${isBW ? g.topReps + " rep" : U.fmt(g.topKg) + " kg"}${prTag}</div>
+        <div class="tt-sub">${g.series.length} serie · ${setsStr}</div>
       `;
     }, ".card");
-
     opts.scales.y.min = Math.max(0, minD - pad);
     opts.scales.y.max = maxD + pad;
     opts.scales.y.ticks.callback = v => U.fmt(v) + (isBW ? " r" : " kg");
-
-    this.chart = new Chart(ctx, {
+    this.chart = new Chart(canvas.getContext("2d"), {
       type: "line",
       data: { labels, datasets: [{ data, borderColor: color, backgroundColor: "transparent",
         borderWidth: 2.5, pointRadius: ptRadius, pointBackgroundColor: ptColors,
@@ -104,30 +129,44 @@ const Progression = {
     });
   },
 
-  buildTable() {
-    const h = this.history;
-    const tbody = document.getElementById("prog-tbody");
-    tbody.innerHTML = "";
-    const maxPrev = i => i === 0 ? -Infinity : Math.max(...h.slice(0, i).map(s => s.kg || 0));
-
-    h.forEach((s, i) => {
-      const v     = U.vol(s.sets, s.reps, s.kg);
-      const prevV = i > 0 ? U.vol(h[i-1].sets, h[i-1].reps, h[i-1].kg) : null;
-      const dv    = prevV !== null ? v - prevV : null;
-      const isPR  = i > 0 && s.kg > maxPrev(i);
-      const prTag = isPR ? '<span class="pr-tag">PR</span>' : "";
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${U.fmtDate(s.date)}</td>
-        <td><span class="week-badge">Wk ${U.weekNum(s.date)}</span></td>
-        <td class="mono">${s.sets}×${s.reps}</td>
-        <td class="mono">${s.kg ? U.fmt(s.kg) + " kg" : "BW"}${prTag}</td>
-        <td class="mono">${s.kg ? U.fmtV(v) : "—"}</td>
-        <td>${U.deltaHTML(dv)}</td>
-        <td class="note-text">${s.note || "—"}</td>
-      `;
-      tbody.appendChild(tr);
-    });
+  // Una scheda per sessione (più recente in alto) con TUTTE le serie fatte.
+  buildSessions() {
+    const wrap = document.getElementById("prog-sessions");
+    if (!wrap) return;
+    const sessions = this.sessions || [];
+    if (!sessions.length) {
+      wrap.innerHTML = '<div class="empty-state"><i class="ti ti-history"></i><span class="es-title">Ancora nessun dato</span><span class="es-sub">Registra questo esercizio in una sessione per vedere le progressioni.</span></div>';
+      return;
+    }
+    const isBW = sessions.every(g => g.topKg === 0);
+    let html = "";
+    for (let i = sessions.length - 1; i >= 0; i--) {
+      const g = sessions[i];
+      const prev = i > 0 ? sessions[i - 1] : null;
+      const dv = (prev && !isBW) ? g.volume - prev.volume : null;
+      const seriesHTML = g.series.map(x =>
+        `<div class="ps-set">
+          <span class="ps-sn">S${x.n}</span>
+          ${isBW
+            ? `<span class="ps-val">${x.reps}<small>rep</small></span>`
+            : `<span class="ps-val">${U.fmt(x.kg)}<small>kg</small></span><span class="ps-x">×</span><span class="ps-val">${x.reps}<small>rep</small></span>`}
+        </div>`).join("");
+      html += `
+        <div class="prog-sess${g.isPR ? " is-pr" : ""}">
+          <div class="ps-head">
+            <div class="ps-date">${U.fmtDate(g.date)}<span class="ps-wk">Sett. ${U.weekNum(g.date)}</span></div>
+            ${g.isPR ? '<span class="ps-pr"><i class="ti ti-trophy"></i>Record</span>' : ""}
+          </div>
+          <div class="ps-sets">${seriesHTML}</div>
+          <div class="ps-foot">
+            <span class="ps-metric">${isBW ? `<b>${g.topReps}</b> rep max` : `<b>${U.fmt(g.topKg)}</b> kg top set`}</span>
+            <span class="ps-metric">Volume <b>${isBW ? g.repsTot + " rep" : U.fmtV(g.volume)}</b></span>
+            ${dv !== null ? `<span class="ps-delta">${U.deltaHTML(dv)}</span>` : ""}
+          </div>
+          ${g.note ? `<div class="ps-note"><i class="ti ti-note"></i>${this._esc(g.note)}</div>` : ""}
+        </div>`;
+    }
+    wrap.innerHTML = html;
   },
 };
 

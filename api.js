@@ -198,6 +198,7 @@ const API = {
     );
     return pages.map(p => ({
       id:   p.id,
+      name: this.read.title(p, CONFIG.PROPS.EL_NAME),
       date: this.read.date(p, CONFIG.PROPS.EL_DATE),
       sets: this.read.number(p, CONFIG.PROPS.EL_SETS),
       reps: this.read.number(p, CONFIG.PROPS.EL_REPS),
