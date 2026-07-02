@@ -226,6 +226,8 @@ const Body = {
   },
 
   buildPesoChart() {
+    // distruggi PRIMA del return su dati vuoti (altrimenti l'istanza resta viva)
+    if (this.pesoChart && !this.checkins.length) { this.pesoChart.destroy(); this.pesoChart = null; }
     if (!this.checkins.length) return;
     const data   = this.checkins.map(c => c.peso);
     const labels = this.checkins.map(c => U.fmtDate(c.date));
@@ -281,6 +283,7 @@ const Body = {
   },
 
   buildMisuraChart() {
+    if (this.misuraChart && !this.checkins.length) { this.misuraChart.destroy(); this.misuraChart = null; }
     if (!this.checkins.length) return;
     const m      = CONFIG.MISURE.find(x => x.key === this.activeMisura);
     const data   = this.checkins.map(c => c[m.key]);

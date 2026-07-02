@@ -168,7 +168,14 @@ const API = {
       recupero: this.read.number(p, CONFIG.PROPS.EL_RECUPERO),
       rir:      this.read.number(p, CONFIG.PROPS.EL_RIR),
       info:     this.read.rich_text(p, CONFIG.PROPS.EL_INFO),
-    }));
+    }))
+      // Notion non garantisce l'ordine dei risultati: ordina per numero di serie
+      // (S<n> nel titolo) così S1/S2/S3 restano stabili e il confronto con la
+      // sessione precedente avviene serie-per-serie corretta.
+      .sort((a, b) => {
+        const num = e => { const m = (e.name || "").split(" – ").pop().match(/S(\d+)/); return m ? parseInt(m[1]) : 999; };
+        return num(a) - num(b);
+      });
   },
 
   // Aggiorna i campi "tecnica di intensità" di una entry esercizio
@@ -204,7 +211,10 @@ const API = {
       reps: this.read.number(p, CONFIG.PROPS.EL_REPS),
       kg:   this.read.number(p, CONFIG.PROPS.EL_KG),
       note: this.read.rich_text(p, CONFIG.PROPS.EL_NOTE),
-    })).filter(e => e.date);
+    })).filter(e => e.date)
+      // "contains" di Notion è un match per sottostringa: "Leg Curl" pescherebbe
+      // anche "Leg Curl Seduto". Filtra sul nome esatto (prima parte del titolo).
+      .filter(e => (e.name || "").split(" – ")[0] === exerciseName);
   },
 
   // Body metrics (check-in corporei)

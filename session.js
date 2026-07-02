@@ -810,7 +810,9 @@ const Session = {
     const grouped  = this.groupByExercise(this.exercises);
     const existing = grouped[exName] || [];
     const last     = existing[existing.length - 1];
-    const si       = existing.length;
+    // Prossimo numero = max S<n> esistente (non il conteggio: dopo la rimozione
+    // di una serie centrale il conteggio duplicherebbe un numero già usato)
+    const si       = this.nextSetNum(existing) - 1;
     const sess     = this.sessions.find(s => s.id === this.activeId);
     const date     = sess?.date || U.today();
 
@@ -912,12 +914,26 @@ const Session = {
 
   // ─── ESERCIZI INTERI: aggiungi / rimuovi (con sync sulla seduta) ───
 
+  // Prossimo numero di serie: max S<n> nei titoli esistenti + 1 (robusto alle
+  // rimozioni di serie centrali; fallback al conteggio+1)
+  nextSetNum(sets) {
+    let max = 0;
+    (sets || []).forEach(s => {
+      const m = (s.name || "").split(" – ").pop().match(/S(\d+)/);
+      if (m) max = Math.max(max, parseInt(m[1]));
+    });
+    return Math.max(max, (sets || []).length) + 1;
+  },
+
   // Crea in Notion N serie per un esercizio nella sessione attiva, ritorna gli oggetti set
   async _createExerciseSets(exName, nSets, base) {
     const sess = this.sessions.find(s => s.id === this.activeId);
     const date = sess?.date || U.today();
     const made = [];
-    for (let i = 1; i <= nSets; i++) {
+    // Se l'esercizio ha già serie (append da reconcile), parti dal numero successivo
+    const startNum = this.nextSetNum(this.groupByExercise(this.exercises)[exName]);
+    for (let k = 0; k < nSets; k++) {
+      const i = startNum + k;
       const props = {};
       props[CONFIG.PROPS.EL_NAME]    = API.prop.title(`${exName} – ${sess?.name || ""} – S${i}`);
       props[CONFIG.PROPS.EL_SESSION] = API.prop.relation([this.activeId]);
@@ -977,9 +993,15 @@ const Session = {
     const sess  = this.sessions.find(s => s.id === this.activeId);
     const sched = sess && CONFIG.SCHEDE[sess.type];   // { _id, exercises, color }
     if (!sched || !sched._id) return;                 // sessione non legata a una seduta del programma attivo
-    let list = (sched.exercises || []).map(e => ({ nome: U.exName(e), serie: U.exSets(e) }));
+    // Conserva TUTTI i meta degli altri esercizi (recupero/rir/rep range/tecnica/
+    // superset) — mappare solo {nome, serie} li azzererebbe sulla seduta.
+    let list = (sched.exercises || []).map(e => ({
+      nome: U.exName(e), serie: U.exSets(e), recupero: U.exRest(e), rir: U.exRir(e),
+      rrMin: U.exRrMin(e), rrMax: U.exRrMax(e),
+      tecnica: U.exTec(e), cadenza: U.exCad(e), info: U.exInfo(e), gruppo: U.exGrp(e),
+    }));
     if (action === "add") {
-      if (!list.some(e => e.nome === exName)) list.push({ nome: exName, serie: serie || 3 });
+      if (!list.some(e => e.nome === exName)) list.push({ nome: exName, serie: serie || 3, recupero: null, rir: null, rrMin: 8, rrMax: 12, tecnica: [], cadenza: "", info: "", gruppo: "" });
     } else {
       list = list.filter(e => e.nome !== exName);
     }
@@ -1367,9 +1389,10 @@ const Session = {
 
   async saveSession() {
     if (this.viewMode) { U.toast("Sei in sola visualizzazione — sblocca per salvare", "info"); return; }
-    const btn = document.querySelector(".btn-primary");
-    btn.disabled = true;
-    btn.innerHTML = '<i class="ti ti-loader"></i>Salvataggio...';
+    // I veri bottoni Salva (desktop + barra mobile) — NON il primo .btn-primary
+    // del DOM, che è "Crea e inizia" del modale nuova sessione.
+    const btns = [...document.querySelectorAll(".sess-save-desktop, .bn-save")];
+    btns.forEach(b => { b.disabled = true; b.innerHTML = '<i class="ti ti-loader"></i> Salvataggio…'; });
     try {
       const updates = this.exercises
         .filter(s => s.reps > 0)
@@ -1384,15 +1407,20 @@ const Session = {
         }
         await API.update(this.activeId, props);
       }
-      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-device-floppy"></i>Salva'; btn.style.background = ""; }
+      btns.forEach(b => { b.disabled = false; b.innerHTML = '<i class="ti ti-device-floppy"></i> Salva'; });
+      // Pulizia: i flag locali di questa sessione non servono più una volta salvata
+      if (this.activeId) {
+        localStorage.removeItem(`gymos_done_${this.activeId}`);
+        localStorage.removeItem(`gymos_order_${this.activeId}`);
+      }
       U.toast("Allenamento salvato 💪", "ok");
       // aggiorna l'elenco e torna alla schermata iniziale (pronto per il prossimo)
       try { this.sessions = await API.getWorkoutSessions(20); this.buildSelect(); } catch(_) {}
       this.showLanding();
     } catch(e) {
       console.error(e);
-      btn.innerHTML = '<i class="ti ti-alert-circle"></i>Errore';
-      btn.disabled = false;
+      btns.forEach(b => { b.disabled = false; b.innerHTML = '<i class="ti ti-alert-circle"></i> Errore'; });
+      U.toast("Errore nel salvataggio — riprova", "err");
     }
   },
 
