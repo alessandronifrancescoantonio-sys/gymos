@@ -277,17 +277,22 @@ const RestTimer = {
   // Restituisce gli oscillatori creati (per poterli fermare se serve).
   _scheduleBurst(ctx, base) {
     const made = [];
-    const tone = (t) => {
-      const o = ctx.createOscillator(), g = ctx.createGain();
-      o.type = "triangle"; o.frequency.value = 880;   // rintocco chiaro, costante
-      o.connect(g); g.connect(ctx.destination);
-      g.gain.setValueAtTime(0.0001, base + t);
-      g.gain.exponentialRampToValueAtTime(0.6, base + t + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001, base + t + 0.34);
-      o.start(base + t); o.stop(base + t + 0.36);
-      made.push(o);
+    // Ogni rintocco è una "campanella": fondamentale + quinta (parziale) → timbro
+    // metallico e squillante che taglia meglio sopra la musica. Volume più alto.
+    const ring = (t, f) => {
+      [[f, 0.62], [f * 1.5, 0.32], [f * 2, 0.14]].forEach(pair => {
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = "triangle"; o.frequency.value = pair[0];
+        o.connect(g); g.connect(ctx.destination);
+        g.gain.setValueAtTime(0.0001, base + t);
+        g.gain.exponentialRampToValueAtTime(pair[1], base + t + 0.008);
+        g.gain.exponentialRampToValueAtTime(0.0001, base + t + 0.30);
+        o.start(base + t); o.stop(base + t + 0.32);
+        made.push(o);
+      });
     };
-    for (let i = 0; i < 9; i++) tone(i * 0.5);   // 9 rintocchi distinti (~4.4s totali)
+    // 9 rintocchi alternati acuto/grave (E6 / B5): cadenza da sveglia, ben distinta
+    for (let i = 0; i < 9; i++) ring(i * 0.5, i % 2 === 0 ? 1319 : 988);
     return made;
   },
   // Suono dal vivo (riserva quando l'audio programmato non è disponibile)

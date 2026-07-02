@@ -51,25 +51,51 @@ const Session = {
   },
 
   async load() {
+    const target = this._pendingId;
+    this._pendingId = null;
+
+    // Sessione IN CORSO già caricata in memoria (non salvata, non dallo storico):
+    // cambiando pagina e tornando qui NON si resetta — resta sull'allenamento.
+    if (!target && this.activeId && !this.sessionDone && !this._fromHistory) {
+      const pg = document.getElementById("page-session");
+      if (pg) pg.classList.remove("session-empty");
+      document.body.classList.remove("sess-landing");
+      return;
+    }
+
     try {
       this.sessions = await API.getWorkoutSessions(20);
-      // se vogliamo aprire una sessione specifica non presente fra le ultime 20, allarga
-      const target = this._pendingId;
-      this._pendingId = null;
       if (target && !this.sessions.find(s => s.id === target)) {
-        this.sessions = await API.getWorkoutSessions(50);
+        this.sessions = await API.getWorkoutSessions(50);   // allarga per una sessione specifica
       }
       this.buildSelect();
+
       if (target && this.sessions.find(s => s.id === target)) {
         // apertura specifica (dalla Home → sessione passata)
         this.activeId = target;
         const sel = document.getElementById("sess-select");
         if (sel) sel.value = target;
         await this.loadSession(target);
-      } else {
-        // navigazione normale → schermata iniziale: solo il pulsante "nuovo allenamento"
-        this.showLanding();
+        return;
       }
+
+      // Dopo un reload della pagina: se c'era un allenamento in corso (non ancora
+      // salvato), riprendilo invece di ripartire dal pulsante.
+      const resume = localStorage.getItem("gymos_active");
+      if (resume) {
+        const s = this.sessions.find(x => x.id === resume);
+        if (s && s.done === false) {
+          this.activeId = resume;
+          const sel = document.getElementById("sess-select");
+          if (sel) sel.value = resume;
+          await this.loadSession(resume);
+          return;
+        }
+        localStorage.removeItem("gymos_active");   // riferimento non più valido
+      }
+
+      // navigazione normale → schermata iniziale (solo il pulsante "nuovo allenamento")
+      this.showLanding();
     } catch(e) { console.error("Session.load:", e); this.showLanding(); }
   },
 
@@ -78,6 +104,8 @@ const Session = {
     this.activeId = null;
     this._fromHistory = false;
     this.viewMode = false;
+    this.sessionDone = false;
+    localStorage.removeItem("gymos_active");   // niente più allenamento "in corso"
     const page = document.getElementById("page-session");
     if (page) page.classList.add("session-empty");
     document.body.classList.add("sess-landing");
@@ -108,6 +136,8 @@ const Session = {
     const sess = this.sessions.find(s => s.id === id);
     if (!sess) return;
     this.sessionDone = sess.done === true;   // sessione già salvata/completata
+    // Ricorda l'allenamento in corso, così sopravvive a cambi pagina e reload
+    if (!this.sessionDone && !this._fromHistory) localStorage.setItem("gymos_active", id);
 
     document.getElementById("sess-title").textContent = sess.name.toUpperCase();
     document.getElementById("sess-meta").textContent =
