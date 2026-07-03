@@ -101,6 +101,12 @@ const Session = {
 
   // Mostra la schermata iniziale (nessuna sessione caricata)
   showLanding() {
+    clearTimeout(this._autoStartTimer);
+    clearTimeout(this._autoSaveTimer);
+    if (this.activeId) {
+      localStorage.removeItem(`gymos_created_${this.activeId}`);
+      localStorage.removeItem(`gymos_autosave_${this.activeId}`);
+    }
     this.activeId = null;
     this._fromHistory = false;
     this.viewMode = false;
@@ -178,6 +184,7 @@ const Session = {
     this.renderExercises();
     this.updateStats();
     this.applyViewMode();
+    this.armSessionTimers();   // auto-avvio durata + eventuale auto-salvataggio
   },
 
   groupByExercise(entries) {
@@ -915,6 +922,7 @@ const Session = {
       this.updateStats();
       this.updateSetCount(exName);
       this.syncSedutaMeta(exName);   // aggiorna serie/recupero/rir/tecnica sulla scheda
+      this.checkAutoSave();          // nuova serie non spuntata → annulla eventuale auto-salvataggio
     } catch(e) {
       console.error("addSet error:", e);
       U.alert("Errore nell'aggiungere la serie. Controlla la connessione.");
@@ -943,6 +951,7 @@ const Session = {
     }
     this.updateSetCount(exName);
     this.syncSedutaMeta(exName);   // aggiorna serie/recupero/rir/tecnica sulla scheda
+    this.checkAutoSave();          // togliendo una serie potrebbe risultare tutto fatto
   },
 
   // ─── ESERCIZI INTERI: aggiungi / rimuovi (con sync sulla seduta) ───
@@ -1244,6 +1253,65 @@ const Session = {
       const secs = (set && set.recupero) ? set.recupero : 90;
       if (typeof RestTimer !== "undefined") RestTimer.start(secs);
     }
+    // se ora è tutto spuntato → programma il salvataggio automatico (o annullalo)
+    this.checkAutoSave();
+  },
+
+  // ─── AUTO-STOP + SALVATAGGIO: 5 min dopo l'ultima serie spuntata ───
+  AUTO_SAVE_MS: 5 * 60 * 1000,
+  allSetsDone() {
+    return this.exercises.length > 0 && this.exercises.every(s => this._done.has(s.id));
+  },
+  checkAutoSave() {
+    clearTimeout(this._autoSaveTimer);
+    if (this.viewMode || this.sessionDone || !this.activeId || !this.allSetsDone()) {
+      if (this.activeId) localStorage.removeItem(`gymos_autosave_${this.activeId}`);
+      return;
+    }
+    // tutte le serie fatte → salva da solo tra 5 min se non lo fai tu
+    localStorage.setItem(`gymos_autosave_${this.activeId}`, Date.now() + this.AUTO_SAVE_MS);
+    this._autoSaveTimer = setTimeout(() => this._doAutoSave(), this.AUTO_SAVE_MS);
+  },
+  _doAutoSave() {
+    if (this.viewMode || this.sessionDone || !this.activeId || !this.allSetsDone()) return;
+    U.toast("Allenamento completato — salvataggio automatico 💪", "info");
+    this.saveSession();   // ferma il timer durata, salva su Notion e torna al pulsante
+  },
+
+  // ─── AUTO-AVVIO timer durata: 5 min dopo la creazione, se dimentichi di avviarlo ───
+  AUTO_START_MS: 5 * 60 * 1000,
+  armSessionTimers() {
+    clearTimeout(this._autoStartTimer);
+    clearTimeout(this._autoSaveTimer);
+    if (this.viewMode || this.sessionDone || !this.activeId) return;
+    const id = this.activeId;
+
+    // 1) auto-avvio durata (solo se non già avviato manualmente)
+    if (!localStorage.getItem(`gymos_start_${id}`)) {
+      const created = parseInt(localStorage.getItem(`gymos_created_${id}`) || "0");
+      if (created) {
+        const dueIn = created + this.AUTO_START_MS - Date.now();
+        const fire = () => {
+          if (this.activeId === id && !localStorage.getItem(`gymos_start_${id}`) && typeof DurationTimer !== "undefined") {
+            DurationTimer.startAt(created);   // conta dalla creazione (totale corretto)
+            U.toast("Timer durata avviato in automatico", "info");
+          }
+        };
+        if (dueIn <= 0) fire();
+        else this._autoStartTimer = setTimeout(fire, dueIn);
+      }
+    }
+
+    // 2) recupera un auto-salvataggio già scaduto mentre l'app era in background
+    const saveDue = parseInt(localStorage.getItem(`gymos_autosave_${id}`) || "0");
+    if (saveDue) {
+      if (this.allSetsDone()) {
+        if (Date.now() >= saveDue) this._doAutoSave();
+        else this._autoSaveTimer = setTimeout(() => this._doAutoSave(), saveDue - Date.now());
+      } else {
+        localStorage.removeItem(`gymos_autosave_${id}`);
+      }
+    }
   },
 
   // Aggiorna display + riepilogo + badge + statistiche + autosave dopo un cambio di valore
@@ -1464,6 +1532,14 @@ const Session = {
 function switchSession(id) { Session.loadSession(id); }
 function saveSession()     { Session.saveSession();   }
 
+// Riprendendo l'app (torna in primo piano) ricontrolla auto-avvio/auto-salvataggio
+// della sessione in corso (i setTimeout in background possono essere sospesi).
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && Session.activeId && !Session.sessionDone && !Session.viewMode) {
+    Session.armSessionTimers();
+  }
+});
+
 // ─── MODAL NUOVA SESSIONE ───
 (function() {
   let _scheda = null;
@@ -1589,6 +1665,7 @@ Session._doCreateSession = async function(name) {
 
     const newSess = await API.create(CONFIG.DB.WORKOUT_LOG, sessProps);
     const sessId  = newSess.id;
+    localStorage.setItem(`gymos_created_${sessId}`, Date.now());   // per l'auto-avvio del timer durata
 
     const exercises = CONFIG.SCHEDE[name].exercises || [];
     const creates   = [];

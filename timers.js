@@ -31,12 +31,17 @@ const DurationTimer = {
 
   // Avvio manuale col bottone
   start() {
+    this.startAt(Date.now());
+    if (navigator.vibrate) navigator.vibrate(20);
+  },
+
+  // Avvio da un istante specifico (usato dall'auto-avvio: backdata alla creazione)
+  startAt(ts) {
     if (!this.sessionId) return;
-    this.startTime = Date.now();
+    this.startTime = ts;
     localStorage.setItem(`gymos_start_${this.sessionId}`, this.startTime);
     this.startTicking();
     this.setBtnState("running");
-    if (navigator.vibrate) navigator.vibrate(20);
   },
 
   startTicking() {
