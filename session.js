@@ -1332,6 +1332,7 @@ const Session = {
             [CONFIG.PROPS.EL_RR_MAX]: API.prop.number(s.rrMax),
           })));
           this.setSyncState("saved");
+          this.syncSedutaMeta(exName);   // propaga il rep range anche sulla scheda
         } catch(e) { this.setSyncState("error"); }
       }, 800);
     }
