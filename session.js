@@ -500,7 +500,10 @@ const Session = {
   prevNotesHTML(prevSets) {
     const esc = t => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const notes = (prevSets || [])
-      .map((s, i) => ({ n: i + 1, t: (s.note || "").trim() }))
+      .map((s, i) => {
+        const m = (s.name || "").split(" – ").pop().match(/S(\d+)/);
+        return { n: m ? parseInt(m[1]) : i + 1, t: (s.note || "").trim() };
+      })
       .filter(o => o.t);
     if (!notes.length) return "";
     const body = notes.map(o => `<div class="pn-line"><b>S${o.n}</b><span>${esc(o.t)}</span></div>`).join("");
