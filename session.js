@@ -181,6 +181,9 @@ const Session = {
       ? await API.getSessionExercises(sameType[0].id)
       : [];
 
+    // Note della SESSIONE (intera): nota corrente + nota della precedente corrispondente
+    this.renderSessionNote(sess, sameType[0]);
+
     this.renderExercises();
     this.updateStats();
     this.applyViewMode();
@@ -1487,6 +1490,48 @@ const Session = {
       console.error(e);
       this.setSyncState("error");
     }
+  },
+
+  // ─── NOTE DELLA SESSIONE (intera) ───
+  renderSessionNote(sess, prevSess) {
+    const inp = document.getElementById("sess-note-input");
+    if (inp) {
+      inp.value = (sess && sess.note) || "";
+      inp.readOnly = this.viewMode;              // sola lettura sulle sessioni passate
+      inp.placeholder = this.viewMode ? "Nessuna nota per questa sessione" : "Sensazioni, energia, cosa migliorare la prossima volta…";
+    }
+    // nota della sessione precedente corrispondente (solo se esiste)
+    const prevWrap = document.getElementById("sess-note-prev");
+    if (prevWrap) {
+      const pn = (prevSess && (prevSess.note || "").trim()) || "";
+      if (pn) {
+        const esc = t => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        prevWrap.innerHTML = `<button type="button" class="prev-notes-toggle" onclick="Session.togglePrevNotes(this, event)">
+            <i class="ti ti-notes"></i><span>Nota scorsa volta</span>
+            <i class="ti ti-chevron-down pn-chev"></i>
+          </button>
+          <div class="prev-notes-body"><div class="pn-line"><span>${esc(pn)}</span></div></div>`;
+        prevWrap.style.display = "";
+      } else {
+        prevWrap.innerHTML = "";
+        prevWrap.style.display = "none";
+      }
+    }
+  },
+
+  saveSessionNote(val) {
+    if (this.viewMode || !this.activeId) return;
+    const id = this.activeId;
+    const sess = this.sessions.find(s => s.id === id);
+    if (sess) sess.note = val;   // aggiorna in memoria (così ricompare come "scorsa volta")
+    clearTimeout(this._saveTimers["sessnote"]);
+    this._saveTimers["sessnote"] = setTimeout(async () => {
+      this.setSyncState("saving");
+      try {
+        await API.update(id, { [CONFIG.PROPS.WL_NOTE]: API.prop.rich_text(val || "") });
+        this.setSyncState("saved");
+      } catch(e) { console.error("saveSessionNote:", e); this.setSyncState("error"); }
+    }, 800);
   },
 
   async saveSession() {

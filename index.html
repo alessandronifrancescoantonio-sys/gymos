@@ -233,6 +233,15 @@
       <div class="sess-stat"><div class="ss-v" id="ss-up" style="color:var(--green)">0</div><div class="ss-l">In aumento</div></div>
     </div>
 
+    <!-- Note della sessione (intera) + nota della sessione precedente corrispondente -->
+    <div class="sess-note-card">
+      <div class="sess-note-prev prev-notes" id="sess-note-prev"></div>
+      <div class="sess-note-head"><i class="ti ti-note"></i> Note della sessione</div>
+      <textarea class="sess-note-input" id="sess-note-input" rows="2"
+        placeholder="Sensazioni, energia, cosa migliorare la prossima volta…"
+        oninput="Session.saveSessionNote(this.value)"></textarea>
+    </div>
+
     <!-- Exercises -->
     <div id="exercises-container"></div>
     <button class="add-ex-btn" onclick="Session.addExercise()">

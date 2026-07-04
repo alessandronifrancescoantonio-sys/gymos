@@ -140,6 +140,7 @@ const API = {
       type: this.read.select(p, CONFIG.PROPS.WL_TYPE),
       done: this.read.checkbox(p, CONFIG.PROPS.WL_DONE),
       split: this.read.select(p, CONFIG.PROPS.WL_SPLIT),
+      note: this.read.rich_text(p, CONFIG.PROPS.WL_NOTE),
     }));
   },
 

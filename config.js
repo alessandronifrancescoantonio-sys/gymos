@@ -104,6 +104,7 @@ const CONFIG = {
     WL_TYPE:   "Tipo sessione",
     WL_DONE:   "Completata",
     WL_SPLIT:  "Split",
+    WL_NOTE:   "Note sessione",
     EL_NAME:     "Nome",
     EL_EXERCISE: "Esercizio",
     EL_SESSION:  "Sessione",

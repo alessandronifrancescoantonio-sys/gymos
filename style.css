@@ -540,6 +540,19 @@ input { font-family:inherit; }
 .ex-editor-range .range-pair i { color:var(--muted); font-style:normal; }
 .ex-editor-range input { width:40px; }
 
+/* ─── Note della SESSIONE intera (sotto le statistiche) ─── */
+.sess-note-card { background:var(--ink2); border:1px solid var(--ink3); border-radius:var(--radius-lg);
+  padding:12px 14px; margin-bottom:14px; box-shadow:inset 0 1px 0 rgba(255,255,255,.05), var(--sh-1); }
+.sess-note-head { display:flex; align-items:center; gap:7px; font-size:11px; font-weight:700; text-transform:uppercase;
+  letter-spacing:.06em; color:var(--ghost); margin-bottom:8px; }
+.sess-note-head i { color:var(--accent); font-size:15px; }
+.sess-note-input { width:100%; resize:vertical; min-height:44px; background:var(--ink); border:1px solid var(--ink4);
+  border-radius:var(--radius-sm); color:var(--text); font-family:'Outfit',sans-serif; font-size:14px; line-height:1.45;
+  padding:10px 12px; outline:none; }
+.sess-note-input:focus { border-color:var(--accent); }
+.sess-note-input[readonly] { background:transparent; border-color:transparent; padding-left:0; color:var(--text2); resize:none; }
+.sess-note-prev { margin-bottom:10px; }
+
 /* ─── Note della sessione precedente (vista compatta a tendina) ─── */
 .prev-notes { margin:0 0 10px; }
 .prev-notes-toggle { display:flex; align-items:center; gap:7px; width:100%;
@@ -904,6 +917,7 @@ body::after {
 #page-session.session-empty .session-landing { display:flex; align-items:center; justify-content:center; min-height:64vh; padding:24px; animation:fadeIn .3s ease; }
 #page-session.session-empty .sess-header,
 #page-session.session-empty .sess-stats,
+#page-session.session-empty .sess-note-card,
 #page-session.session-empty #exercises-container,
 #page-session.session-empty .add-ex-btn { display:none !important; }
 body.sess-landing .bn-save, body.sess-landing .rest-fab { display:none !important; }
