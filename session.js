@@ -1467,7 +1467,10 @@ const Session = {
     });
     const d    = Math.round((vol - prevVol) * 10) / 10;
     const pct  = prevVol > 0 ? Math.round(d / prevVol * 100) : 0;
-    const dStr = (d > 0 ? "+" : "") + U.fmtV(d) + (prevVol > 0 ? ` (${d > 0 ? "+" : ""}${pct}%)` : "");
+    // Mostra la % solo quando ha senso: se la sessione scorsa aveva un volume
+    // trascurabile la percentuale diventa assurda (+45700%), meglio solo i kg.
+    const showPct = prevVol > 0 && Math.abs(pct) <= 300;
+    const dStr = (d > 0 ? "+" : "") + U.fmtV(d) + (showPct ? ` (${d > 0 ? "+" : ""}${pct}%)` : "");
     document.getElementById("ss-vol").textContent  = U.fmtV(vol);
     const de = document.getElementById("ss-delta");
     de.textContent = dStr;
