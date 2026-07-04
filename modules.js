@@ -585,7 +585,11 @@ const Dashboard = {
       day.setDate(startW.getDate() + i);
       const iso  = day.toISOString().split("T")[0];
       const isT  = iso === U.today();
-      const sess = sessions.find(s => s.date === iso);
+      // Se in un giorno ci sono più sessioni (es. una lasciata a metà + quella
+      // vera completata), dà priorità a quella completata → il giorno diventa
+      // verde se hai davvero allenato.
+      const daySess = sessions.filter(s => s.date === iso);
+      const sess    = daySess.find(s => s.done) || daySess[0];
 
       const col = document.createElement("div");
       col.className = "split-day";
