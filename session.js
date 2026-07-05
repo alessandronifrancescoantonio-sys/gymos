@@ -852,9 +852,28 @@ const Session = {
     const atTop = last.topReps >= rrMax;
     const target = Math.min(last.topReps + 1, rrMax);
     const sysAdd = this._systemicDown ? " Anche altri esercizi sono in calo: occhio a recupero, sonno e alimentazione." : "";
+    // Doppia progressione da manuale: si sale di peso quando TUTTE le serie
+    // chiudono il top del range, non solo la migliore.
+    const setsArr    = last.sets || [];
+    const atTopCount = setsArr.filter(s => s.reps >= rrMax).length;
+    const allAtTop   = setsArr.length > 0 && atTopCount === setsArr.length;
+    // Giorni dall'ultima volta che hai fatto QUESTO esercizio (detraining)
+    const gapDays = Math.round((Date.now() - new Date(last.date).getTime()) / 86400000);
 
     // 1) Dolore/fastidio → cautela (priorità massima)
     if (pain) return goal(`Tieni leggero e cura la tecnica${rirStr}`, `Avevi segnato: «${noteSnip}». Se il fastidio resta, non caricare.`, "warn");
+
+    // 1b) Pausa lunga su questo esercizio → rientro conservativo (tendini e
+    // articolazioni recuperano più lente dei muscoli; i numeri tornano in fretta)
+    if (gapDays >= 21) {
+      return goal(`Riprendi leggero: scala il peso e fermati lontano dal cedimento`,
+        `Non fai questo esercizio da ${gapDays} giorni: riprendi confidenza oggi, i numeri tornano in fretta.`, "warn");
+    }
+    if (gapDays >= 14) {
+      return goal(
+        isBW ? `Rifai le <b>${last.topReps}</b> rep dell'ultima volta, senza forzare` : `Rifai <b>${U.fmt(last.topKg)} kg</b> × <b>${last.topReps}</b>, senza forzare${rirStr}`,
+        `${gapDays} giorni di pausa su questo esercizio: oggi consolida, dalla prossima si rispinge.`, "hold");
+    }
 
     // 2) Calo sostenuto (o calo + fatica generale) → recupera
     if (sustainedDecline || (declined && this._systemicDown)) {
@@ -871,6 +890,12 @@ const Session = {
         `La scorsa è andata sotto (${isBW ? last.topReps + " rep" : U.fmt(last.topKg) + "kg × " + last.topReps})${hard ? " e l'avevi sentita dura" : ""}: torna ai numeri della seduta prima, poi si riparte.`, "go");
     }
 
+    // 2c) Best set SOTTO il fondo del range → peso troppo alto per lavorare bene
+    if (!isBW && last.topReps < rrMin) {
+      return goal(`Scala un po' il peso · rientra in <b>${rrMin}–${rrMax}</b> rep${rirStr}`,
+        `La scorsa il best set era ${last.topReps} rep a ${U.fmt(last.topKg)}kg, sotto il range: con un carico più gestibile lavori meglio.`, "hold");
+    }
+
     // 3) Stallo vero (≥3 sedute fermo, non al top)
     if (stall >= 3 && !atTop) {
       const trick = easy
@@ -881,12 +906,25 @@ const Session = {
         `Sblocca lo stallo: ${trick}`, "hold");
     }
 
-    // 4) Al top del range → aumenta il peso (o le rep a corpo libero)
-    if (atTop) {
+    // 4) TUTTE le serie al top del range → si sale di peso (doppia progressione)
+    if (allAtTop) {
       const twice = prev && prev.topReps >= rrMax ? " per la 2ª seduta" : "";
       return isBW
-        ? goal(`Punta <b>${last.topReps + 1}</b> rep`, `Sei al top del range${twice}: aggiungi rep o rendi più difficile.`, "go")
-        : goal(`Aumenta il peso · riparti da <b>${rrMin}</b> rep${rirStr}`, `Hai chiuso ${rrMin}–${rrMax} a ${U.fmt(last.topKg)}kg${twice}${easy ? " e l'avevi sentito facile" : ""}.`, "go");
+        ? goal(`Punta <b>${last.topReps + 1}</b> rep`, `Tutte le serie al top del range${twice}: aggiungi rep o rendi più difficile.`, "go")
+        : goal(`Aumenta il peso · riparti da <b>${rrMin}</b> rep${rirStr}`, `Tutte le serie a ${rrMax} rep con ${U.fmt(last.topKg)}kg${twice}${easy ? ", e l'avevi sentito facile" : ""}: sei pronto a salire.`, "go");
+    }
+
+    // 4b) Solo il best set al top, le altre serie no → prima chiudi TUTTE le
+    // serie al top, POI si sale di peso (regola della doppia progressione)
+    if (atTop && setsArr.length > 1) {
+      return isBW
+        ? goal(`Porta <b>tutte</b> le serie a <b>${rrMax}</b> rep`, `${atTopCount} serie su ${setsArr.length} al top: chiudile tutte, poi si aumenta.`, "go")
+        : goal(`Tieni <b>${U.fmt(last.topKg)} kg</b> · porta tutte le serie a <b>${rrMax}</b> rep${rirStr}`, `${atTopCount} serie su ${setsArr.length} già al top: chiudile tutte, poi si sale di peso.`, "go");
+    }
+    if (atTop) {
+      return isBW
+        ? goal(`Punta <b>${last.topReps + 1}</b> rep`, `Sei al top del range: aggiungi rep o rendi più difficile.`, "go")
+        : goal(`Aumenta il peso · riparti da <b>${rrMin}</b> rep${rirStr}`, `Hai chiuso ${rrMin}–${rrMax} a ${U.fmt(last.topKg)}kg${easy ? " e l'avevi sentito facile" : ""}.`, "go");
     }
 
     // 5) Sotto il top, in progressione → aggiungi 1 rep
@@ -910,7 +948,7 @@ const Session = {
     return Object.values(byDate).map(g => {
       let top = g.sets[0];
       g.sets.forEach(s => { if (e1(s.kg, s.reps) > e1(top.kg, top.reps)) top = s; });
-      return { date: g.date, topKg: top.kg, topReps: top.reps, e1: Math.round(e1(top.kg, top.reps) * 10) / 10, notes: g.notes };
+      return { date: g.date, topKg: top.kg, topReps: top.reps, e1: Math.round(e1(top.kg, top.reps) * 10) / 10, sets: g.sets, notes: g.notes };
     }).sort((a, b) => new Date(a.date) - new Date(b.date));
   },
 
