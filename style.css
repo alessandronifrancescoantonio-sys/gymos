@@ -249,7 +249,9 @@ input { font-family:inherit; }
 .tg-main b { font-weight:700; }
 .tg-sub { font-size:11px; color:var(--dim); line-height:1.35; }
 /* Volume settimanale per muscolo */
-.vol-prog { font-size:11px; font-weight:600; color:var(--accent); background:rgba(255,59,47,.1); border:1px solid rgba(255,59,47,.25); padding:2px 9px; border-radius:100px; margin-left:8px; }
+#dash-volume .card-title { flex-wrap:nowrap; }
+.vol-prog { font-size:11px; font-weight:600; color:var(--accent); background:rgba(255,59,47,.1); border:1px solid rgba(255,59,47,.25); padding:2px 9px; border-radius:100px; margin-left:8px;
+  max-width:104px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex-shrink:1; min-width:0; }
 .vol-edit-btn { margin-left:auto; display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:600; color:var(--dim); background:var(--ink3); border:1px solid var(--ink4); border-radius:100px; padding:5px 11px; }
 .vol-edit-btn:active { transform:scale(.96); }
 .vol-list { display:flex; flex-direction:column; gap:9px; margin-top:4px; }

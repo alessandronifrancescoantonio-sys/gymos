@@ -433,10 +433,11 @@ function addCheckin() { Body.addCheckin(); }
 //  se cambi programma, cambia tutto.
 // ═══════════════════════════════════════════════
 const Volume = {
-  MUSCLES: ["Petto", "Dorso", "Spalle", "Bicipiti", "Tricipiti", "Quadricipiti", "Femorali", "Glutei", "Polpacci", "Adduttori", "Addome"],
+  MUSCLES: ["Petto", "Dorso", "Spalle", "Bicipiti", "Tricipiti", "Quadricipiti", "Femorali", "Glutei", "Polpacci", "Adduttori", "Addome", "Avambracci"],
   MEV: 10, MAV_HI: 20,   // zona ottimale (MAV): 10–20 serie/settimana
 
-  // Classificatore automatico per nome esercizio → {muscolo: frazione}
+  // Classificatore automatico per nome esercizio → {muscolo: frazione}.
+  // L'ORDINE conta: i pattern specifici stanno prima di quelli generici.
   classify(name) {
     const s = " " + (name || "").toLowerCase() + " ";
     const t = re => re.test(s);
@@ -448,14 +449,18 @@ const Volume = {
     if (t(/leg curl|femoral|nordic/)) return { Femorali: 1 };
     if (t(/leg ext|quadric/)) return { Quadricipiti: 1 };
     if (t(/squat|pressa|leg press|pendulum|belt|hack|affond|lunge|pistol/)) return { Quadricipiti: 1, Glutei: 0.5 };
+    if (t(/avambracc|wrist|polso|forearm/)) return { Avambracci: 1 };
     if (t(/martell|hammer/)) return { Bicipiti: 1 };
     if (t(/curl|scott|bayes|bicip|preacher/)) return { Bicipiti: 1 };
     if (t(/push ?down|skull|french|overhead ext|tric|dip|kick ?back/)) return { Tricipiti: 1 };
+    // Deltoidi posteriori PRIMA di "spalle" generico: niente tricipiti fantasma
+    if (t(/rear|posterior|pec back|reverse|face pull/)) return { Spalle: 1 };
     if (t(/alz lat|laterali|lateral raise|alzate/)) return { Spalle: 1 };
     if (t(/shoulder press|overhead press|military|lento avanti|arnold|spalle/)) return { Spalle: 1, Tricipiti: 0.5 };
-    if (t(/rear|posterior|pec back|reverse|face pull/)) return { Spalle: 1 };
     if (t(/row|pulley|rematore|low row|lat mach|pulldown|trazion|pull ?up|upper back|dorso/)) return { Dorso: 1, Bicipiti: 0.5 };
-    if (t(/pec|chest|croci|panca|bench|dist |fly|piegament|push ?up|press/)) return { Petto: 1, Spalle: 0.5, Tricipiti: 0.5 };
+    // Croci/fly: il gomito non si estende → niente tricipiti
+    if (t(/croci|fly|pec deck/)) return { Petto: 1, Spalle: 0.5 };
+    if (t(/pec|chest|panca|bench|dist |piegament|push ?up|press/)) return { Petto: 1, Spalle: 0.5, Tricipiti: 0.5 };
     return {};   // sconosciuto → l'utente assegna a mano
   },
 
@@ -559,13 +564,19 @@ const Volume = {
       const primary = Object.keys(m).find(k => m[k] >= 1) || "—";
       const sec = Object.keys(m).filter(k => m[k] < 1);
       const isAuto = !this.loadOverrides()[ex];
+      const info = [];
+      if (sec.length) info.push("+ " + sec.join(", ") + " (½)");
+      if (primary === "—") info.push("da assegnare");
+      else if (isAuto) info.push("auto");
+      // Escapa apici e virgolette per l'attributo onchange (nomi con ' o ")
+      const exAttr = ex.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/"/g, "&quot;");
       return `
         <div class="vol-ex">
           <div class="vol-ex-main">
             <span class="vol-ex-name">${this._esc(ex)}</span>
-            <span class="vol-ex-sec">${sec.length ? "+ " + sec.join(", ") + " (½)" : (primary === "—" ? "da assegnare" : "")}${isAuto && primary !== "—" ? " · auto" : ""}</span>
+            <span class="vol-ex-sec">${info.join(" · ")}</span>
           </div>
-          <select class="vol-ex-sel" onchange="Volume.setPrimary('${ex.replace(/'/g, "\\'")}', this.value)">
+          <select class="vol-ex-sel" onchange="Volume.setPrimary('${exAttr}', this.value)">
             ${opts.map(o => `<option value="${o}"${o === primary ? " selected" : ""}>${o === "—" ? "Automatico" : o}</option>`).join("")}
           </select>
         </div>`;
