@@ -426,6 +426,162 @@ function addCheckin() { Body.addCheckin(); }
 // ═══════════════════════════════════════════════
 //  GymOS — dashboard.js
 // ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════
+//  GymOS — Volume settimanale per gruppo muscolare
+//  Conteggio frazionato (primario 1, secondario 0,5), target 10–20 serie/sett
+//  (Schoenfeld et al.). Si riferisce SEMPRE al programma attivo (CONFIG.SCHEDE):
+//  se cambi programma, cambia tutto.
+// ═══════════════════════════════════════════════
+const Volume = {
+  MUSCLES: ["Petto", "Dorso", "Spalle", "Bicipiti", "Tricipiti", "Quadricipiti", "Femorali", "Glutei", "Polpacci", "Adduttori", "Addome"],
+  MEV: 10, MAV_HI: 20,   // zona ottimale (MAV): 10–20 serie/settimana
+
+  // Classificatore automatico per nome esercizio → {muscolo: frazione}
+  classify(name) {
+    const s = " " + (name || "").toLowerCase() + " ";
+    const t = re => re.test(s);
+    if (t(/polpacc|calf/)) return { Polpacci: 1 };
+    if (t(/addutt/)) return { Adduttori: 1 };
+    if (t(/addome|crunch|plank|abs |core|oblique/)) return { Addome: 1 };
+    if (t(/glute|hip thrust|ponte/)) return { Glutei: 1 };
+    if (t(/rdl|stacco rumeno|romanian|good morning/)) return { Femorali: 1, Glutei: 0.5 };
+    if (t(/leg curl|femoral|nordic/)) return { Femorali: 1 };
+    if (t(/leg ext|quadric/)) return { Quadricipiti: 1 };
+    if (t(/squat|pressa|leg press|pendulum|belt|hack|affond|lunge|pistol/)) return { Quadricipiti: 1, Glutei: 0.5 };
+    if (t(/martell|hammer/)) return { Bicipiti: 1 };
+    if (t(/curl|scott|bayes|bicip|preacher/)) return { Bicipiti: 1 };
+    if (t(/push ?down|skull|french|overhead ext|tric|dip|kick ?back/)) return { Tricipiti: 1 };
+    if (t(/alz lat|laterali|lateral raise|alzate/)) return { Spalle: 1 };
+    if (t(/shoulder press|overhead press|military|lento avanti|arnold|spalle/)) return { Spalle: 1, Tricipiti: 0.5 };
+    if (t(/rear|posterior|pec back|reverse|face pull/)) return { Spalle: 1 };
+    if (t(/row|pulley|rematore|low row|lat mach|pulldown|trazion|pull ?up|upper back|dorso/)) return { Dorso: 1, Bicipiti: 0.5 };
+    if (t(/pec|chest|croci|panca|bench|dist |fly|piegament|push ?up|press/)) return { Petto: 1, Spalle: 0.5, Tricipiti: 0.5 };
+    return {};   // sconosciuto → l'utente assegna a mano
+  },
+
+  _overrides: null,
+  loadOverrides() {
+    if (!this._overrides) {
+      try { this._overrides = JSON.parse(localStorage.getItem("gymos_muscle_map") || "{}"); }
+      catch(e) { this._overrides = {}; }
+    }
+    return this._overrides;
+  },
+  saveOverrides() { try { localStorage.setItem("gymos_muscle_map", JSON.stringify(this._overrides || {})); } catch(e){} },
+  musclesFor(name) {
+    const ov = this.loadOverrides()[name];
+    if (ov) { const m = { [ov.p]: 1 }; (ov.s || []).forEach(x => { if (x !== ov.p) m[x] = 0.5; }); return m; }
+    return this.classify(name);
+  },
+  setPrimary(name, muscle) {
+    const ov = this.loadOverrides();
+    if (!muscle || muscle === "—") { delete ov[name]; }   // torna all'automatico
+    else {
+      const auto = this.classify(name);
+      const sec = Object.keys(auto).filter(m => auto[m] < 1 && m !== muscle);
+      ov[name] = { p: muscle, s: sec };
+    }
+    this.saveOverrides();
+    this.renderCard();
+    this.renderEditor();
+  },
+
+  // Volume settimanale pianificato dal programma attivo (ogni seduta 1×/settimana)
+  compute() {
+    const vol = {}; this.MUSCLES.forEach(m => vol[m] = 0);
+    const exList = [];
+    Object.values(CONFIG.SCHEDE || {}).forEach(sc => {
+      (sc.exercises || []).forEach(it => {
+        const name = U.exName(it), sets = U.exSets(it);
+        if (!name) return;
+        exList.push(name);
+        const m = this.musclesFor(name);
+        Object.keys(m).forEach(mus => { if (vol[mus] == null) vol[mus] = 0; vol[mus] += sets * m[mus]; });
+      });
+    });
+    return { vol, exercises: [...new Set(exList)] };
+  },
+
+  zone(v) { return v === 0 ? "none" : v < this.MEV ? "low" : v <= this.MAV_HI ? "ok" : "high"; },
+
+  barHTML(v) {
+    const pct = Math.min(100, (v / (this.MAV_HI + 6)) * 100);
+    const mevPct = (this.MEV / (this.MAV_HI + 6)) * 100;
+    const mavPct = (this.MAV_HI / (this.MAV_HI + 6)) * 100;
+    return `<div class="vol-bar"><div class="vol-zone" style="left:${mevPct}%;width:${mavPct - mevPct}%"></div><div class="vol-fill vz-${this.zone(v)}" style="width:${pct}%"></div></div>`;
+  },
+  fmt(v) { return Number.isInteger(v) ? v : v.toFixed(1).replace(".", ","); },
+
+  renderCard() {
+    const wrap = document.getElementById("dash-volume");
+    if (!wrap) return;
+    const prog = App.activeProgram || "—";
+    const { vol } = this.compute();
+    const rows = this.MUSCLES.filter(m => vol[m] > 0).sort((a, b) => vol[b] - vol[a]);
+    if (!rows.length) {
+      wrap.innerHTML = `<div class="card-title"><i class="ti ti-chart-bar"></i>Volume settimanale</div><div class="empty-state">Nessun esercizio nel programma attivo.</div>`;
+      return;
+    }
+    const low = rows.filter(m => vol[m] < this.MEV).length;
+    wrap.innerHTML = `
+      <div class="card-title"><i class="ti ti-chart-bar"></i>Volume settimanale
+        <span class="vol-prog">${this._esc(prog)}</span>
+        <button class="vol-edit-btn" onclick="Volume.openEditor()"><i class="ti ti-adjustments"></i> Dettaglio</button>
+      </div>
+      <div class="vol-list">
+        ${rows.slice(0, 6).map(m => `
+          <div class="vol-row">
+            <span class="vol-name">${m}</span>
+            ${this.barHTML(vol[m])}
+            <span class="vol-val vz-${this.zone(vol[m])}">${this.fmt(vol[m])}</span>
+          </div>`).join("")}
+      </div>
+      <div class="vol-foot">Serie allenanti / settimana · target <b>10–20</b>${low ? ` · <span class="vz-low">${low} sotto target</span>` : ""} <button class="vol-more" onclick="Volume.openEditor()">vedi tutti →</button></div>`;
+  },
+
+  openEditor() { document.getElementById("vol-modal").style.display = "flex"; this.renderEditor(); },
+  closeEditor(ev) { if (ev && ev.target !== ev.currentTarget) return; document.getElementById("vol-modal").style.display = "none"; },
+
+  renderEditor() {
+    const body = document.getElementById("vol-modal-body");
+    if (!body) return;
+    const { vol, exercises } = this.compute();
+    const total = Object.values(vol).reduce((a, b) => a + b, 0);
+    const bars = this.MUSCLES.map(m => `
+      <div class="vol-row">
+        <span class="vol-name">${m}</span>
+        ${this.barHTML(vol[m])}
+        <span class="vol-val vz-${this.zone(vol[m])}">${this.fmt(vol[m])}</span>
+      </div>`).join("");
+    const opts = ["—", ...this.MUSCLES];
+    const exRows = exercises.map(ex => {
+      const m = this.musclesFor(ex);
+      const primary = Object.keys(m).find(k => m[k] >= 1) || "—";
+      const sec = Object.keys(m).filter(k => m[k] < 1);
+      const isAuto = !this.loadOverrides()[ex];
+      return `
+        <div class="vol-ex">
+          <div class="vol-ex-main">
+            <span class="vol-ex-name">${this._esc(ex)}</span>
+            <span class="vol-ex-sec">${sec.length ? "+ " + sec.join(", ") + " (½)" : (primary === "—" ? "da assegnare" : "")}${isAuto && primary !== "—" ? " · auto" : ""}</span>
+          </div>
+          <select class="vol-ex-sel" onchange="Volume.setPrimary('${ex.replace(/'/g, "\\'")}', this.value)">
+            ${opts.map(o => `<option value="${o}"${o === primary ? " selected" : ""}>${o === "—" ? "Automatico" : o}</option>`).join("")}
+          </select>
+        </div>`;
+    }).join("");
+    body.innerHTML = `
+      <div class="vol-total">Totale: <b>${this.fmt(total)}</b> serie allenanti / settimana</div>
+      <div class="vol-legend"><span><i class="vz-low">■</i> sotto 10</span><span><i class="vz-ok">■</i> 10–20 ottimale</span><span><i class="vz-high">■</i> oltre 20</span></div>
+      <div class="vol-list vol-list-full">${bars}</div>
+      <div class="vol-sec-title"><i class="ti ti-body-scan"></i> Muscolo di ogni esercizio</div>
+      <div class="vol-hint">Il muscolo primario conta 1 serie, i secondari ½ (conteggio frazionato). Correggi dove l'automatico sbaglia.</div>
+      <div class="vol-ex-list">${exRows}</div>`;
+  },
+
+  _esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); },
+};
+
 const Dashboard = {
   async load() {
     const hour = new Date().getHours();
@@ -445,6 +601,7 @@ const Dashboard = {
 
       this.buildStats(sessions, checkins, sleepData, habits, todayHabit);
       this.buildWeekSplit(sessions);
+      Volume.renderCard();
       this.buildRecentSessions(sessions);
       this.buildSemaforo(sleepData);
     } catch(e) { console.error("Dashboard.load:", e); }

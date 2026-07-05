@@ -15,7 +15,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-<link rel="stylesheet" href="style.css?v=13">
+<link rel="stylesheet" href="style.css?v=14">
 </head>
 <body>
 
@@ -136,6 +136,9 @@
         <div class="card-title"><i class="ti ti-calendar-week"></i>Split settimanale</div>
         <div class="week-split" id="week-split"></div>
       </div>
+
+      <!-- Volume settimanale per muscolo (programma attivo) -->
+      <div class="card" id="dash-volume"></div>
 
       <!-- Today checklist -->
       <div class="card">
@@ -554,6 +557,17 @@
   </div>
 </div>
 
+<!-- VOLUME SETTIMANALE: dettaglio + editor muscoli -->
+<div class="vol-overlay" id="vol-modal" style="display:none" onclick="Volume.closeEditor(event)">
+  <div class="vol-box">
+    <div class="vol-head">
+      <div class="vol-head-title"><i class="ti ti-chart-bar"></i> Volume settimanale</div>
+      <button class="archive-close" onclick="Volume.closeEditor()" aria-label="Chiudi"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="vol-body" id="vol-modal-body"></div>
+  </div>
+</div>
+
 <!-- RIEPILOGO FINE ALLENAMENTO -->
 <div class="summary-overlay" id="workout-summary" style="display:none">
   <div class="summary-box">
@@ -610,12 +624,12 @@
   </div>
 </div>
 
-<script src="config.js?v=13"></script>
-<script src="api.js?v=13"></script>
-<script src="session.js?v=13"></script>
-<script src="modules.js?v=13"></script>
-<script src="timers.js?v=13"></script>
-<script src="app.js?v=13"></script>
+<script src="config.js?v=14"></script>
+<script src="api.js?v=14"></script>
+<script src="session.js?v=14"></script>
+<script src="modules.js?v=14"></script>
+<script src="timers.js?v=14"></script>
+<script src="app.js?v=14"></script>
 <script>
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(function(){});
