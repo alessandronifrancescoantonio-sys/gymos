@@ -58,6 +58,7 @@ const Progression = {
       this.history = await API.getExerciseHistory(this.activeEx);
       this.sessions = this.groupSessions();
       this.buildChart();
+      this.buildRecords();
       this.buildSessions();
     } catch(e) { console.error("Progression.loadHistory:", e); }
   },
@@ -127,6 +128,48 @@ const Progression = {
         pointBorderColor: "#0D0D0F", pointBorderWidth: 2, pointHoverRadius: 9, tension: .35 }] },
       options: opts,
     });
+  },
+
+  // "I tuoi record" per l'esercizio selezionato: peso max, 1RM stimato (Epley),
+  // rep massime, volume record. Calcolati dallo storico completo (this.history).
+  buildRecords() {
+    const wrap   = document.getElementById("prog-records");
+    const nameEl = document.getElementById("prog-rec-name");
+    if (nameEl) nameEl.textContent = this.activeEx || "";
+    if (!wrap) return;
+    const sets = (this.history || []).filter(s => (s.reps || 0) > 0);
+    if (!sets.length) {
+      wrap.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><i class="ti ti-trophy"></i><span class="es-title">Ancora nessun record</span><span class="es-sub">Registra questo esercizio in una sessione per sbloccare i tuoi record.</span></div>';
+      return;
+    }
+    const e1 = (kg, reps) => (kg > 0 && reps > 0) ? Math.round(kg * (1 + reps / 30) * 10) / 10 : 0;
+    const isBW = sets.every(s => (s.kg || 0) === 0);
+    let heavy = sets[0];
+    sets.forEach(s => { if ((s.kg || 0) > (heavy.kg || 0) || ((s.kg || 0) === (heavy.kg || 0) && s.reps > heavy.reps)) heavy = s; });
+    let bestE = { v: 0, s: null };
+    sets.forEach(s => { const v = e1(s.kg || 0, s.reps); if (v > bestE.v) bestE = { v, s }; });
+    let repMax = sets[0];
+    sets.forEach(s => { if (s.reps > repMax.reps) repMax = s; });
+    let volMax = { volume: 0, repsTot: 0, date: null };
+    (this.sessions || []).forEach(g => { if (g.volume > volMax.volume) volMax = g; });
+
+    const tile = (icon, color, val, lbl, sub) => `
+      <div class="rec-tile">
+        <div class="rec-ic" style="color:${color}"><i class="ti ${icon}"></i></div>
+        <div class="rec-main">
+          <div class="rec-val">${val}</div>
+          <div class="rec-lbl">${lbl}</div>
+          ${sub ? `<div class="rec-sub">${sub}</div>` : ""}
+        </div>
+      </div>`;
+    let html = "";
+    if (!isBW) {
+      html += tile("ti-barbell", "var(--accent)", `${U.fmt(heavy.kg)} <small>kg</small>`, "Peso massimo", `× ${heavy.reps} rep · ${U.fmtDate(heavy.date)}`);
+      html += tile("ti-trending-up", "var(--amber)", `${U.fmt(bestE.v)} <small>kg</small>`, "1RM stimato", "stima Epley");
+    }
+    html += tile("ti-repeat", "#3B82F6", `${repMax.reps} <small>rep</small>`, "Rep massime", isBW ? U.fmtDate(repMax.date) : `a ${U.fmt(repMax.kg)} kg`);
+    html += tile("ti-stack-2", "var(--green)", isBW ? `${volMax.repsTot} <small>rep</small>` : `${U.fmtV(volMax.volume)}`, "Volume record", volMax.date ? U.fmtDate(volMax.date) : "");
+    wrap.innerHTML = html;
   },
 
   // Una scheda per sessione (più recente in alto) con TUTTE le serie fatte.

@@ -91,6 +91,15 @@ input { font-family:inherit; }
 .delta-eq { font-size:10px; color:var(--muted); background:var(--ink3); padding:2px 6px; border-radius:100px; }
 .delta-dn { display:inline-flex; align-items:center; gap:2px; font-size:10px; font-weight:600; color:var(--red); background:rgba(239,68,68,.1); border:1px solid rgba(239,68,68,.2); padding:2px 6px; border-radius:100px; }
 .pr-tag { font-size:9px; font-weight:700; background:rgba(245,166,35,.15); color:var(--amber); border:1px solid rgba(245,166,35,.3); padding:1px 5px; border-radius:100px; margin-left:4px; }
+/* Vista "I tuoi record" (Progressioni) */
+.rec-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
+.rec-tile { display:flex; align-items:center; gap:11px; background:var(--ink3); border:1px solid var(--ink4); border-radius:12px; padding:12px; }
+.rec-ic { width:38px; height:38px; border-radius:10px; background:var(--ink2); display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:19px; }
+.rec-main { min-width:0; }
+.rec-val { font-family:'DM Mono',monospace; font-size:19px; font-weight:600; color:var(--text); line-height:1; }
+.rec-val small { font-size:11px; color:var(--muted); font-weight:500; }
+.rec-lbl { font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:var(--dim); margin-top:5px; }
+.rec-sub { font-size:10px; color:var(--muted); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .chart-tooltip { position:absolute; pointer-events:none; background:var(--ink2); border:1px solid var(--ink4); border-radius:8px; padding:10px 14px; min-width:145px; z-index:10; display:none; }
 .tt-date { font-size:10px; color:var(--dim); margin-bottom:6px; text-transform:uppercase; letter-spacing:.06em; }
 .tt-main { font-family:'Bebas Neue',sans-serif; font-size:24px; letter-spacing:.04em; line-height:1; margin-bottom:4px; }
@@ -216,6 +225,12 @@ input { font-family:inherit; }
 .set-prev .px { font-size:9px; color:var(--muted); }
 .set-prev .pe { font-size:11px; color:var(--muted); font-style:italic; }
 .set-prev .plbl { font-size:9px; color:var(--muted); margin-left:3px; }
+/* Riferimento "volta scorsa" tappabile → pre-compila kg/rep di oggi */
+.set-prev-tap { cursor:pointer; border-color:rgba(255,59,47,.25) !important; transition:border-color .15s, background .15s; }
+.set-prev-tap:active { transform:scale(.98); background:rgba(255,59,47,.06); }
+.set-prev .pv-use { display:inline-flex; align-items:center; gap:2px; font-size:9px; font-weight:700; color:var(--accent);
+  text-transform:uppercase; letter-spacing:.03em; margin-left:7px; padding-left:7px; border-left:1px solid var(--ink4); }
+.set-prev .pv-use i { font-size:11px; }
 .rm-set-btn { width:28px; height:28px; border-radius:7px; border:1px solid rgba(239,68,68,.2); color:rgba(239,68,68,.5); display:flex; align-items:center; justify-content:center; transition:all .15s; flex-shrink:0; }
 .rm-set-btn:active { background:rgba(239,68,68,.12); color:var(--red); }
 .rm-set-btn i { font-size:13px; }

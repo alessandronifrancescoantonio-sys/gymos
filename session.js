@@ -799,8 +799,9 @@ const Session = {
     // "Volta scorsa" valida solo se la serie precedente ha rep reali (>0):
     // le serie lasciate a 0 non sono un riferimento utile → trattale come prima volta.
     const hasPrev  = prevSet && (prevSet.reps || 0) > 0;
+    const canTap   = hasPrev && !this.viewMode && !this.sessionDone;
     const prevHTML = hasPrev
-      ? `<span class="pv">${U.fmt(prevSet.kg)}kg</span><span class="px">×</span><span class="pv">${prevSet.reps}r</span><span class="plbl">scorsa</span>`
+      ? `<span class="pv">${U.fmt(prevSet.kg)}kg</span><span class="px">×</span><span class="pv">${prevSet.reps}r</span><span class="plbl">scorsa</span>${canTap ? '<span class="pv-use"><i class="ti ti-arrow-down"></i>usa</span>' : ""}`
       : `<span class="pe">prima volta</span>`;
 
     const prog   = this.getProgression(set, prevSet);
@@ -823,7 +824,7 @@ const Session = {
       <div class="set-body">
         <div class="set-body-top">
           <span class="set-counter">Serie ${si + 1}/${total || 1}</span>
-          <div class="set-prev">${prevHTML}</div>
+          <div class="set-prev${canTap ? " set-prev-tap" : ""}"${canTap ? ` onclick="Session.prefillFromPrev('${set.id}','${exName}')"` : ""}>${prevHTML}</div>
           <button class="rm-set-btn" onclick="Session.removeSet('${set.id}','${exName}')" aria-label="Rimuovi serie">
             <i class="ti ti-x"></i>
           </button>
@@ -1292,6 +1293,23 @@ const Session = {
         );
       });
     });
+  },
+
+  // Tocca il riferimento "volta scorsa" → pre-compila kg e rep della serie di oggi
+  prefillFromPrev(id, exName) {
+    if (this.viewMode) return;
+    const set = this.exercises.find(e => e.id === id);
+    if (!set) return;
+    const grouped  = this.groupByExercise(this.exercises);
+    const prevSets = this.groupByExercise(this.prevExercises)[exName] || [];
+    const idx      = grouped[exName] ? grouped[exName].findIndex(s => s.id === id) : -1;
+    const prev     = prevSets[idx];
+    if (!prev || (prev.reps || 0) <= 0) return;
+    set.kg   = prev.kg || 0;
+    set.reps = prev.reps || 0;
+    this.refreshSetValue(set, exName);
+    if (navigator.vibrate) navigator.vibrate(12);
+    U.toast("Valori della volta scorsa inseriti", "info", 1400);
   },
 
   adjSet(id, field, delta, exName) {
