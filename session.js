@@ -800,9 +800,18 @@ const Session = {
     // le serie lasciate a 0 non sono un riferimento utile → trattale come prima volta.
     const hasPrev  = prevSet && (prevSet.reps || 0) > 0;
     const canTap   = hasPrev && !this.viewMode && !this.sessionDone;
-    const prevHTML = hasPrev
-      ? `<span class="pv">${U.fmt(prevSet.kg)}kg</span><span class="px">×</span><span class="pv">${prevSet.reps}r</span><span class="plbl">scorsa</span>${canTap ? '<span class="pv-use"><i class="ti ti-arrow-down"></i>usa</span>' : ""}`
-      : `<span class="pe">prima volta</span>`;
+    // Riga "volta scorsa" dedicata: etichetta chiara + valore + pulsante "Usa"
+    const prevTag  = canTap ? "button" : "div";
+    const prevRow  = hasPrev
+      ? `<${prevTag} class="prev-use${canTap ? " tap" : ""}"${canTap ? ` type="button" onclick="Session.prefillFromPrev('${set.id}','${exName}')"` : ""}>
+           <i class="ti ti-history pu-ic"></i>
+           <span class="pu-txt">
+             <span class="pu-lbl">Volta scorsa</span>
+             <span class="pu-val">${U.fmt(prevSet.kg)}<small>kg</small> × ${prevSet.reps}<small>rep</small></span>
+           </span>
+           ${canTap ? '<span class="pu-act"><i class="ti ti-arrow-down"></i>Usa</span>' : ""}
+         </${prevTag}>`
+      : `<div class="prev-none"><i class="ti ti-history pu-ic"></i>Prima volta che lo fai</div>`;
 
     const prog   = this.getProgression(set, prevSet);
     const status = this.buildStatusBadge(prog, set, exName, rrMin, rrMax, prevMax);
@@ -824,11 +833,11 @@ const Session = {
       <div class="set-body">
         <div class="set-body-top">
           <span class="set-counter">Serie ${si + 1}/${total || 1}</span>
-          <div class="set-prev${canTap ? " set-prev-tap" : ""}"${canTap ? ` onclick="Session.prefillFromPrev('${set.id}','${exName}')"` : ""}>${prevHTML}</div>
           <button class="rm-set-btn" onclick="Session.removeSet('${set.id}','${exName}')" aria-label="Rimuovi serie">
             <i class="ti ti-x"></i>
           </button>
         </div>
+        ${prevRow}
         <div class="stepper-row">
           <span class="stepper-lbl">Kg</span>
           <button class="adj" data-id="${set.id}" data-f="k" data-d="-2.5" data-ex="${exName}">−</button>
