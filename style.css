@@ -248,6 +248,30 @@ input { font-family:inherit; }
 .tg-main { font-size:14px; font-weight:500; color:var(--text); }
 .tg-main b { font-weight:700; }
 .tg-sub { font-size:11px; color:var(--dim); line-height:1.35; }
+/* Riepilogo fine allenamento */
+.summary-overlay { position:fixed; inset:0; z-index:560; background:rgba(0,0,0,.78); backdrop-filter:blur(5px);
+  display:flex; align-items:center; justify-content:center; padding:20px; animation:fadeIn .25s ease; }
+.summary-box { width:100%; max-width:380px; background:var(--ink2); border:1px solid rgba(255,59,47,.25);
+  border-radius:var(--radius-lg); padding:26px 22px; text-align:center;
+  background-image:linear-gradient(180deg, rgba(255,59,47,.10), rgba(255,255,255,0) 50%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06), var(--sh-3); animation:fadeUp .35s var(--ease-out); }
+.sum-icon { width:56px; height:56px; border-radius:50%; margin:0 auto 10px; display:flex; align-items:center; justify-content:center;
+  background:rgba(255,59,47,.14); border:1px solid rgba(255,59,47,.3); color:var(--accent); font-size:26px;
+  box-shadow:0 0 24px -6px rgba(255,59,47,.5); }
+.sum-title { font-family:'Bebas Neue',sans-serif; font-size:26px; letter-spacing:.02em; color:var(--text); }
+.sum-sess { font-size:12px; color:var(--dim); margin:2px 0 16px; }
+.sum-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px; }
+.sum-cell { background:var(--ink3); border:1px solid var(--ink4); border-radius:12px; padding:11px 8px; }
+.sum-v { font-family:'DM Mono',monospace; font-size:19px; font-weight:600; color:var(--text); line-height:1; }
+.sum-l { font-size:9px; text-transform:uppercase; letter-spacing:.06em; color:var(--dim); margin-top:5px; }
+.sum-delta { font-size:13px; font-weight:600; margin-bottom:12px; display:flex; align-items:center; justify-content:center; gap:5px; }
+.sum-prs { margin-bottom:4px; }
+.sum-pr-head { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--amber);
+  display:flex; align-items:center; justify-content:center; gap:5px; margin-bottom:8px; }
+.sum-pr-chip { display:inline-block; margin:0 3px 6px; padding:5px 12px; border-radius:100px; font-size:12px; font-weight:600;
+  background:rgba(245,166,35,.12); border:1px solid rgba(245,166,35,.3); color:var(--amber); }
+.sum-close { width:100%; justify-content:center; margin-top:12px; }
+
 /* Toni del suggerimento: go (spingi), hold (stallo), warn (cautela/calo) */
 .today-goal.tg-hold { background:linear-gradient(180deg, rgba(59,130,246,.10), rgba(59,130,246,.03)); border-color:rgba(59,130,246,.28); }
 .today-goal.tg-hold > i, .today-goal.tg-hold .tg-lbl { color:#3B82F6; }

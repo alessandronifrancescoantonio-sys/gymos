@@ -1925,6 +1925,55 @@ const Session = {
     }, 800);
   },
 
+  // ═══ RIEPILOGO FINE ALLENAMENTO ═══
+  // Raccoglie i numeri della sessione PRIMA che lo stato venga pulito.
+  _collectSummary(mins) {
+    let vol = 0, prevVol = 0, done = 0, ups = 0;
+    const prevG = this.groupByExercise(this.prevExercises);
+    this.exercises.forEach(s => { if (s.reps > 0) { vol += s.reps * (s.kg || 0); done++; } });
+    this.prevExercises.forEach(s => { if (s.reps > 0) prevVol += s.reps * (s.kg || 0); });
+    this.exercises.forEach(s => {
+      const exName = s.name.split(" – ")[0];
+      const si = this.exercises.filter(e => e.name.split(" – ")[0] === exName).indexOf(s);
+      if (this.getProgression(s, (prevG[exName] || [])[si] || null) === "up") ups++;
+    });
+    // Esercizi che hanno segnato un record in questa sessione
+    const prExs = [...new Set(this.exercises
+      .filter(s => this._prSets && this._prSets.has(s.id))
+      .map(s => s.name.split(" – ")[0]))];
+    const sess = this.sessions.find(s => s.id === this.activeId);
+    return { name: sess ? sess.name : "", mins, vol, prevVol, done, ups, prExs };
+  },
+
+  showSummary(d) {
+    const esc = t => String(t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    document.getElementById("sum-sess").textContent = d.name || "";
+    document.getElementById("sum-durata").textContent = d.mins > 0 ? `${d.mins} min` : "—";
+    document.getElementById("sum-vol").textContent = U.fmtV(d.vol);
+    document.getElementById("sum-serie").textContent = d.done;
+    const upEl = document.getElementById("sum-up");
+    upEl.textContent = d.ups; upEl.style.color = d.ups > 0 ? "var(--green)" : "var(--text)";
+    const de = document.getElementById("sum-delta");
+    if (d.prevVol > 0) {
+      const diff = Math.round((d.vol - d.prevVol) * 10) / 10;
+      const pct  = Math.round(diff / d.prevVol * 100);
+      const okPct = Math.abs(pct) <= 300;
+      de.innerHTML = `<i class="ti ${diff >= 0 ? "ti-trending-up" : "ti-trending-down"}"></i> ${diff >= 0 ? "+" : ""}${U.fmtV(diff)} vs scorsa${okPct ? ` (${diff >= 0 ? "+" : ""}${pct}%)` : ""}`;
+      de.style.color = diff > 0 ? "var(--green)" : diff < 0 ? "var(--red)" : "var(--dim)";
+      de.style.display = "";
+    } else de.style.display = "none";
+    const pr = document.getElementById("sum-prs");
+    pr.innerHTML = d.prExs.length
+      ? `<div class="sum-pr-head"><i class="ti ti-trophy"></i> ${d.prExs.length === 1 ? "Nuovo record" : d.prExs.length + " nuovi record"}</div>` +
+        d.prExs.map(n => `<span class="sum-pr-chip">${esc(n)}</span>`).join("")
+      : "";
+    document.getElementById("workout-summary").style.display = "flex";
+  },
+
+  closeSummary() {
+    document.getElementById("workout-summary").style.display = "none";
+  },
+
   async saveSession() {
     if (this.viewMode) { U.toast("Sei in sola visualizzazione — sblocca per salvare", "info"); return; }
     // I veri bottoni Salva (desktop + barra mobile) — NON il primo .btn-primary
@@ -1936,25 +1985,28 @@ const Session = {
         .filter(s => s.reps > 0)
         .map(s => API.updateExerciseEntry(s.id, s.sets || 1, s.reps, s.kg, s.note));
       await Promise.all(updates);
+      let savedMins = 0;
       if (this.activeId) {
         const props = { [CONFIG.PROPS.WL_DONE]: API.prop.checkbox(true) };
         // Ferma il timer durata e salva i minuti
         if (typeof DurationTimer !== "undefined") {
-          const mins = DurationTimer.finishAndReset();
-          if (mins > 0) props["Durata (min)"] = API.prop.number(mins);
+          savedMins = DurationTimer.finishAndReset();
+          if (savedMins > 0) props["Durata (min)"] = API.prop.number(savedMins);
         }
         await API.update(this.activeId, props);
       }
+      // Raccogli i numeri del riepilogo ORA (prima della pulizia dello stato)
+      const summary = this._collectSummary(savedMins);
       btns.forEach(b => { b.disabled = false; b.innerHTML = '<i class="ti ti-device-floppy"></i> Salva'; });
       // Pulizia: i flag locali di questa sessione non servono più una volta salvata
       if (this.activeId) {
         localStorage.removeItem(`gymos_done_${this.activeId}`);
         localStorage.removeItem(`gymos_order_${this.activeId}`);
       }
-      U.toast("Allenamento salvato 💪", "ok");
       // aggiorna l'elenco e torna alla schermata iniziale (pronto per il prossimo)
       try { this.sessions = await API.getWorkoutSessions(20); this.buildSelect(); } catch(_) {}
       this.showLanding();
+      this.showSummary(summary);   // riepilogo sopra la schermata iniziale
     } catch(e) {
       console.error(e);
       btns.forEach(b => { b.disabled = false; b.innerHTML = '<i class="ti ti-alert-circle"></i> Errore'; });
