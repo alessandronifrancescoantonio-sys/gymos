@@ -156,6 +156,8 @@ const Session = {
 
     // Stato "serie completata" (locale per sessione)
     this._done = new Set(JSON.parse(localStorage.getItem(`gymos_done_${id}`) || "[]"));
+    // Serie che hanno segnato un record in questa sessione (per tenere il badge PR)
+    this._prSets = new Set(JSON.parse(localStorage.getItem(`gymos_pr_${id}`) || "[]"));
 
     // Riallinea la sessione IN CORSO alla sua seduta (aggiunge esercizi nuovi
     // della scheda; toglie quelli rimossi dalla scheda solo se senza dati).
@@ -188,6 +190,8 @@ const Session = {
     this.updateStats();
     this.applyViewMode();
     this.armSessionTimers();   // auto-avvio durata + eventuale auto-salvataggio
+    // Semina i record personali dallo storico (in background, non blocca l'UI)
+    this.prSeedBg(Object.keys(grouped));
   },
 
   groupByExercise(entries) {
@@ -1178,13 +1182,116 @@ const Session = {
   },
 
   buildStatusBadge(prog, set, exName, rrMin, rrMax, prevMax) {
-    const isPR = set.kg > prevMax && prevMax > 0 && set.reps > 0;
+    // PR reale: la serie batte un record noto (peso / e1RM / rep) OPPURE è già
+    // stata registrata come record in questa sessione (_prSets, resta evidenziata).
+    const isPR = (this._prSets && this._prSets.has(set.id)) || this.prBeats(exName, set);
     const prTag = isPR ? '<span class="pr-tag">PR</span>' : "";
     if (prog === "mt")  return '<span class="badge b-mt">da fare</span>';
     if (prog === "new") return '<span class="badge b-eq">nuovo</span>';
     if (prog === "up")  return `<span class="badge b-up"><i class="ti ti-trending-up" style="font-size:10px"></i>Su</span>${prTag}`;
     if (prog === "eq")  return `<span class="badge b-eq"><i class="ti ti-minus" style="font-size:10px"></i>Uguale</span>`;
     return `<span class="badge b-dn"><i class="ti ti-trending-down" style="font-size:10px"></i>Giù</span>`;
+  },
+
+  // ═══ RECORD PERSONALI (PR) ═══════════════════════════════════════════════
+  // Tiene traccia, per esercizio, del miglior PESO, del miglior 1RM stimato
+  // (formula di Epley) e delle migliori RIPETIZIONI a un dato peso. I record
+  // stanno in localStorage (veloci, offline) e vengono "seminati" una volta per
+  // esercizio dallo storico Notion. Nessun record → nessun falso PR.
+  _prStore: null,
+  prLoadStore() {
+    if (!this._prStore) {
+      try { this._prStore = JSON.parse(localStorage.getItem("gymos_pr") || "{}"); }
+      catch(e) { this._prStore = {}; }
+    }
+    return this._prStore;
+  },
+  prSaveStore() { try { localStorage.setItem("gymos_pr", JSON.stringify(this._prStore || {})); } catch(e){} },
+  e1rm(kg, reps) { return (kg > 0 && reps > 0) ? Math.round(kg * (1 + reps / 30) * 10) / 10 : 0; },
+  prRec(exName) { return this.prLoadStore()[exName] || null; },
+
+  // La serie batte un record GIÀ NOTO? (se non c'è ancora un record → no, è baseline)
+  prBeats(exName, set) {
+    if (!set || (set.reps || 0) <= 0) return false;
+    const rec = this.prRec(exName);
+    if (!rec || ((rec.w || 0) <= 0 && (rec.e1rm || 0) <= 0)) return false;  // nessun record reale ancora
+    const e        = this.e1rm(set.kg || 0, set.reps);
+    const bestReps = (rec.repsAt && rec.repsAt[String(set.kg || 0)]) || 0;
+    // rep PR solo se migliori le rep a un peso GIÀ fatto (bestReps>0): un peso nuovo
+    // non è un record di rep.
+    return (set.kg || 0) > (rec.w || 0)
+        || e > (rec.e1rm || 0)
+        || (bestReps > 0 && set.reps > bestReps);
+  },
+
+  // Registra la serie nei record (prende sempre il massimo) e dice cosa ha battuto
+  prMerge(exName, kg, reps) {
+    const s   = this.prLoadStore();
+    const rec = s[exName] || { w: 0, e1rm: 0, repsAt: {} };
+    if (!rec.repsAt) rec.repsAt = {};
+    const e        = this.e1rm(kg, reps);
+    const kgKey    = String(kg || 0);
+    const bestReps = rec.repsAt[kgKey] || 0;
+    const beat = {
+      weight: (kg || 0) > (rec.w || 0),
+      e1rm:   e > (rec.e1rm || 0),
+      reps:   bestReps > 0 && reps > bestReps,   // solo miglioria a un peso già fatto
+    };
+    rec.w    = Math.max(rec.w || 0, kg || 0);
+    rec.e1rm = Math.max(rec.e1rm || 0, e);
+    if ((kg || 0) > 0) rec.repsAt[kgKey] = Math.max(bestReps, reps);
+    s[exName] = rec;
+    this.prSaveStore();
+    return beat;
+  },
+
+  // Semina i record dallo storico Notion, una volta per esercizio (in background).
+  async prSeedBg(exNames) {
+    let seeded;
+    try { seeded = new Set(JSON.parse(localStorage.getItem("gymos_pr_seeded") || "[]")); }
+    catch(e) { seeded = new Set(); }
+    const todo = (exNames || []).filter(n => n && !seeded.has(n));
+    if (!todo.length) return;
+    const s = this.prLoadStore();
+    for (const ex of todo) {
+      try {
+        const hist = await API.getExerciseHistory(ex);
+        const rec  = s[ex] || { w: 0, e1rm: 0, repsAt: {} };
+        if (!rec.repsAt) rec.repsAt = {};
+        hist.forEach(h => {
+          if ((h.reps || 0) <= 0) return;
+          rec.w    = Math.max(rec.w || 0, h.kg || 0);
+          rec.e1rm = Math.max(rec.e1rm || 0, this.e1rm(h.kg || 0, h.reps));
+          const k = String(h.kg || 0);
+          if ((h.kg || 0) > 0) rec.repsAt[k] = Math.max(rec.repsAt[k] || 0, h.reps);
+        });
+        s[ex] = rec;
+        seeded.add(ex);
+      } catch(e) { /* offline: riproverà alla prossima apertura */ }
+    }
+    this.prSaveStore();
+    try { localStorage.setItem("gymos_pr_seeded", JSON.stringify([...seeded])); } catch(e){}
+    this.refreshBadges();   // ora che i record sono noti, aggiorna i badge PR
+  },
+
+  savePrSets() {
+    if (this.activeId) try { localStorage.setItem(`gymos_pr_${this.activeId}`, JSON.stringify([...this._prSets])); } catch(e){}
+  },
+
+  // Riaggiorna solo i badge di stato/PR di tutte le serie (senza re-render completo)
+  refreshBadges() {
+    const grouped = this.groupByExercise(this.exercises);
+    const prevG   = this.groupByExercise(this.prevExercises);
+    Object.keys(grouped).forEach(exName => {
+      const prevSets = prevG[exName] || [];
+      const prevMax  = prevSets.length > 0 ? Math.max(...prevSets.map(s => s.kg || 0)) : 0;
+      grouped[exName].forEach((set, i) => {
+        const el = document.getElementById(`prog-${set.id}`);
+        if (el) el.innerHTML = this.buildStatusBadge(
+          this.getProgression(set, prevSets[i] || null), set, exName, set.rrMin || 8, set.rrMax || 12, prevMax
+        );
+      });
+    });
   },
 
   adjSet(id, field, delta, exName) {
@@ -1229,6 +1336,7 @@ const Session = {
   },
 
   _done: new Set(),
+  _prSets: new Set(),   // serie che hanno segnato un record in questa sessione
   saveDone() {
     if (this.activeId) localStorage.setItem(`gymos_done_${this.activeId}`, JSON.stringify([...this._done]));
   },
@@ -1259,6 +1367,25 @@ const Session = {
       const set = this.exercises.find(e => e.id === id);
       const secs = (set && set.recupero) ? set.recupero : 90;
       if (typeof RestTimer !== "undefined") RestTimer.start(secs);
+      // ── RECORD PERSONALE? — controlla PRIMA di aggiornare i record ──
+      if (set && (set.reps || 0) > 0 && !this.sessionDone) {
+        const rec0 = this.prRec(exName);
+        const hadRecord = !!rec0 && ((rec0.w || 0) > 0 || (rec0.e1rm || 0) > 0);
+        const beat = this.prMerge(exName, set.kg || 0, set.reps);
+        if (hadRecord && (beat.weight || beat.e1rm || beat.reps)) {
+          this._prSets.add(id);
+          this.savePrSets();
+          card.classList.add("set-pr");
+          const el = document.getElementById(`prog-${id}`);
+          if (el && !el.querySelector(".pr-tag")) el.insertAdjacentHTML("beforeend", '<span class="pr-tag">PR</span>');
+          const parts = [];
+          if (beat.weight) parts.push("peso");
+          if (beat.e1rm)   parts.push("1RM");
+          if (beat.reps)   parts.push("rep");
+          U.toast(`🎉 Nuovo record — ${exName} (${parts.join(" · ")})`, "ok", 2800);
+          if (navigator.vibrate) navigator.vibrate([25, 40, 35]);
+        }
+      }
     }
     // se ora è tutto spuntato → programma il salvataggio automatico (o annullalo)
     this.checkAutoSave();
