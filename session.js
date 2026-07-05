@@ -264,6 +264,7 @@ const Session = {
           <i class="ti ti-chevron-down ex-chevron"></i>
         </div>
         <div class="ex-body">
+          ${(!this.viewMode && !this.sessionDone) ? this.progressionGoalHTML(exName, prevSets, rrMin, rrMax) : ""}
           ${this.prevNotesHTML(prevSets)}
           <div id="sets-${sid}"></div>
           <div class="add-set-row">
@@ -788,6 +789,36 @@ const Session = {
       const cancelPress = () => { clearTimeout(pressTimer); document.removeEventListener("mouseup", cancelPress); };
       document.addEventListener("mouseup", cancelPress);
     });
+  },
+
+  // ═══ SUGGERIMENTO DI PROGRESSIONE (doppia progressione) ═══════════════════
+  // Prima aggiungi rep dentro il range; raggiunto il top del range, aumenti il
+  // peso e riparti dal basso. Guarda la seduta precedente (prevSets).
+  progressionGoalHTML(exName, prevSets, rrMin, rrMax) {
+    const real = (prevSets || []).filter(s => (s.reps || 0) > 0);
+    const goal = (main, sub) => `
+      <div class="today-goal">
+        <i class="ti ti-target"></i>
+        <div class="tg-txt">
+          <span class="tg-lbl">Obiettivo di oggi</span>
+          <span class="tg-main">${main}</span>
+          ${sub ? `<span class="tg-sub">${sub}</span>` : ""}
+        </div>
+      </div>`;
+    if (!real.length) {
+      return goal(`Trova un peso per <b>${rrMin}–${rrMax}</b> rep`, "Prima volta: parti e registra i numeri");
+    }
+    // "top set" della volta scorsa: peso più alto, a parità le rep più alte
+    let top = real[0];
+    real.forEach(s => { if ((s.kg || 0) > (top.kg || 0) || ((s.kg || 0) === (top.kg || 0) && s.reps > top.reps)) top = s; });
+    const isBW = (top.kg || 0) === 0;
+    if (top.reps >= rrMax) {
+      if (isBW) return goal(`Punta <b>${top.reps + 1}</b> rep`, `Sei al top del range (${top.reps}) — aggiungi ripetizioni`);
+      return goal(`Aumenta il peso · riparti da <b>${rrMin}</b> rep`, `La volta scorsa hai chiuso il range: ${U.fmt(top.kg)}kg × ${top.reps}`);
+    }
+    const target = Math.min(top.reps + 1, rrMax);
+    if (isBW) return goal(`Punta <b>${target}</b> rep`, `+1 rep verso il top del range (${rrMax})`);
+    return goal(`Resta a <b>${U.fmt(top.kg)} kg</b> · punta <b>${target}</b> rep`, `+1 rep verso il top del range (${rrMax})`);
   },
 
   buildSetRow(set, si, prevSet, exName, rrMin, rrMax, prevMax, total, expanded) {
