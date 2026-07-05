@@ -833,11 +833,15 @@ const Session = {
     const last = stats[n - 1], prev = stats[n - 2] || null, prev2 = stats[n - 3] || null;
     const isBW = (last.topKg || 0) === 0;
     const nl = (last.notes || []).join(" · ").toLowerCase();
-    const has = arr => arr.some(w => nl.includes(w));
-    const pain = has(["dolor", "fastidio", "fitta", "infortun", "problema", "male", "tira"]);
-    const easy = has(["facile", "comod", "leggero", "scarico", "troppo poco"]);
-    const hard = has(["cedimento", "difficile", "dura", "morto", "fallit", "grind", "tostissim", "non ce la", "al massimo"]);
-    const noteSnip = (() => { const t = (last.notes || []).join(" · "); return t.length > 62 ? t.slice(0, 60) + "…" : t; })();
+    // Confini di parola: "male" NON deve matchare "normale", "dura" non "durata",
+    // "tira" non "tirata" (che è un esercizio). Meglio perdere un segnale che inventarlo.
+    const pain = /(dolor|fastidi|infortun|pizzic|contrattur|strapp|tendinit|acciacc|infiamm)\w*|\bfitt[ae]\b|\bmale\b|\bmal\s+di\b|\btirone\b/.test(nl);
+    const easy = /(facil|comod)\w*|\blegger[oa]\b|\bscaric\w*|troppo poco/.test(nl);
+    const hard = /(cediment|difficil|fallit|grind|tost)\w*|\bdur[ae]\b|\bmort[oa]\b|non ce la|al massimo|al limite/.test(nl);
+    const noteSnip = (() => {
+      const t = (last.notes || []).join(" · ").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      return t.length > 62 ? t.slice(0, 60) + "…" : t;
+    })();
 
     const tol = Math.max(0.5, last.e1 * 0.02);
     const improved = prev ? last.e1 > prev.e1 + tol : true;
@@ -857,6 +861,14 @@ const Session = {
       return goal(
         isBW ? `Recupera: rifai <b>${last.topReps}</b> rep pulite` : `Recupera: torna a <b>${U.fmt(last.topKg)} kg</b> × <b>${last.topReps}</b> pulite${rirStr}`,
         `Sei in calo rispetto alle sedute precedenti — riconsolida prima di rispingere.${sysAdd}`, "warn");
+    }
+
+    // 2b) Calo isolato (una sola seduta sotto) → riprenditi i numeri di prima,
+    // non "+1 rep" sulla seduta storta: il riferimento è la seduta buona.
+    if (declined && prev) {
+      return goal(
+        isBW ? `Riprenditi le <b>${prev.topReps}</b> rep` : `Riprenditi <b>${U.fmt(prev.topKg)} kg</b> × <b>${prev.topReps}</b>${rirStr}`,
+        `La scorsa è andata sotto (${isBW ? last.topReps + " rep" : U.fmt(last.topKg) + "kg × " + last.topReps})${hard ? " e l'avevi sentita dura" : ""}: torna ai numeri della seduta prima, poi si riparte.`, "go");
     }
 
     // 3) Stallo vero (≥3 sedute fermo, non al top)
@@ -919,6 +931,9 @@ const Session = {
   // Carica lo storico di ogni esercizio (in background): alimenta l'analisi degli
   // obiettivi E semina i record personali con una sola lettura per esercizio.
   async loadExerciseIntel(exNames) {
+    // Token anti-sovrapposizione: se nel frattempo apri un'altra sessione,
+    // il caricamento vecchio si ferma (niente statistiche mescolate).
+    const token = (this._intelToken = (this._intelToken || 0) + 1);
     let seeded;
     try { seeded = new Set(JSON.parse(localStorage.getItem("gymos_pr_seeded") || "[]")); } catch(e) { seeded = new Set(); }
     const store = this.prLoadStore();
@@ -929,6 +944,7 @@ const Session = {
       if (!ex) continue;
       try {
         const hist = await API.getExerciseHistory(ex);
+        if (token !== this._intelToken) return;   // sessione cambiata: abbandona
         // stats SENZA la seduta di oggi (l'obiettivo si basa sul passato)
         this._exStats[ex] = this._statsFromHistory(hist).filter(g => g.date !== curDate);
         if (!seeded.has(ex)) {

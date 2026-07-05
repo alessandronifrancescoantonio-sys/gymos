@@ -201,7 +201,10 @@ const API = {
         property: CONFIG.PROPS.EL_NAME,
         rich_text: { contains: exerciseName }
       },
-      [{ property: CONFIG.PROPS.EL_DATE, direction: "ascending" }],
+      // Discendente: con il limite a 50 righe prendi le sedute più RECENTI
+      // (ascendente prenderebbe le più vecchie e l'analisi resterebbe indietro).
+      // I consumatori (Progression, _statsFromHistory) riordinano da soli.
+      [{ property: CONFIG.PROPS.EL_DATE, direction: "descending" }],
       50
     );
     return pages.map(p => ({
