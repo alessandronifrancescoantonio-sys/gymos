@@ -792,7 +792,10 @@ const Session = {
     row.className = "set-card" + (expanded ? "" : " set-collapsed") + (done ? " set-done" : "");
     row.id = `setrow-${set.id}`;
 
-    const prevHTML = prevSet
+    // "Volta scorsa" valida solo se la serie precedente ha rep reali (>0):
+    // le serie lasciate a 0 non sono un riferimento utile → trattale come prima volta.
+    const hasPrev  = prevSet && (prevSet.reps || 0) > 0;
+    const prevHTML = hasPrev
       ? `<span class="pv">${U.fmt(prevSet.kg)}kg</span><span class="px">×</span><span class="pv">${prevSet.reps}r</span><span class="plbl">scorsa</span>`
       : `<span class="pe">prima volta</span>`;
 
@@ -808,6 +811,7 @@ const Session = {
           <span class="ssum-x">×</span>
           <span class="ssum" id="ssum-rep-${set.id}">${set.reps > 0 ? set.reps : "0"}</span><span class="ssum-u">rep</span>
         </div>
+        <span class="set-hd-prev" title="Volta scorsa">${hasPrev ? `<i class="ti ti-history"></i>${U.fmt(prevSet.kg)}×${prevSet.reps}` : ""}</span>
         <div class="set-hd-badge" id="prog-${set.id}">${status}</div>
         <i class="ti ti-circle-check set-done-mark"></i>
         <i class="ti ti-chevron-down set-chev"></i>
