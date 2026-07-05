@@ -248,6 +248,11 @@ input { font-family:inherit; }
 .tg-main { font-size:14px; font-weight:500; color:var(--text); }
 .tg-main b { font-weight:700; }
 .tg-sub { font-size:11px; color:var(--dim); line-height:1.35; }
+/* Toni del suggerimento: go (spingi), hold (stallo), warn (cautela/calo) */
+.today-goal.tg-hold { background:linear-gradient(180deg, rgba(59,130,246,.10), rgba(59,130,246,.03)); border-color:rgba(59,130,246,.28); }
+.today-goal.tg-hold > i, .today-goal.tg-hold .tg-lbl { color:#3B82F6; }
+.today-goal.tg-warn { background:linear-gradient(180deg, rgba(245,166,35,.12), rgba(245,166,35,.03)); border-color:rgba(245,166,35,.3); }
+.today-goal.tg-warn > i, .today-goal.tg-warn .tg-lbl { color:var(--amber); }
 .rm-set-btn { width:28px; height:28px; border-radius:7px; border:1px solid rgba(239,68,68,.2); color:rgba(239,68,68,.5); display:flex; align-items:center; justify-content:center; transition:all .15s; flex-shrink:0; }
 .rm-set-btn:active { background:rgba(239,68,68,.12); color:var(--red); }
 .rm-set-btn i { font-size:13px; }

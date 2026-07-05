@@ -190,8 +190,9 @@ const Session = {
     this.updateStats();
     this.applyViewMode();
     this.armSessionTimers();   // auto-avvio durata + eventuale auto-salvataggio
-    // Semina i record personali dallo storico (in background, non blocca l'UI)
-    this.prSeedBg(Object.keys(grouped));
+    // Carica lo storico di ogni esercizio (background): alimenta gli obiettivi
+    // intelligenti e semina i record personali. Non blocca l'UI.
+    this.loadExerciseIntel(Object.keys(grouped));
   },
 
   groupByExercise(entries) {
@@ -264,7 +265,7 @@ const Session = {
           <i class="ti ti-chevron-down ex-chevron"></i>
         </div>
         <div class="ex-body">
-          ${(!this.viewMode && !this.sessionDone) ? this.progressionGoalHTML(exName, prevSets, rrMin, rrMax) : ""}
+          ${(!this.viewMode && !this.sessionDone) ? this.progressionGoalHTML(exName, prevSets, rrMin, rrMax, rir) : ""}
           ${this.prevNotesHTML(prevSets)}
           <div id="sets-${sid}"></div>
           <div class="add-set-row">
@@ -794,31 +795,175 @@ const Session = {
   // ═══ SUGGERIMENTO DI PROGRESSIONE (doppia progressione) ═══════════════════
   // Prima aggiungi rep dentro il range; raggiunto il top del range, aumenti il
   // peso e riparti dal basso. Guarda la seduta precedente (prevSets).
-  progressionGoalHTML(exName, prevSets, rrMin, rrMax) {
-    const real = (prevSets || []).filter(s => (s.reps || 0) > 0);
-    const goal = (main, sub) => `
-      <div class="today-goal">
-        <i class="ti ti-target"></i>
+  progressionGoalHTML(exName, prevSets, rrMin, rrMax, rir) {
+    const rirStr = (rir != null && rir !== "") ? ` a RIR ${rir}` : "";
+    const goal = (main, sub, tone) => {
+      const ic = tone === "warn" ? "ti-alert-triangle" : tone === "hold" ? "ti-refresh" : "ti-target";
+      return `
+      <div class="today-goal tg-${tone || "go"}">
+        <i class="ti ${ic}"></i>
         <div class="tg-txt">
           <span class="tg-lbl">Obiettivo di oggi</span>
           <span class="tg-main">${main}</span>
           ${sub ? `<span class="tg-sub">${sub}</span>` : ""}
         </div>
       </div>`;
-    if (!real.length) {
-      return goal(`Trova un peso per <b>${rrMin}–${rrMax}</b> rep`, "Prima volta: parti e registra i numeri");
+    };
+
+    const stats = (this._exStats && this._exStats[exName]) || null;
+
+    // ── Fallback: storico non ancora caricato → usa la sola seduta precedente ──
+    if (!stats || !stats.length) {
+      const real = (prevSets || []).filter(s => (s.reps || 0) > 0);
+      if (!real.length) return goal(`Trova un peso per <b>${rrMin}–${rrMax}</b> rep${rirStr}`, "Prima volta: parti e registra i numeri", "go");
+      let top = real[0];
+      real.forEach(s => { if ((s.kg || 0) > (top.kg || 0) || ((s.kg || 0) === (top.kg || 0) && s.reps > top.reps)) top = s; });
+      const bw = (top.kg || 0) === 0;
+      if (top.reps >= rrMax) return bw
+        ? goal(`Punta <b>${top.reps + 1}</b> rep`, `Sei al top del range (${top.reps})`, "go")
+        : goal(`Aumenta il peso · riparti da <b>${rrMin}</b> rep${rirStr}`, `La volta scorsa hai chiuso: ${U.fmt(top.kg)}kg × ${top.reps}`, "go");
+      const tg = Math.min(top.reps + 1, rrMax);
+      return bw
+        ? goal(`Punta <b>${tg}</b> rep`, `+1 rep verso il top (${rrMax})`, "go")
+        : goal(`Resta a <b>${U.fmt(top.kg)} kg</b> · punta <b>${tg}</b> rep${rirStr}`, `+1 rep verso il top del range (${rrMax})`, "go");
     }
-    // "top set" della volta scorsa: peso più alto, a parità le rep più alte
-    let top = real[0];
-    real.forEach(s => { if ((s.kg || 0) > (top.kg || 0) || ((s.kg || 0) === (top.kg || 0) && s.reps > top.reps)) top = s; });
-    const isBW = (top.kg || 0) === 0;
-    if (top.reps >= rrMax) {
-      if (isBW) return goal(`Punta <b>${top.reps + 1}</b> rep`, `Sei al top del range (${top.reps}) — aggiungi ripetizioni`);
-      return goal(`Aumenta il peso · riparti da <b>${rrMin}</b> rep`, `La volta scorsa hai chiuso il range: ${U.fmt(top.kg)}kg × ${top.reps}`);
+
+    // ── Analisi ricca: andamento su più sedute + note + contesto ──
+    const n = stats.length;
+    const last = stats[n - 1], prev = stats[n - 2] || null, prev2 = stats[n - 3] || null;
+    const isBW = (last.topKg || 0) === 0;
+    const nl = (last.notes || []).join(" · ").toLowerCase();
+    const has = arr => arr.some(w => nl.includes(w));
+    const pain = has(["dolor", "fastidio", "fitta", "infortun", "problema", "male", "tira"]);
+    const easy = has(["facile", "comod", "leggero", "scarico", "troppo poco"]);
+    const hard = has(["cedimento", "difficile", "dura", "morto", "fallit", "grind", "tostissim", "non ce la", "al massimo"]);
+    const noteSnip = (() => { const t = (last.notes || []).join(" · "); return t.length > 62 ? t.slice(0, 60) + "…" : t; })();
+
+    const tol = Math.max(0.5, last.e1 * 0.02);
+    const improved = prev ? last.e1 > prev.e1 + tol : true;
+    const declined = prev ? last.e1 < prev.e1 - tol : false;
+    let stall = 1;
+    for (let i = n - 2; i >= 0; i--) { if (Math.abs(stats[i].e1 - last.e1) <= tol) stall++; else break; }
+    const sustainedDecline = declined && prev2 && prev.e1 <= prev2.e1 + tol;
+    const atTop = last.topReps >= rrMax;
+    const target = Math.min(last.topReps + 1, rrMax);
+    const sysAdd = this._systemicDown ? " Anche altri esercizi sono in calo: occhio a recupero, sonno e alimentazione." : "";
+
+    // 1) Dolore/fastidio → cautela (priorità massima)
+    if (pain) return goal(`Tieni leggero e cura la tecnica${rirStr}`, `Avevi segnato: «${noteSnip}». Se il fastidio resta, non caricare.`, "warn");
+
+    // 2) Calo sostenuto (o calo + fatica generale) → recupera
+    if (sustainedDecline || (declined && this._systemicDown)) {
+      return goal(
+        isBW ? `Recupera: rifai <b>${last.topReps}</b> rep pulite` : `Recupera: torna a <b>${U.fmt(last.topKg)} kg</b> × <b>${last.topReps}</b> pulite${rirStr}`,
+        `Sei in calo rispetto alle sedute precedenti — riconsolida prima di rispingere.${sysAdd}`, "warn");
     }
-    const target = Math.min(top.reps + 1, rrMax);
-    if (isBW) return goal(`Punta <b>${target}</b> rep`, `+1 rep verso il top del range (${rrMax})`);
-    return goal(`Resta a <b>${U.fmt(top.kg)} kg</b> · punta <b>${target}</b> rep`, `+1 rep verso il top del range (${rrMax})`);
+
+    // 3) Stallo vero (≥3 sedute fermo, non al top)
+    if (stall >= 3 && !atTop) {
+      const trick = easy
+        ? "e l'avevi trovato facile: prova ad aumentare un filo il peso."
+        : "prova +1 rep con una micro-pausa (rest-pause), o accorcia un po' il recupero.";
+      return goal(
+        isBW ? `Fermo da ${stall} sedute — punta <b>${target}</b> rep` : `Fermo a <b>${U.fmt(last.topKg)} kg</b> da ${stall} sedute`,
+        `Sblocca lo stallo: ${trick}`, "hold");
+    }
+
+    // 4) Al top del range → aumenta il peso (o le rep a corpo libero)
+    if (atTop) {
+      const twice = prev && prev.topReps >= rrMax ? " per la 2ª seduta" : "";
+      return isBW
+        ? goal(`Punta <b>${last.topReps + 1}</b> rep`, `Sei al top del range${twice}: aggiungi rep o rendi più difficile.`, "go")
+        : goal(`Aumenta il peso · riparti da <b>${rrMin}</b> rep${rirStr}`, `Hai chiuso ${rrMin}–${rrMax} a ${U.fmt(last.topKg)}kg${twice}${easy ? " e l'avevi sentito facile" : ""}.`, "go");
+    }
+
+    // 5) Sotto il top, in progressione → aggiungi 1 rep
+    const reason = improved ? "Stai salendo: continua la doppia progressione." : (hard ? "La scorsa era tosta: consolidala prima di caricare." : "+1 rep verso il top del range.");
+    return isBW
+      ? goal(`Punta <b>${target}</b> rep`, reason, "go")
+      : goal(`Resta a <b>${U.fmt(last.topKg)} kg</b> · punta <b>${target}</b> rep${rirStr}`, reason, "go");
+  },
+
+  // Comprime lo storico grezzo (una riga per serie) in sedute con top set e note
+  _statsFromHistory(hist) {
+    const byDate = {};
+    (hist || []).forEach(r => {
+      if ((r.reps || 0) <= 0) return;
+      const d = String(r.date);
+      if (!byDate[d]) byDate[d] = { date: r.date, sets: [], notes: [] };
+      byDate[d].sets.push({ kg: r.kg || 0, reps: r.reps });
+      if (r.note && String(r.note).trim()) byDate[d].notes.push(String(r.note).trim());
+    });
+    const e1 = (kg, reps) => (kg > 0 ? kg * (1 + reps / 30) : reps);
+    return Object.values(byDate).map(g => {
+      let top = g.sets[0];
+      g.sets.forEach(s => { if (e1(s.kg, s.reps) > e1(top.kg, top.reps)) top = s; });
+      return { date: g.date, topKg: top.kg, topReps: top.reps, e1: Math.round(e1(top.kg, top.reps) * 10) / 10, notes: g.notes };
+    }).sort((a, b) => new Date(a.date) - new Date(b.date));
+  },
+
+  // Fatica sistemica: molti esercizi in calo nell'ultima seduta rispetto alla precedente
+  _computeSystemic(exNames) {
+    let withHist = 0, down = 0;
+    (exNames || []).forEach(ex => {
+      const st = this._exStats[ex];
+      if (!st || st.length < 2) return;
+      withHist++;
+      const last = st[st.length - 1], prev = st[st.length - 2];
+      const tol = Math.max(0.5, last.e1 * 0.02);
+      if (last.e1 < prev.e1 - tol) down++;
+    });
+    return withHist >= 3 && down / withHist >= 0.5;
+  },
+
+  // Carica lo storico di ogni esercizio (in background): alimenta l'analisi degli
+  // obiettivi E semina i record personali con una sola lettura per esercizio.
+  async loadExerciseIntel(exNames) {
+    let seeded;
+    try { seeded = new Set(JSON.parse(localStorage.getItem("gymos_pr_seeded") || "[]")); } catch(e) { seeded = new Set(); }
+    const store = this.prLoadStore();
+    this._exStats = {};
+    const cur = this.sessions.find(s => s.id === this.activeId);
+    const curDate = cur ? cur.date : null;
+    for (const ex of (exNames || [])) {
+      if (!ex) continue;
+      try {
+        const hist = await API.getExerciseHistory(ex);
+        // stats SENZA la seduta di oggi (l'obiettivo si basa sul passato)
+        this._exStats[ex] = this._statsFromHistory(hist).filter(g => g.date !== curDate);
+        if (!seeded.has(ex)) {
+          const rec = store[ex] || { w: 0, e1rm: 0, repsAt: {} };
+          if (!rec.repsAt) rec.repsAt = {};
+          hist.forEach(h => {
+            if ((h.reps || 0) <= 0) return;
+            rec.w    = Math.max(rec.w || 0, h.kg || 0);
+            rec.e1rm = Math.max(rec.e1rm || 0, this.e1rm(h.kg || 0, h.reps));
+            const k = String(h.kg || 0);
+            if ((h.kg || 0) > 0) rec.repsAt[k] = Math.max(rec.repsAt[k] || 0, h.reps);
+          });
+          store[ex] = rec; seeded.add(ex);
+        }
+      } catch(e) { /* offline: riproverà alla prossima apertura */ }
+    }
+    this.prSaveStore();
+    try { localStorage.setItem("gymos_pr_seeded", JSON.stringify([...seeded])); } catch(e){}
+    this._systemicDown = this._computeSystemic(exNames);
+    this.refreshBadges();
+    this.refreshGoals();
+  },
+
+  // Riaggiorna i banner "Obiettivo di oggi" dopo il caricamento dello storico
+  refreshGoals() {
+    const grouped = this.groupByExercise(this.exercises);
+    const prevG   = this.groupByExercise(this.prevExercises);
+    document.querySelectorAll("#exercises-container .ex-block").forEach(b => {
+      const ex = b.dataset.ex;
+      const tg = b.querySelector(".today-goal");
+      if (!ex || !tg) return;  // in sola-visualizzazione il banner non c'è
+      const sets = grouped[ex] || [];
+      const rrMin = sets[0]?.rrMin || 8, rrMax = sets[0]?.rrMax || 12, rir = sets[0]?.rir ?? "";
+      tg.outerHTML = this.progressionGoalHTML(ex, prevG[ex] || [], rrMin, rrMax, rir);
+    });
   },
 
   buildSetRow(set, si, prevSet, exName, rrMin, rrMax, prevMax, total, expanded) {
