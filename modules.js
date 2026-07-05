@@ -509,13 +509,66 @@ const Volume = {
 
   zone(v) { return v === 0 ? "none" : v < this.MEV ? "low" : v <= this.MAV_HI ? "ok" : "high"; },
 
-  barHTML(v) {
-    const pct = Math.min(100, (v / (this.MAV_HI + 6)) * 100);
-    const mevPct = (this.MEV / (this.MAV_HI + 6)) * 100;
-    const mavPct = (this.MAV_HI / (this.MAV_HI + 6)) * 100;
-    return `<div class="vol-bar"><div class="vol-zone" style="left:${mevPct}%;width:${mavPct - mevPct}%"></div><div class="vol-fill vz-${this.zone(v)}" style="width:${pct}%"></div></div>`;
+  // Inizio settimana corrente (lunedì 00:00), coerente con lo split settimanale
+  _weekStart() {
+    const now = new Date();
+    const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    monday.setDate(monday.getDate() - ((now.getDay() + 6) % 7));
+    return monday;
+  },
+
+  // Serie realmente completate questa settimana (dalle sessioni fatte), per muscolo
+  async loadActual(sessions) {
+    const token = (this._actualToken = (this._actualToken || 0) + 1);
+    const monday = this._weekStart();
+    const wk = (sessions || []).filter(s => s.date && new Date(s.date) >= monday);
+    const actual = {}; this.MUSCLES.forEach(m => actual[m] = 0);
+    let contributed = 0;
+    for (const s of wk) {
+      try {
+        const ex = await API.getSessionExercises(s.id);
+        if (token !== this._actualToken) return;   // dashboard ricaricata: abbandona
+        let any = false;
+        ex.forEach(row => {
+          if ((row.reps || 0) <= 0) return;
+          any = true;
+          const name = (row.name || "").split(" – ")[0];
+          const m = this.musclesFor(name);
+          Object.keys(m).forEach(mus => { if (actual[mus] == null) actual[mus] = 0; actual[mus] += m[mus]; });
+        });
+        if (any) contributed++;
+      } catch(e) { /* ignora la singola sessione non leggibile */ }
+    }
+    this._actual = actual;
+    this._actualCount = contributed;   // solo sessioni con almeno una serie fatta
+    this.renderCard();
+    const modal = document.getElementById("vol-modal");
+    if (modal && modal.style.display === "flex") this.renderEditor();
+  },
+
+  // Barra: zona target 10–20 + riempimento (fatto se disponibile, altrimenti
+  // pianificato) + marcatore del volume pianificato dal programma.
+  barHTML(planned, actual) {
+    const max = this.MAV_HI + 6;
+    const p = x => Math.min(100, (x / max) * 100);
+    const mevPct = (this.MEV / max) * 100, mavPct = (this.MAV_HI / max) * 100;
+    const fillVal = actual != null ? actual : planned;
+    const mark = actual != null ? `<div class="vol-plan-mark" style="left:${Math.min(99, p(planned))}%" title="Previste dal programma"></div>` : "";
+    return `<div class="vol-bar"><div class="vol-zone" style="left:${mevPct}%;width:${mavPct - mevPct}%"></div><div class="vol-fill vz-${this.zone(fillVal)}" style="width:${p(fillVal)}%"></div>${mark}</div>`;
   },
   fmt(v) { return Number.isInteger(v) ? v : v.toFixed(1).replace(".", ","); },
+
+  // Una riga muscolo: mostra "fatto / previsto" se il fatto è disponibile
+  _muscleRow(m, planned) {
+    const a = this._actual ? (this._actual[m] || 0) : null;
+    const shown = a != null ? a : planned;
+    return `
+      <div class="vol-row">
+        <span class="vol-name">${m}</span>
+        ${this.barHTML(planned, a)}
+        <span class="vol-val vz-${this.zone(shown)}">${this.fmt(shown)}${a != null ? `<span class="vol-plan">/${this.fmt(planned)}</span>` : ""}</span>
+      </div>`;
+  },
 
   renderCard() {
     const wrap = document.getElementById("dash-volume");
@@ -528,20 +581,19 @@ const Volume = {
       return;
     }
     const low = rows.filter(m => vol[m] < this.MEV).length;
+    const hasA = !!this._actual;
+    const foot = hasA
+      ? `<b>Fatte</b> / previste a settimana · zona verde <b>10–20</b>`
+      : `Serie allenanti / settimana · target <b>10–20</b>${low ? ` · <span class="vz-low">${low} sotto target</span>` : ""}`;
     wrap.innerHTML = `
       <div class="card-title"><i class="ti ti-chart-bar"></i>Volume settimanale
         <span class="vol-prog">${this._esc(prog)}</span>
         <button class="vol-edit-btn" onclick="Volume.openEditor()"><i class="ti ti-adjustments"></i> Dettaglio</button>
       </div>
       <div class="vol-list">
-        ${rows.slice(0, 6).map(m => `
-          <div class="vol-row">
-            <span class="vol-name">${m}</span>
-            ${this.barHTML(vol[m])}
-            <span class="vol-val vz-${this.zone(vol[m])}">${this.fmt(vol[m])}</span>
-          </div>`).join("")}
+        ${rows.slice(0, 6).map(m => this._muscleRow(m, vol[m])).join("")}
       </div>
-      <div class="vol-foot">Serie allenanti / settimana · target <b>10–20</b>${low ? ` · <span class="vz-low">${low} sotto target</span>` : ""} <button class="vol-more" onclick="Volume.openEditor()">vedi tutti →</button></div>`;
+      <div class="vol-foot">${foot} <button class="vol-more" onclick="Volume.openEditor()">vedi tutti →</button></div>`;
   },
 
   openEditor() { document.getElementById("vol-modal").style.display = "flex"; this.renderEditor(); },
@@ -552,12 +604,8 @@ const Volume = {
     if (!body) return;
     const { vol, exercises } = this.compute();
     const total = Object.values(vol).reduce((a, b) => a + b, 0);
-    const bars = this.MUSCLES.map(m => `
-      <div class="vol-row">
-        <span class="vol-name">${m}</span>
-        ${this.barHTML(vol[m])}
-        <span class="vol-val vz-${this.zone(vol[m])}">${this.fmt(vol[m])}</span>
-      </div>`).join("");
+    const totalA = this._actual ? Object.values(this._actual).reduce((a, b) => a + b, 0) : null;
+    const bars = this.MUSCLES.map(m => this._muscleRow(m, vol[m])).join("");
     const opts = ["—", ...this.MUSCLES];
     const exRows = exercises.map(ex => {
       const m = this.musclesFor(ex);
@@ -582,8 +630,10 @@ const Volume = {
         </div>`;
     }).join("");
     body.innerHTML = `
-      <div class="vol-total">Totale: <b>${this.fmt(total)}</b> serie allenanti / settimana</div>
-      <div class="vol-legend"><span><i class="vz-low">■</i> sotto 10</span><span><i class="vz-ok">■</i> 10–20 ottimale</span><span><i class="vz-high">■</i> oltre 20</span></div>
+      <div class="vol-total">${totalA != null
+        ? `Questa settimana: <b>${this.fmt(totalA)}</b> fatte su <b>${this.fmt(total)}</b> previste${this._actualCount ? ` · ${this._actualCount} ${this._actualCount === 1 ? "sessione" : "sessioni"}` : ""}`
+        : `Totale: <b>${this.fmt(total)}</b> serie allenanti / settimana`}</div>
+      <div class="vol-legend"><span><i class="vz-low">■</i> sotto 10</span><span><i class="vz-ok">■</i> 10–20 ottimale</span><span><i class="vz-high">■</i> oltre 20</span>${totalA != null ? `<span><i class="vol-mark-legend"></i> previste dal programma</span>` : ""}</div>
       <div class="vol-list vol-list-full">${bars}</div>
       <div class="vol-sec-title"><i class="ti ti-body-scan"></i> Muscolo di ogni esercizio</div>
       <div class="vol-hint">Il muscolo primario conta 1 serie, i secondari ½ (conteggio frazionato). Correggi dove l'automatico sbaglia.</div>
@@ -613,6 +663,7 @@ const Dashboard = {
       this.buildStats(sessions, checkins, sleepData, habits, todayHabit);
       this.buildWeekSplit(sessions);
       Volume.renderCard();
+      Volume.loadActual(sessions);   // serie fatte davvero questa settimana (bg)
       this.buildRecentSessions(sessions);
       this.buildSemaforo(sleepData);
     } catch(e) { console.error("Dashboard.load:", e); }

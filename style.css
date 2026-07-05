@@ -260,7 +260,10 @@ input { font-family:inherit; }
 .vol-bar { position:relative; flex:1; height:8px; background:var(--ink3); border-radius:100px; overflow:hidden; }
 .vol-zone { position:absolute; top:0; bottom:0; background:rgba(39,209,127,.16); }
 .vol-fill { position:absolute; top:0; left:0; bottom:0; border-radius:100px; transition:width .4s var(--ease-out); }
-.vol-val { font-family:'DM Mono',monospace; font-size:13px; font-weight:600; width:34px; text-align:right; flex-shrink:0; }
+.vol-plan-mark { position:absolute; top:-3px; bottom:-3px; width:2px; background:var(--text); border-radius:2px; box-shadow:0 0 0 1.5px var(--ink2); }
+.vol-mark-legend { display:inline-block; width:2px; height:11px; background:var(--text); border-radius:2px; vertical-align:middle; margin-right:4px; }
+.vol-val { font-family:'DM Mono',monospace; font-size:13px; font-weight:600; width:52px; text-align:right; flex-shrink:0; }
+.vol-plan { font-size:10px; color:var(--muted); font-weight:500; }
 .vz-none, .vol-fill.vz-none { color:var(--muted); background:var(--muted); }
 .vz-low  { color:#F59E0B; } .vol-fill.vz-low  { background:#F59E0B; }
 .vz-ok   { color:var(--green); } .vol-fill.vz-ok { background:var(--green); }
