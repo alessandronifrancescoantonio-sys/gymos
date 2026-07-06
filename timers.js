@@ -146,10 +146,12 @@ const RestTimer = {
     this.ensureNotif();
 
     this.updateDisplay();
+    this._mediaStart();   // mostra il countdown sul lock screen (Android)
     clearInterval(this.interval);
     this.interval = setInterval(() => {
       this.remaining = Math.max(0, Math.round((this.endAt - Date.now()) / 1000));
       this.updateDisplay();
+      this._mediaTick();
       if (Date.now() >= this.endAt) this.finish();
     }, 250);
   },
@@ -159,6 +161,7 @@ const RestTimer = {
     this.total = Math.max(this.total, Math.round((this.endAt - Date.now()) / 1000));
     this.remaining = Math.round((this.endAt - Date.now()) / 1000);
     this.updateDisplay();
+    this._mediaTick(true);
     // riprogramma il suono in base al nuovo istante di fine
     this.scheduleAlarm(Math.round((this.endAt - Date.now()) / 1000));
   },
@@ -216,6 +219,7 @@ const RestTimer = {
     clearInterval(this.interval);
     this.interval = null;
     this.releaseWake();
+    this._mediaStop();
     document.getElementById("rest-running").style.display = "none";
     const fab = document.getElementById("rest-fab");
     if (fab) fab.style.visibility = "";
@@ -252,6 +256,7 @@ const RestTimer = {
     this.stopAlarm();
     this.stopScheduled();
     this.releaseWake();
+    this._mediaStop();
     document.getElementById("rest-running").style.display = "none";
     const fab = document.getElementById("rest-fab");
     if (fab) fab.style.visibility = "";
@@ -268,6 +273,69 @@ const RestTimer = {
   },
   releaseWake() {
     try { if (this.wakeLock) { this.wakeLock.release(); this.wakeLock = null; } } catch(e) {}
+  },
+
+  // ── Lock screen (Android): il recupero appare come "player" con countdown ──
+  // Sfrutta la MediaSession: l'OS mostra titolo + barra di avanzamento sul lock
+  // screen e la anima da solo (playbackRate), quindi scorre anche a telefono
+  // bloccato. Serve una micro-traccia (silenziosa) in play perché compaia.
+  _ensureSilent() {
+    if (this._silentAudio !== undefined) return this._silentAudio;
+    try {
+      const sr = 8000, n = sr;               // 1s di silenzio, in loop
+      const buf = new ArrayBuffer(44 + n), v = new DataView(buf);
+      const w = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+      w(0, "RIFF"); v.setUint32(4, 36 + n, true); w(8, "WAVE"); w(12, "fmt ");
+      v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+      v.setUint32(24, sr, true); v.setUint32(28, sr, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true);
+      w(36, "data"); v.setUint32(40, n, true);
+      for (let i = 0; i < n; i++) v.setUint8(44 + i, 128);   // 8-bit → 128 = silenzio
+      const a = new Audio(URL.createObjectURL(new Blob([buf], { type: "audio/wav" })));
+      a.loop = true; a.preload = "auto";
+      this._silentAudio = a;
+    } catch (e) { this._silentAudio = null; }
+    return this._silentAudio;
+  },
+  _mediaStart() {
+    try {
+      const a = this._ensureSilent();
+      if (a) { try { a.currentTime = 0; } catch (e) {} const p = a.play(); if (p && p.catch) p.catch(() => {}); }
+      if ("mediaSession" in navigator) {
+        const ms = navigator.mediaSession;
+        ms.playbackState = "playing";
+        const stopIt = () => this.stop();
+        ["pause", "stop"].forEach(act => { try { ms.setActionHandler(act, stopIt); } catch (e) {} });
+        try { ms.setActionHandler("play", () => {}); } catch (e) {}
+        this._mediaTick(true);
+      }
+    } catch (e) {}
+  },
+  _mediaTick(force) {
+    try {
+      if (!("mediaSession" in navigator)) return;
+      if (!force && this._lastMediaSec === this.remaining) return;
+      this._lastMediaSec = this.remaining;
+      const ms = navigator.mediaSession;
+      const m = Math.floor(this.remaining / 60), s = this.remaining % 60;
+      const label = m > 0 ? `${m}:${s.toString().padStart(2, "0")}` : `${this.remaining}s`;
+      if (window.MediaMetadata) ms.metadata = new MediaMetadata({ title: `Recupero — ${label}`, artist: "GymOS", album: "Timer recupero" });
+      if (ms.setPositionState && this.total > 0) {
+        const elapsed = Math.max(0, Math.min(this.total, this.total - this.remaining));
+        ms.setPositionState({ duration: this.total, position: elapsed, playbackRate: 1 });
+      }
+    } catch (e) {}
+  },
+  _mediaStop() {
+    try {
+      if (this._silentAudio) this._silentAudio.pause();
+      if ("mediaSession" in navigator) {
+        const ms = navigator.mediaSession;
+        ms.playbackState = "none";
+        try { ms.metadata = null; } catch (e) {}
+        try { if (ms.setPositionState) ms.setPositionState(); } catch (e) {}
+      }
+      this._lastMediaSec = null;
+    } catch (e) {}
   },
 
   // ── Audio: beep finale (preparato durante il tap per evitare blocchi) ──
