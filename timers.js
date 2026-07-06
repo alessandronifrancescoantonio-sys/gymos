@@ -219,7 +219,7 @@ const RestTimer = {
     clearInterval(this.interval);
     this.interval = null;
     this.releaseWake();
-    this._mediaStop();
+    // la notifica "Recupero finito" (notify) sostituisce quella in corso (stesso tag)
     document.getElementById("rest-running").style.display = "none";
     const fab = document.getElementById("rest-fab");
     if (fab) fab.style.visibility = "";
@@ -275,66 +275,38 @@ const RestTimer = {
     try { if (this.wakeLock) { this.wakeLock.release(); this.wakeLock = null; } } catch(e) {}
   },
 
-  // ── Lock screen (Android): il recupero appare come "player" con countdown ──
-  // Sfrutta la MediaSession: l'OS mostra titolo + barra di avanzamento sul lock
-  // screen e la anima da solo (playbackRate), quindi scorre anche a telefono
-  // bloccato. Serve una micro-traccia (silenziosa) in play perché compaia.
-  _ensureSilent() {
-    if (this._silentAudio !== undefined) return this._silentAudio;
-    try {
-      const sr = 8000, n = sr;               // 1s di silenzio, in loop
-      const buf = new ArrayBuffer(44 + n), v = new DataView(buf);
-      const w = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
-      w(0, "RIFF"); v.setUint32(4, 36 + n, true); w(8, "WAVE"); w(12, "fmt ");
-      v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
-      v.setUint32(24, sr, true); v.setUint32(28, sr, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true);
-      w(36, "data"); v.setUint32(40, n, true);
-      for (let i = 0; i < n; i++) v.setUint8(44 + i, 128);   // 8-bit → 128 = silenzio
-      const a = new Audio(URL.createObjectURL(new Blob([buf], { type: "audio/wav" })));
-      a.loop = true; a.preload = "auto";
-      this._silentAudio = a;
-    } catch (e) { this._silentAudio = null; }
-    return this._silentAudio;
+  // ── Lock screen (Android): notifica persistente col countdown del recupero ──
+  // Senza audio → non mette in pausa la musica. Si aggiorna ogni secondo quando
+  // l'app è attiva; a telefono bloccato può "congelarsi" ma mostra comunque
+  // l'orario di fine, e il suono di fine parte lo stesso.
+  _fmtRemain() {
+    const m = Math.floor(this.remaining / 60), s = this.remaining % 60;
+    return m > 0 ? `${m}:${s.toString().padStart(2, "0")}` : `${this.remaining}s`;
   },
-  _mediaStart() {
-    try {
-      const a = this._ensureSilent();
-      if (a) { try { a.currentTime = 0; } catch (e) {} const p = a.play(); if (p && p.catch) p.catch(() => {}); }
-      if ("mediaSession" in navigator) {
-        const ms = navigator.mediaSession;
-        ms.playbackState = "playing";
-        const stopIt = () => this.stop();
-        ["pause", "stop"].forEach(act => { try { ms.setActionHandler(act, stopIt); } catch (e) {} });
-        try { ms.setActionHandler("play", () => {}); } catch (e) {}
-        this._mediaTick(true);
-      }
-    } catch (e) {}
-  },
+  _mediaStart() { this._lastMediaSec = null; this._mediaTick(true); },
   _mediaTick(force) {
     try {
-      if (!("mediaSession" in navigator)) return;
+      if (!("Notification" in window) || Notification.permission !== "granted") return;
+      if (!(navigator.serviceWorker && navigator.serviceWorker.ready)) return;
       if (!force && this._lastMediaSec === this.remaining) return;
       this._lastMediaSec = this.remaining;
-      const ms = navigator.mediaSession;
-      const m = Math.floor(this.remaining / 60), s = this.remaining % 60;
-      const label = m > 0 ? `${m}:${s.toString().padStart(2, "0")}` : `${this.remaining}s`;
-      if (window.MediaMetadata) ms.metadata = new MediaMetadata({ title: `Recupero — ${label}`, artist: "GymOS", album: "Timer recupero" });
-      if (ms.setPositionState && this.total > 0) {
-        const elapsed = Math.max(0, Math.min(this.total, this.total - this.remaining));
-        ms.setPositionState({ duration: this.total, position: elapsed, playbackRate: 1 });
-      }
+      const end = new Date(this.endAt);
+      const hh = end.getHours(), mm = end.getMinutes().toString().padStart(2, "0"), ss = end.getSeconds().toString().padStart(2, "0");
+      const opts = {
+        body: `Manca ${this._fmtRemain()} · finisce alle ${hh}:${mm}:${ss}`,
+        tag: "gymos-rest", renotify: false, silent: true, requireInteraction: true,
+        icon: "icon-192.png", badge: "icon-192.png",
+      };
+      navigator.serviceWorker.ready.then(reg => reg.showNotification("⏱️ Recupero in corso", opts)).catch(() => {});
     } catch (e) {}
   },
   _mediaStop() {
     try {
-      if (this._silentAudio) this._silentAudio.pause();
-      if ("mediaSession" in navigator) {
-        const ms = navigator.mediaSession;
-        ms.playbackState = "none";
-        try { ms.metadata = null; } catch (e) {}
-        try { if (ms.setPositionState) ms.setPositionState(); } catch (e) {}
-      }
       this._lastMediaSec = null;
+      if (navigator.serviceWorker && navigator.serviceWorker.ready) {
+        navigator.serviceWorker.ready.then(reg => reg.getNotifications({ tag: "gymos-rest" })
+          .then(ns => ns.forEach(n => n.close()))).catch(() => {});
+      }
     } catch (e) {}
   },
 
