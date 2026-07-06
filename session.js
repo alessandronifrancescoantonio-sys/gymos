@@ -797,7 +797,7 @@ const Session = {
   // peso e riparti dal basso. Guarda la seduta precedente (prevSets).
   progressionGoalHTML(exName, prevSets, rrMin, rrMax, rir) {
     const rirStr = (rir != null && rir !== "") ? ` a RIR ${rir}` : "";
-    const goal = (main, sub, tone) => {
+    const goal = (main, sub, tone, data) => {
       const ic = tone === "warn" ? "ti-alert-triangle" : tone === "hold" ? "ti-refresh" : "ti-target";
       return `
       <div class="today-goal tg-${tone || "go"}">
@@ -806,6 +806,7 @@ const Session = {
           <span class="tg-lbl">Obiettivo di oggi</span>
           <span class="tg-main">${main}</span>
           ${sub ? `<span class="tg-sub">${sub}</span>` : ""}
+          ${data ? `<span class="tg-data"><i class="ti ti-chart-dots"></i>${data}</span>` : ""}
         </div>
       </div>`;
     };
@@ -846,8 +847,6 @@ const Session = {
     const tol = Math.max(0.5, last.e1 * 0.02);
     const improved = prev ? last.e1 > prev.e1 + tol : true;
     const declined = prev ? last.e1 < prev.e1 - tol : false;
-    let stall = 1;
-    for (let i = n - 2; i >= 0; i--) { if (Math.abs(stats[i].e1 - last.e1) <= tol) stall++; else break; }
     const sustainedDecline = declined && prev2 && prev.e1 <= prev2.e1 + tol;
     const atTop = last.topReps >= rrMax;
     const target = Math.min(last.topReps + 1, rrMax);
@@ -857,29 +856,69 @@ const Session = {
     const setsArr    = last.sets || [];
     const atTopCount = setsArr.filter(s => s.reps >= rrMax).length;
     const allAtTop   = setsArr.length > 0 && atTopCount === setsArr.length;
+    const prevSetsArr = (prev && prev.sets) || [];
+    // Regola ACSM "2-for-2": top del range raggiunto per DUE sedute consecutive
+    const twoForTwo  = allAtTop && prevSetsArr.length > 0 && prevSetsArr.every(s => s.reps >= rrMax);
     // Giorni dall'ultima volta che hai fatto QUESTO esercizio (detraining)
     const gapDays = Math.round((Date.now() - new Date(last.date).getTime()) / 86400000);
 
+    // ── METRICHE OGGETTIVE (evidence-based) ──
+    // Trend e1RM: regressione lineare sulle ultime ≤5 sedute (%/seduta).
+    // Un punto solo non dice nulla: conta la direzione ripetuta.
+    const win = stats.slice(-5), m = win.length;
+    let slopePct = 0;
+    if (m >= 2) {
+      const xs = win.map((_, i) => i), ys = win.map(g => g.e1);
+      const mx = xs.reduce((a, b) => a + b, 0) / m, my = ys.reduce((a, b) => a + b, 0) / m;
+      let num = 0, den = 0;
+      xs.forEach((x, i) => { num += (x - mx) * (ys[i] - my); den += (x - mx) * (x - mx); });
+      const slope = den > 0 ? num / den : 0;
+      slopePct = my > 0 ? Math.round(slope / my * 1000) / 10 : 0;
+    }
+    // Plateau: sedute passate dalla MIGLIOR prestazione (e1RM), non solo "uguale a ieri"
+    // ">" stretto: a parità di e1RM il best resta la PRIMA seduta che l'ha fatto,
+    // così "fermo allo stesso valore da 4 sedute" conta davvero come plateau.
+    let bestIdx = 0;
+    stats.forEach((g, i) => { if (g.e1 > stats[bestIdx].e1) bestIdx = i; });
+    const sinceBest = n - 1 - bestIdx;
+    // Drop-off intra-seduta: crollo di rep tra la prima e l'ultima serie = fatica
+    // dentro la sessione (recupero corto o carico alto sulle prime serie)
+    const dropoff = setsArr.length >= 2 ? (setsArr[0].reps - setsArr[setsArr.length - 1].reps) : 0;
+    // Incremento consigliato quando si sale (ACSM: 2-10%; meno per muscoli piccoli)
+    let incr = "2–5%";
+    try {
+      if (typeof Volume !== "undefined") {
+        const mus = Volume.musclesFor(exName);
+        const primary = Object.keys(mus).find(k => mus[k] >= 1);
+        if (["Petto", "Dorso", "Quadricipiti", "Femorali", "Glutei"].includes(primary)) incr = "5–10%";
+      }
+    } catch (e) {}
+    // Riga dati oggettiva mostrata nel banner (trasparenza dell'analisi)
+    const trendStr = m >= 3 ? `Trend 1RMst ${slopePct > 0 ? "+" : ""}${String(slopePct).replace(".", ",")}%/seduta` : "Poche sedute per un trend";
+    const bestStr  = sinceBest === 0 ? "ultima = migliore" : `migliore ${sinceBest} ${sinceBest === 1 ? "seduta" : "sedute"} fa`;
+    const dataLine = `${trendStr} · ${bestStr}${dropoff >= 3 ? ` · drop-off ${dropoff} rep` : ""}`;
+
     // 1) Dolore/fastidio → cautela (priorità massima)
-    if (pain) return goal(`Tieni leggero e cura la tecnica${rirStr}`, `Avevi segnato: «${noteSnip}». Se il fastidio resta, non caricare.`, "warn");
+    if (pain) return goal(`Tieni leggero e cura la tecnica${rirStr}`, `Avevi segnato: «${noteSnip}». Se il fastidio resta, non caricare.`, "warn", dataLine);
 
     // 1b) Pausa lunga su questo esercizio → rientro conservativo (tendini e
     // articolazioni recuperano più lente dei muscoli; i numeri tornano in fretta)
     if (gapDays >= 21) {
       return goal(`Riprendi leggero: scala il peso e fermati lontano dal cedimento`,
-        `Non fai questo esercizio da ${gapDays} giorni: riprendi confidenza oggi, i numeri tornano in fretta.`, "warn");
+        `Non fai questo esercizio da ${gapDays} giorni: riprendi confidenza oggi, i numeri tornano in fretta.`, "warn", dataLine);
     }
     if (gapDays >= 14) {
       return goal(
         isBW ? `Rifai le <b>${last.topReps}</b> rep dell'ultima volta, senza forzare` : `Rifai <b>${U.fmt(last.topKg)} kg</b> × <b>${last.topReps}</b>, senza forzare${rirStr}`,
-        `${gapDays} giorni di pausa su questo esercizio: oggi consolida, dalla prossima si rispinge.`, "hold");
+        `${gapDays} giorni di pausa su questo esercizio: oggi consolida, dalla prossima si rispinge.`, "hold", dataLine);
     }
 
-    // 2) Calo sostenuto (o calo + fatica generale) → recupera
-    if (sustainedDecline || (declined && this._systemicDown)) {
+    // 2) Trend in discesa confermato su più sedute (regressione ≤ -1,5%/seduta)
+    // o calo sostenuto/sistemico → back-off: -10% smaltisce la fatica e riparte
+    if ((m >= 3 && slopePct <= -1.5) || sustainedDecline || (declined && this._systemicDown)) {
       return goal(
-        isBW ? `Recupera: rifai <b>${last.topReps}</b> rep pulite` : `Recupera: torna a <b>${U.fmt(last.topKg)} kg</b> × <b>${last.topReps}</b> pulite${rirStr}`,
-        `Sei in calo rispetto alle sedute precedenti — riconsolida prima di rispingere.${sysAdd}`, "warn");
+        `Scarica oggi: riduci il carico di <b>~10%</b>${rirStr}`,
+        `Il 1RM stimato scende da più sedute: la fatica ha superato il recupero. Un back-off leggero oggi fa ripartire la progressione.${sysAdd}`, "warn", dataLine);
     }
 
     // 2b) Calo isolato (una sola seduta sotto) → riprenditi i numeri di prima,
@@ -887,51 +926,54 @@ const Session = {
     if (declined && prev) {
       return goal(
         isBW ? `Riprenditi le <b>${prev.topReps}</b> rep` : `Riprenditi <b>${U.fmt(prev.topKg)} kg</b> × <b>${prev.topReps}</b>${rirStr}`,
-        `La scorsa è andata sotto (${isBW ? last.topReps + " rep" : U.fmt(last.topKg) + "kg × " + last.topReps})${hard ? " e l'avevi sentita dura" : ""}: torna ai numeri della seduta prima, poi si riparte.`, "go");
+        `La scorsa è andata sotto (${isBW ? last.topReps + " rep" : U.fmt(last.topKg) + "kg × " + last.topReps})${hard ? " e l'avevi sentita dura" : ""}: torna ai numeri della seduta prima, poi si riparte.`, "go", dataLine);
     }
 
-    // 2c) Best set SOTTO il fondo del range → peso troppo alto per lavorare bene
+    // 2c) Best set SOTTO il fondo del range → carico troppo alto per il range
     if (!isBW && last.topReps < rrMin) {
-      return goal(`Scala un po' il peso · rientra in <b>${rrMin}–${rrMax}</b> rep${rirStr}`,
-        `La scorsa il best set era ${last.topReps} rep a ${U.fmt(last.topKg)}kg, sotto il range: con un carico più gestibile lavori meglio.`, "hold");
+      return goal(`Riduci il carico di <b>~5–10%</b> · rientra in <b>${rrMin}–${rrMax}</b> rep${rirStr}`,
+        `La scorsa il best set era ${last.topReps} rep a ${U.fmt(last.topKg)}kg, sotto il range: nel range lavori meglio e progredisci.`, "hold", dataLine);
     }
 
-    // 3) Stallo vero (≥3 sedute fermo, non al top)
-    if (stall >= 3 && !atTop) {
-      const trick = easy
-        ? "e l'avevi trovato facile: prova ad aumentare un filo il peso."
-        : "prova +1 rep con una micro-pausa (rest-pause), o accorcia un po' il recupero.";
+    // 3) Plateau OGGETTIVO: nessun nuovo best e1RM da ≥3 sedute e trend piatto
+    if (sinceBest >= 3 && !atTop && Math.abs(slopePct) < 1.5) {
+      const trick = dropoff >= 4
+        ? `le rep crollano di ${dropoff} tra la prima e l'ultima serie: allunga il recupero tra le serie (2–3 min) prima di cambiare altro.`
+        : easy
+          ? "l'avevi trovato facile: prova ad aumentare un filo il peso."
+          : "prova +1 rep con una micro-pausa (rest-pause), o un piccolo -5% per risalire con slancio.";
       return goal(
-        isBW ? `Fermo da ${stall} sedute — punta <b>${target}</b> rep` : `Fermo a <b>${U.fmt(last.topKg)} kg</b> da ${stall} sedute`,
-        `Sblocca lo stallo: ${trick}`, "hold");
+        isBW ? `Plateau da ${sinceBest} sedute — punta <b>${target}</b> rep` : `Plateau a <b>${U.fmt(last.topKg)} kg</b> da ${sinceBest} sedute`,
+        `Sblocca: ${trick}`, "hold", dataLine);
     }
 
-    // 4) TUTTE le serie al top del range → si sale di peso (doppia progressione)
+    // 4) TUTTE le serie al top del range → si sale di peso (doppia progressione,
+    // incremento ACSM: 2-10%, meno per i muscoli piccoli)
     if (allAtTop) {
-      const twice = prev && prev.topReps >= rrMax ? " per la 2ª seduta" : "";
+      const conf = twoForTwo ? " Regola 2-per-2 confermata (due sedute piene al top)." : "";
       return isBW
-        ? goal(`Punta <b>${last.topReps + 1}</b> rep`, `Tutte le serie al top del range${twice}: aggiungi rep o rendi più difficile.`, "go")
-        : goal(`Aumenta il peso · riparti da <b>${rrMin}</b> rep${rirStr}`, `Tutte le serie a ${rrMax} rep con ${U.fmt(last.topKg)}kg${twice}${easy ? ", e l'avevi sentito facile" : ""}: sei pronto a salire.`, "go");
+        ? goal(`Punta <b>${last.topReps + 1}</b> rep`, `Tutte le serie al top del range: aggiungi rep o rendi più difficile.${conf}`, "go", dataLine)
+        : goal(`Aumenta il carico di <b>~${incr}</b> · riparti da <b>${rrMin}</b> rep${rirStr}`, `Tutte le serie a ${rrMax} rep con ${U.fmt(last.topKg)}kg${easy ? ", sentite facili" : ""}: sei pronto a salire.${conf}`, "go", dataLine);
     }
 
-    // 4b) Solo il best set al top, le altre serie no → prima chiudi TUTTE le
-    // serie al top, POI si sale di peso (regola della doppia progressione)
+    // 4b) Solo il best set al top → prima chiudi TUTTE le serie al top, POI si sale
     if (atTop && setsArr.length > 1) {
       return isBW
-        ? goal(`Porta <b>tutte</b> le serie a <b>${rrMax}</b> rep`, `${atTopCount} serie su ${setsArr.length} al top: chiudile tutte, poi si aumenta.`, "go")
-        : goal(`Tieni <b>${U.fmt(last.topKg)} kg</b> · porta tutte le serie a <b>${rrMax}</b> rep${rirStr}`, `${atTopCount} serie su ${setsArr.length} già al top: chiudile tutte, poi si sale di peso.`, "go");
+        ? goal(`Porta <b>tutte</b> le serie a <b>${rrMax}</b> rep`, `${atTopCount} serie su ${setsArr.length} al top: chiudile tutte, poi si aumenta.`, "go", dataLine)
+        : goal(`Tieni <b>${U.fmt(last.topKg)} kg</b> · porta tutte le serie a <b>${rrMax}</b> rep${rirStr}`, `${atTopCount} serie su ${setsArr.length} già al top: chiudile tutte, poi si sale di peso.`, "go", dataLine);
     }
     if (atTop) {
       return isBW
-        ? goal(`Punta <b>${last.topReps + 1}</b> rep`, `Sei al top del range: aggiungi rep o rendi più difficile.`, "go")
-        : goal(`Aumenta il peso · riparti da <b>${rrMin}</b> rep${rirStr}`, `Hai chiuso ${rrMin}–${rrMax} a ${U.fmt(last.topKg)}kg${easy ? " e l'avevi sentito facile" : ""}.`, "go");
+        ? goal(`Punta <b>${last.topReps + 1}</b> rep`, `Sei al top del range: aggiungi rep o rendi più difficile.`, "go", dataLine)
+        : goal(`Aumenta il carico di <b>~${incr}</b> · riparti da <b>${rrMin}</b> rep${rirStr}`, `Hai chiuso ${rrMin}–${rrMax} a ${U.fmt(last.topKg)}kg${easy ? " e l'avevi sentito facile" : ""}.`, "go", dataLine);
     }
 
-    // 5) Sotto il top, in progressione → aggiungi 1 rep
-    const reason = improved ? "Stai salendo: continua la doppia progressione." : (hard ? "La scorsa era tosta: consolidala prima di caricare." : "+1 rep verso il top del range.");
+    // 5) Sotto il top, in progressione → aggiungi 1 rep (con nota sul drop-off)
+    const restNote = dropoff >= 4 ? ` Occhio: ${dropoff} rep perse tra la prima e l'ultima serie — allunga un po' il recupero.` : "";
+    const reason = improved ? `Stai salendo: continua la doppia progressione.${restNote}` : (hard ? `La scorsa era tosta: consolidala prima di caricare.${restNote}` : `+1 rep verso il top del range.${restNote}`);
     return isBW
-      ? goal(`Punta <b>${target}</b> rep`, reason, "go")
-      : goal(`Resta a <b>${U.fmt(last.topKg)} kg</b> · punta <b>${target}</b> rep${rirStr}`, reason, "go");
+      ? goal(`Punta <b>${target}</b> rep`, reason, "go", dataLine)
+      : goal(`Resta a <b>${U.fmt(last.topKg)} kg</b> · punta <b>${target}</b> rep${rirStr}`, reason, "go", dataLine);
   },
 
   // Comprime lo storico grezzo (una riga per serie) in sedute con top set e note

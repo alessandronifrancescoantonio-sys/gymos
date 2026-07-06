@@ -248,6 +248,11 @@ input { font-family:inherit; }
 .tg-main { font-size:14px; font-weight:500; color:var(--text); }
 .tg-main b { font-weight:700; }
 .tg-sub { font-size:11px; color:var(--dim); line-height:1.35; }
+/* Riga dati oggettivi dell'analisi (trend, best, drop-off) */
+.tg-data { display:inline-flex; align-items:center; gap:5px; margin-top:5px; font-family:'DM Mono',monospace;
+  font-size:9.5px; color:var(--muted); background:rgba(255,255,255,.04); border:1px solid var(--ink4);
+  border-radius:100px; padding:3px 9px; width:fit-content; }
+.tg-data i { font-size:11px; opacity:.8; }
 /* Volume settimanale per muscolo */
 #dash-volume .card-title { flex-wrap:nowrap; }
 .vol-prog { font-size:11px; font-weight:600; color:var(--accent); background:rgba(255,59,47,.1); border:1px solid rgba(255,59,47,.25); padding:2px 9px; border-radius:100px; margin-left:8px;
