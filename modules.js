@@ -491,9 +491,11 @@ const Volume = {
     this.renderEditor();
   },
 
-  // Volume settimanale pianificato dal programma attivo (ogni seduta 1×/settimana)
+  // Volume settimanale pianificato dal programma attivo (ogni seduta 1×/settimana).
+  // Separa DIRETTO (muscolo primario, 1 serie) da INDIRETTO (secondario, ½ serie).
   compute() {
-    const vol = {}; this.MUSCLES.forEach(m => vol[m] = 0);
+    const vol = {}, dir = {}, ind = {};
+    this.MUSCLES.forEach(m => { vol[m] = 0; dir[m] = 0; ind[m] = 0; });
     const exList = [];
     Object.values(CONFIG.SCHEDE || {}).forEach(sc => {
       (sc.exercises || []).forEach(it => {
@@ -501,10 +503,14 @@ const Volume = {
         if (!name) return;
         exList.push(name);
         const m = this.musclesFor(name);
-        Object.keys(m).forEach(mus => { if (vol[mus] == null) vol[mus] = 0; vol[mus] += sets * m[mus]; });
+        Object.keys(m).forEach(mus => {
+          if (vol[mus] == null) { vol[mus] = 0; dir[mus] = 0; ind[mus] = 0; }
+          vol[mus] += sets * m[mus];
+          if (m[mus] >= 1) dir[mus] += sets; else ind[mus] += sets * m[mus];
+        });
       });
     });
-    return { vol, exercises: [...new Set(exList)] };
+    return { vol, dir, ind, exercises: [...new Set(exList)] };
   },
 
   zone(v) { return v === 0 ? "none" : v < this.MEV ? "low" : v <= this.MAV_HI ? "ok" : "high"; },
@@ -522,7 +528,8 @@ const Volume = {
     const token = (this._actualToken = (this._actualToken || 0) + 1);
     const monday = this._weekStart();
     const wk = (sessions || []).filter(s => s.date && new Date(s.date) >= monday);
-    const actual = {}; this.MUSCLES.forEach(m => actual[m] = 0);
+    const actual = {}, aDir = {}, aInd = {};
+    this.MUSCLES.forEach(m => { actual[m] = 0; aDir[m] = 0; aInd[m] = 0; });
     let contributed = 0;
     for (const s of wk) {
       try {
@@ -534,12 +541,17 @@ const Volume = {
           any = true;
           const name = (row.name || "").split(" – ")[0];
           const m = this.musclesFor(name);
-          Object.keys(m).forEach(mus => { if (actual[mus] == null) actual[mus] = 0; actual[mus] += m[mus]; });
+          Object.keys(m).forEach(mus => {
+            if (actual[mus] == null) { actual[mus] = 0; aDir[mus] = 0; aInd[mus] = 0; }
+            actual[mus] += m[mus];
+            if (m[mus] >= 1) aDir[mus] += 1; else aInd[mus] += m[mus];
+          });
         });
         if (any) contributed++;
       } catch(e) { /* ignora la singola sessione non leggibile */ }
     }
     this._actual = actual;
+    this._actualDir = aDir; this._actualInd = aInd;
     this._actualCount = contributed;   // solo sessioni con almeno una serie fatta
     this.renderCard();
     const modal = document.getElementById("vol-modal");
@@ -558,15 +570,25 @@ const Volume = {
   },
   fmt(v) { return Number.isInteger(v) ? v : v.toFixed(1).replace(".", ","); },
 
-  // Una riga muscolo: mostra "fatto / previsto" se il fatto è disponibile
-  _muscleRow(m, planned) {
+  // Una riga muscolo: mostra "fatto / previsto" se il fatto è disponibile.
+  // Con split={dir,ind} aggiunge la scomposizione diretto/indiretto (½) sotto.
+  _muscleRow(m, planned, split) {
     const a = this._actual ? (this._actual[m] || 0) : null;
     const shown = a != null ? a : planned;
+    let detail = "";
+    if (split) {
+      detail = a != null
+        ? `<div class="vol-split">diretto <b>${this.fmt(this._actualDir[m] || 0)}</b>/${this.fmt(split.dir)} · indiretto <b>${this.fmt(this._actualInd[m] || 0)}</b>/${this.fmt(split.ind)} <span class="vol-frac">(½)</span></div>`
+        : `<div class="vol-split">diretto <b>${this.fmt(split.dir)}</b> · indiretto <b>${this.fmt(split.ind)}</b> <span class="vol-frac">(½)</span></div>`;
+    }
     return `
-      <div class="vol-row">
-        <span class="vol-name">${m}</span>
-        ${this.barHTML(planned, a)}
-        <span class="vol-val vz-${this.zone(shown)}">${this.fmt(shown)}${a != null ? `<span class="vol-plan">/${this.fmt(planned)}</span>` : ""}</span>
+      <div class="vol-rowwrap">
+        <div class="vol-row">
+          <span class="vol-name">${m}</span>
+          ${this.barHTML(planned, a)}
+          <span class="vol-val vz-${this.zone(shown)}">${this.fmt(shown)}${a != null ? `<span class="vol-plan">/${this.fmt(planned)}</span>` : ""}</span>
+        </div>
+        ${detail}
       </div>`;
   },
 
@@ -602,10 +624,10 @@ const Volume = {
   renderEditor() {
     const body = document.getElementById("vol-modal-body");
     if (!body) return;
-    const { vol, exercises } = this.compute();
+    const { vol, dir, ind, exercises } = this.compute();
     const total = Object.values(vol).reduce((a, b) => a + b, 0);
     const totalA = this._actual ? Object.values(this._actual).reduce((a, b) => a + b, 0) : null;
-    const bars = this.MUSCLES.map(m => this._muscleRow(m, vol[m])).join("");
+    const bars = this.MUSCLES.map(m => this._muscleRow(m, vol[m], { dir: dir[m], ind: ind[m] })).join("");
     const opts = ["—", ...this.MUSCLES];
     const exRows = exercises.map(ex => {
       const m = this.musclesFor(ex);
@@ -634,6 +656,7 @@ const Volume = {
         ? `Questa settimana: <b>${this.fmt(totalA)}</b> fatte su <b>${this.fmt(total)}</b> previste${this._actualCount ? ` · ${this._actualCount} ${this._actualCount === 1 ? "sessione" : "sessioni"}` : ""}`
         : `Totale: <b>${this.fmt(total)}</b> serie allenanti / settimana`}</div>
       <div class="vol-legend"><span><i class="vz-low">■</i> sotto 10</span><span><i class="vz-ok">■</i> 10–20 ottimale</span><span><i class="vz-high">■</i> oltre 20</span>${totalA != null ? `<span><i class="vol-mark-legend"></i> previste dal programma</span>` : ""}</div>
+      <div class="vol-note"><i class="ti ti-info-circle"></i> Ogni totale somma le serie <b>dirette</b> (muscolo primario, 1) e <b>indirette</b> (secondario, ½). La riga sotto ogni muscolo le mostra separate.</div>
       <div class="vol-list vol-list-full">${bars}</div>
       <div class="vol-sec-title"><i class="ti ti-body-scan"></i> Muscolo di ogni esercizio</div>
       <div class="vol-hint">Il muscolo primario conta 1 serie, i secondari ½ (conteggio frazionato). Correggi dove l'automatico sbaglia.</div>
