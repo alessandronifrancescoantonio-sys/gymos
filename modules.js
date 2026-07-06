@@ -628,27 +628,19 @@ const Volume = {
     const total = Object.values(vol).reduce((a, b) => a + b, 0);
     const totalA = this._actual ? Object.values(this._actual).reduce((a, b) => a + b, 0) : null;
     const bars = this.MUSCLES.map(m => this._muscleRow(m, vol[m], { dir: dir[m], ind: ind[m] })).join("");
-    const opts = ["—", ...this.MUSCLES];
-    const exRows = exercises.map(ex => {
-      const m = this.musclesFor(ex);
-      const primary = Object.keys(m).find(k => m[k] >= 1) || "—";
-      const sec = Object.keys(m).filter(k => m[k] < 1);
-      const isAuto = !this.loadOverrides()[ex];
-      const info = [];
-      if (sec.length) info.push("+ " + sec.join(", ") + " (½)");
-      if (primary === "—") info.push("da assegnare");
-      else if (isAuto) info.push("auto");
-      // Escapa apici e virgolette per l'attributo onchange (nomi con ' o ")
-      const exAttr = ex.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/"/g, "&quot;");
+    // Esercizi raggruppati per SEDUTA del programma attivo, in tendine
+    const sedute = Object.entries(CONFIG.SCHEDE || {}).map(([nome, sc]) => {
+      const exs = (sc.exercises || []).map(it => U.exName(it)).filter(Boolean);
+      const toFix = exs.filter(e => Object.keys(this.musclesFor(e)).length === 0).length;
+      const isOpen = this._openSeds && this._openSeds.has(nome);
       return `
-        <div class="vol-ex">
-          <div class="vol-ex-main">
-            <span class="vol-ex-name">${this._esc(ex)}</span>
-            <span class="vol-ex-sec">${info.join(" · ")}</span>
-          </div>
-          <select class="vol-ex-sel" onchange="Volume.setPrimary('${exAttr}', this.value)">
-            ${opts.map(o => `<option value="${o}"${o === primary ? " selected" : ""}>${o === "—" ? "Automatico" : o}</option>`).join("")}
-          </select>
+        <div class="vol-sed${isOpen ? " open" : ""}" data-sed="${String(nome).replace(/"/g, "&quot;")}">
+          <button class="vol-sed-hd" onclick="Volume.toggleSed(this)" style="border-left:3px solid ${sc.color || "var(--accent)"}">
+            <span class="vol-sed-name">${this._esc(nome)}</span>
+            <span class="vol-sed-count">${exs.length} eserc.${toFix ? ` · <span class="vz-low">${toFix} da assegnare</span>` : ""}</span>
+            <i class="ti ti-chevron-down vol-sed-chev"></i>
+          </button>
+          <div class="vol-sed-body">${exs.map(e => this._exRow(e)).join("")}</div>
         </div>`;
     }).join("");
     body.innerHTML = `
@@ -659,8 +651,40 @@ const Volume = {
       <div class="vol-note"><i class="ti ti-info-circle"></i> Ogni totale somma le serie <b>dirette</b> (muscolo primario, 1) e <b>indirette</b> (secondario, ½). La riga sotto ogni muscolo le mostra separate.</div>
       <div class="vol-list vol-list-full">${bars}</div>
       <div class="vol-sec-title"><i class="ti ti-body-scan"></i> Muscolo di ogni esercizio</div>
-      <div class="vol-hint">Il muscolo primario conta 1 serie, i secondari ½ (conteggio frazionato). Correggi dove l'automatico sbaglia.</div>
-      <div class="vol-ex-list">${exRows}</div>`;
+      <div class="vol-hint">Apri una seduta del programma e correggi il muscolo dove l'automatico sbaglia. Primario = 1 serie, secondari = ½.</div>
+      <div class="vol-sed-list">${sedute}</div>`;
+  },
+
+  _openSeds: null,
+  toggleSed(btn) {
+    const wrap = btn.parentElement;
+    if (!this._openSeds) this._openSeds = new Set();
+    if (wrap.classList.toggle("open")) this._openSeds.add(wrap.dataset.sed);
+    else this._openSeds.delete(wrap.dataset.sed);
+  },
+
+  // Riga singolo esercizio con selettore muscolo primario
+  _exRow(ex) {
+    const m = this.musclesFor(ex);
+    const primary = Object.keys(m).find(k => m[k] >= 1) || "—";
+    const sec = Object.keys(m).filter(k => m[k] < 1);
+    const isAuto = !this.loadOverrides()[ex];
+    const info = [];
+    if (sec.length) info.push("+ " + sec.join(", ") + " (½)");
+    if (primary === "—") info.push("da assegnare");
+    else if (isAuto) info.push("auto");
+    const exAttr = ex.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/"/g, "&quot;");
+    const opts = ["—", ...this.MUSCLES];
+    return `
+      <div class="vol-ex">
+        <div class="vol-ex-main">
+          <span class="vol-ex-name">${this._esc(ex)}</span>
+          <span class="vol-ex-sec">${info.join(" · ")}</span>
+        </div>
+        <select class="vol-ex-sel" onchange="Volume.setPrimary('${exAttr}', this.value)">
+          ${opts.map(o => `<option value="${o}"${o === primary ? " selected" : ""}>${o === "—" ? "Automatico" : o}</option>`).join("")}
+        </select>
+      </div>`;
   },
 
   _esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); },
