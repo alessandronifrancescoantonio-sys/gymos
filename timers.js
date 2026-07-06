@@ -151,7 +151,6 @@ const RestTimer = {
     this.interval = setInterval(() => {
       this.remaining = Math.max(0, Math.round((this.endAt - Date.now()) / 1000));
       this.updateDisplay();
-      this._mediaTick();
       if (Date.now() >= this.endAt) this.finish();
     }, 250);
   },
@@ -283,28 +282,44 @@ const RestTimer = {
     const m = Math.floor(this.remaining / 60), s = this.remaining % 60;
     return m > 0 ? `${m}:${s.toString().padStart(2, "0")}` : `${this.remaining}s`;
   },
-  _mediaStart() { this._lastMediaSec = null; this._mediaTick(true); },
+  _endClock() {
+    const e = new Date(this.endAt);
+    return `${e.getHours()}:${e.getMinutes().toString().padStart(2, "0")}:${e.getSeconds().toString().padStart(2, "0")}`;
+  },
+  _mediaStart() { this._mediaTick(true); },
+  // Notifica STATICA sul lock screen (non finge di ticchettare: mostra l'orario
+  // di fine) + programma l'avviso di FINE all'istante esatto, così scatta anche
+  // a telefono bloccato o app chiusa (Notification Triggers, dove supportato).
   _mediaTick(force) {
+    if (!force) return;   // niente aggiornamenti al secondo: si inchioderebbero da bloccato
     try {
       if (!("Notification" in window) || Notification.permission !== "granted") return;
-      if (!(navigator.serviceWorker && navigator.serviceWorker.ready)) return;
-      if (!force && this._lastMediaSec === this.remaining) return;
-      this._lastMediaSec = this.remaining;
-      const end = new Date(this.endAt);
-      const hh = end.getHours(), mm = end.getMinutes().toString().padStart(2, "0"), ss = end.getSeconds().toString().padStart(2, "0");
-      const opts = {
-        body: `Manca ${this._fmtRemain()} · finisce alle ${hh}:${mm}:${ss}`,
-        tag: "gymos-rest", renotify: false, silent: true, requireInteraction: true,
-        icon: "icon-192.png", badge: "icon-192.png",
-      };
-      navigator.serviceWorker.ready.then(reg => reg.showNotification("⏱️ Recupero in corso", opts)).catch(() => {});
+      if (!navigator.serviceWorker || !navigator.serviceWorker.ready) return;
+      navigator.serviceWorker.ready.then(reg => {
+        // 1) notifica "in corso" con l'orario di fine (statica, non lampeggia)
+        reg.showNotification("⏱️ Recupero in corso", {
+          body: `Finisce alle ${this._endClock()}`,
+          tag: "gymos-rest", renotify: false, silent: true, requireInteraction: true,
+          icon: "icon-192.png", badge: "icon-192.png",
+        }).catch(() => {});
+        // 2) avviso di FINE programmato all'istante esatto (anche ad app chiusa)
+        if ("showTrigger" in Notification.prototype && window.TimestampTrigger) {
+          try {
+            reg.showNotification("GymOS — Recupero finito! 💪", {
+              body: "Pronto per la prossima serie",
+              tag: "gymos-rest", renotify: true, requireInteraction: true,
+              vibrate: [300, 120, 300, 120, 500], icon: "icon-192.png", badge: "icon-192.png",
+              showTrigger: new TimestampTrigger(this.endAt),
+            }).catch(() => {});
+          } catch (e) {}
+        }
+      }).catch(() => {});
     } catch (e) {}
   },
   _mediaStop() {
     try {
-      this._lastMediaSec = null;
       if (navigator.serviceWorker && navigator.serviceWorker.ready) {
-        navigator.serviceWorker.ready.then(reg => reg.getNotifications({ tag: "gymos-rest" })
+        navigator.serviceWorker.ready.then(reg => reg.getNotifications({ tag: "gymos-rest", includeTriggered: true })
           .then(ns => ns.forEach(n => n.close()))).catch(() => {});
       }
     } catch (e) {}
