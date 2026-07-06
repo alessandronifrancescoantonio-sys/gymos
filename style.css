@@ -264,7 +264,8 @@ input { font-family:inherit; }
 .vol-mark-legend { display:inline-block; width:2px; height:11px; background:var(--text); border-radius:2px; vertical-align:middle; margin-right:4px; }
 .vol-val { font-family:'DM Mono',monospace; font-size:13px; font-weight:600; width:52px; text-align:right; flex-shrink:0; }
 .vol-plan { font-size:10px; color:var(--muted); font-weight:500; }
-.vz-none, .vol-fill.vz-none { color:var(--muted); background:var(--muted); }
+.vz-none { color:var(--muted); }
+.vol-fill.vz-none { background:var(--muted); }
 .vz-low  { color:#F59E0B; } .vol-fill.vz-low  { background:#F59E0B; }
 .vz-ok   { color:var(--green); } .vol-fill.vz-ok { background:var(--green); }
 .vz-high { color:#EF4444; } .vol-fill.vz-high { background:#EF4444; }
@@ -1291,3 +1292,150 @@ body::before, body::after { will-change:transform, opacity; }
 @media (prefers-reduced-motion:reduce) {
   .modal-box, .app-modal-box, .ex-block > .ex-body, .set-card > .set-body { animation:none !important; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DESIGN PRO — layer di raffinamento visivo (solo estetica, zero logica)
+   Superfici multilivello, ombre a doppia sorgente, gradienti di accento,
+   bordi luminosi, stati ricchi. Ordine dopo tutto, vince in cascata.
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root {
+  --acc-2:#FF6A3D;
+  --acc-grad:linear-gradient(135deg, #FF3B2F 0%, #FF6A3D 55%, #FF8A66 100%);
+  --surf-1:linear-gradient(180deg, #1A1A1F 0%, #141417 100%);
+  --surf-2:linear-gradient(180deg, #212127 0%, #1A1A20 100%);
+  --line-soft:rgba(255,255,255,.055);
+  --line-strong:rgba(255,255,255,.09);
+  --sh-card:0 1px 0 rgba(255,255,255,.04) inset, 0 2px 6px rgba(0,0,0,.35), 0 16px 40px -18px rgba(0,0,0,.7);
+  --sh-pop:0 1px 0 rgba(255,255,255,.06) inset, 0 8px 22px rgba(0,0,0,.5), 0 30px 70px -20px rgba(0,0,0,.8);
+  --glow-acc:0 6px 22px -6px rgba(255,59,47,.55);
+  --glow-green:0 6px 20px -8px rgba(39,209,127,.55);
+}
+
+/* Superfici: card come pannelli a doppio gradiente con riflesso in alto */
+.card, .stat-card, .semaforo-card, .sess-timer-bar, .sess-note-card,
+.modal-box, .app-modal-box, .summary-box, .sl-card {
+  background:var(--surf-1);
+  border-color:var(--line-soft);
+  box-shadow:var(--sh-card);
+}
+.card { position:relative; }
+.card::before, .stat-card::before {
+  content:""; position:absolute; top:0; left:14%; right:14%; height:1px; pointer-events:none;
+  background:linear-gradient(90deg, transparent, rgba(255,255,255,.12), transparent);
+}
+.stat-card { position:relative; overflow:hidden; }
+
+/* Rilievi interni piu chiari e bordati */
+.recent-sess-item, .sum-cell, .rec-tile, .vol-sed, .vol-ex, .habit-check,
+.prog-sess, .set-prev, .prev-use, .prev-none {
+  background:var(--surf-2);
+  border-color:var(--line-soft);
+}
+
+/* Bottone primario: gradiente + doppia ombra + lucentezza */
+.btn-primary, .sl-btn, .bn-save, .pu-act, .sess-save-desktop {
+  background:var(--acc-grad);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.25), inset 0 -1px 0 rgba(0,0,0,.2), var(--glow-acc);
+  text-shadow:0 1px 2px rgba(0,0,0,.25);
+}
+.btn-primary:hover { opacity:1; filter:brightness(1.08); }
+.btn-primary:active, .sl-btn:active, .bn-save:active { transform:scale(.97); filter:brightness(.95); }
+
+/* Eyebrow in gradiente */
+.eyebrow { background:var(--acc-grad); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+
+/* Icone dei titoli card con bagliore */
+.card-title i { color:var(--acc-2); filter:drop-shadow(0 0 6px rgba(255,90,47,.35)); }
+
+/* Semaforo recovery: alone verde nell'angolo */
+.semaforo-card { position:relative; overflow:hidden; }
+.semaforo-card::after {
+  content:""; position:absolute; right:-30px; top:-30px; width:120px; height:120px; border-radius:50%;
+  background:radial-gradient(circle, rgba(39,209,127,.18), transparent 70%); pointer-events:none;
+}
+.sem-icon { box-shadow:0 0 18px -4px rgba(39,209,127,.5); border-radius:50%; }
+
+/* Micro-interazioni su card cliccabili */
+.quick-link, .stat-clickable { transition:transform .15s var(--ease), box-shadow .2s, border-color .2s; }
+.quick-link:active, .stat-clickable:active { transform:translateY(1px) scale(.99); }
+.stat-newsess { background:linear-gradient(160deg, rgba(255,59,47,.16), rgba(255,59,47,.04) 60%), var(--surf-1); }
+.stat-newsess .stat-val { background:var(--acc-grad); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; filter:none; }
+
+/* Anello sessioni: alone */
+.ring-wrap { filter:drop-shadow(0 0 14px rgba(255,59,47,.25)); }
+
+/* Split settimanale: pip con profondita */
+.split-pip { box-shadow:inset 0 1px 0 rgba(255,255,255,.05), 0 2px 6px rgba(0,0,0,.35); border-radius:10px; }
+.split-pip.done { box-shadow:inset 0 1px 0 rgba(255,255,255,.08), 0 0 14px -3px rgba(39,209,127,.5); }
+
+/* Barre volume: gradiente e bagliore per zona */
+.vol-fill.vz-ok   { background:linear-gradient(90deg, #1FAE68, #2BE58C); box-shadow:0 0 10px -2px rgba(39,209,127,.6); }
+.vol-fill.vz-low  { background:linear-gradient(90deg, #D98E1B, #FFC14D); box-shadow:0 0 10px -2px rgba(245,166,35,.55); }
+.vol-fill.vz-high { background:linear-gradient(90deg, #D93636, #FF6B5E); box-shadow:0 0 10px -2px rgba(239,68,68,.55); }
+.vol-bar { box-shadow:inset 0 1px 3px rgba(0,0,0,.5); }
+
+/* Sessione: header con velo di accento, barra laterale luminosa */
+.sess-header { background:linear-gradient(180deg, rgba(255,59,47,.05), transparent 70%), var(--ink); }
+.sess-accent-bar { background:var(--acc-grad); box-shadow:0 0 12px -2px rgba(255,59,47,.6); }
+.sess-timer-bar.running { box-shadow:var(--sh-card), 0 0 22px -8px rgba(255,59,47,.5); }
+
+/* Esercizi e serie */
+.ex-block { box-shadow:var(--sh-card); border-color:var(--line-soft); }
+.ex-num { background:linear-gradient(160deg, rgba(255,59,47,.2), rgba(255,59,47,.06)); border:1px solid rgba(255,59,47,.25); }
+.set-done-btn { background:linear-gradient(135deg, #1FAE68, #2BE58C); box-shadow:inset 0 1px 0 rgba(255,255,255,.25), var(--glow-green); text-shadow:0 1px 2px rgba(0,0,0,.2); }
+.badge.b-up { background:linear-gradient(135deg, rgba(39,209,127,.22), rgba(39,209,127,.1)); border:1px solid rgba(39,209,127,.3); }
+.badge.b-dn { background:linear-gradient(135deg, rgba(239,68,68,.22), rgba(239,68,68,.1)); border:1px solid rgba(239,68,68,.3); }
+.pr-tag { background:linear-gradient(135deg, rgba(245,166,35,.3), rgba(245,166,35,.12)); box-shadow:0 0 10px -3px rgba(245,166,35,.6); }
+
+/* Obiettivo di oggi: anima luminosa per tono */
+.today-goal { box-shadow:inset 0 1px 0 rgba(255,255,255,.05), 0 4px 14px -6px rgba(255,59,47,.25); }
+.today-goal.tg-hold { box-shadow:inset 0 1px 0 rgba(255,255,255,.05), 0 4px 14px -6px rgba(59,130,246,.3); }
+.today-goal.tg-warn { box-shadow:inset 0 1px 0 rgba(255,255,255,.05), 0 4px 14px -6px rgba(245,166,35,.35); }
+
+/* Timer recupero */
+.rest-running { box-shadow:var(--sh-pop); }
+.rest-fab { background:var(--acc-grad); }
+
+/* Bottom nav: voce attiva a pillola rialzata */
+@media (max-width:760px) {
+  .bn-link.active {
+    background:linear-gradient(160deg, rgba(255,59,47,.22), rgba(255,59,47,.08));
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.07), 0 4px 12px -4px rgba(255,59,47,.4);
+    border:1px solid rgba(255,59,47,.22);
+  }
+  .bottom-nav { box-shadow:0 -8px 30px rgba(0,0,0,.5); }
+}
+
+/* Input: focus ring luminoso coerente */
+.field-inp:focus, .sess-select:focus, .vol-ex-sel:focus, .sess-note-input:focus,
+.note-inp:focus, #archive-q:focus, .app-modal-input:focus {
+  border-color:var(--acc-2);
+  box-shadow:0 0 0 3px rgba(255,90,47,.15), inset 0 1px 2px rgba(0,0,0,.3);
+  outline:none;
+}
+
+/* Tabelle: zebra + hover */
+.data-table thead th { color:var(--ghost); border-bottom:1px solid var(--line-strong); }
+.data-table tbody tr:nth-child(even) { background:rgba(255,255,255,.018); }
+.data-table tbody tr:hover { background:rgba(255,59,47,.05); }
+
+/* Pillole */
+.pill-btn { border-color:var(--line-soft); background:var(--surf-2); transition:all .15s; }
+.pill-btn.on { box-shadow:0 4px 14px -4px rgba(255,59,47,.45), inset 0 1px 0 rgba(255,255,255,.15); }
+
+/* Record: tile con icona in rilievo */
+.rec-ic { box-shadow:inset 0 1px 0 rgba(255,255,255,.06), 0 2px 8px rgba(0,0,0,.35); }
+
+/* Riepilogo fine allenamento: cornice gradiente */
+.summary-box { border:1px solid transparent;
+  background:linear-gradient(#161619, #161619) padding-box,
+             linear-gradient(160deg, rgba(255,59,47,.5), rgba(255,255,255,.06) 40%, rgba(255,59,47,.15)) border-box;
+  box-shadow:var(--sh-pop); }
+.sum-cell { box-shadow:inset 0 1px 0 rgba(255,255,255,.04); }
+.sum-pr-chip { box-shadow:0 0 12px -4px rgba(245,166,35,.5); }
+
+/* Modali grandi: cornice luminosa sottile */
+.vol-box, .archive-box { border:1px solid transparent;
+  background:linear-gradient(#161619, #161619) padding-box,
+             linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.03) 30%, rgba(255,59,47,.12)) border-box;
+  box-shadow:var(--sh-pop); }
