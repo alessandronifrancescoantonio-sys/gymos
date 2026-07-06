@@ -618,7 +618,7 @@ const Volume = {
       <div class="vol-foot">${foot} <button class="vol-more" onclick="Volume.openEditor()">vedi tutti →</button></div>`;
   },
 
-  openEditor() { document.getElementById("vol-modal").style.display = "flex"; this.renderEditor(); },
+  openEditor() { this._openSeds = new Set(); document.getElementById("vol-modal").style.display = "flex"; this.renderEditor(); },
   closeEditor(ev) { if (ev && ev.target !== ev.currentTarget) return; document.getElementById("vol-modal").style.display = "none"; },
 
   renderEditor() {
