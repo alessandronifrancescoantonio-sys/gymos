@@ -2,7 +2,7 @@
 // Online: prende SEMPRE la versione più fresca dei file (rivalida col server,
 // bypassando la cache HTTP del browser). La cache serve solo da fallback offline.
 // Le chiamate al Worker Notion (altra origine) NON passano da qui.
-const CACHE = "gymos-v26";
+const CACHE = "gymos-v27";
 
 self.addEventListener("install", () => self.skipWaiting());
 

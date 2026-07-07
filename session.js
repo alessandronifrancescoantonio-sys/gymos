@@ -838,7 +838,7 @@ const Session = {
     // "tira" non "tirata" (che è un esercizio). Meglio perdere un segnale che inventarlo.
     const pain = /(dolor|fastidi|infortun|pizzic|contrattur|strapp|tendinit|acciacc|infiamm)\w*|\bfitt[ae]\b|\bmale\b|\bmal\s+di\b|\btirone\b/.test(nl);
     const easy = /(facil|comod)\w*|\blegger[oa]\b|\bscaric\w*|troppo poco/.test(nl);
-    const hard = /(cediment|difficil|fallit|grind|tost)\w*|\bdur[ae]\b|\bmort[oa]\b|non ce la|al massimo|al limite/.test(nl);
+    const hard = /(cediment|difficil|duriss|pesant|faticos|soffert|sudat|fallit|grind|tost)\w*|\bdur[ae]\b|\bmort[oa]\b|non ce la|al massimo|al limite/.test(nl);
     const noteSnip = (() => {
       const t = (last.notes || []).join(" · ").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
       return t.length > 62 ? t.slice(0, 60) + "…" : t;
@@ -977,12 +977,34 @@ const Session = {
         : goal(`Aumenta il peso di <b>~${incr}</b> · riparti da <b>${rrMin}</b> rep${rirStr}`, `Hai chiuso ${rrMin}–${rrMax} a ${U.fmt(last.topKg)}kg${easy ? " e l'avevi sentito facile" : ""}.`, "go", dataLine);
     }
 
-    // 5) Sotto il top, in progressione → aggiungi 1 rep (con nota sul drop-off)
-    const restNote = dropoff >= 4 ? ` Perdi ${dropoff} rep tra la prima e l'ultima serie: riposa un po' di più tra le serie.` : "";
-    const reason = improved ? `Stai migliorando: aggiungi 1 rep.${restNote}` : (hard ? `La scorsa era dura: prima ripetila bene, poi si sale.${restNote}` : `+1 rep verso il massimo del range.${restNote}`);
-    return isBW
-      ? goal(`Punta <b>${target}</b> rep`, reason, "go", dataLine)
-      : goal(`Resta a <b>${U.fmt(last.topKg)} kg</b> · punta <b>${target}</b> rep${rirStr}`, reason, "go", dataLine);
+    // 5) Sotto il top → progressione. Non è obbligatorio salire ogni volta:
+    // dopo un aumento si CONSOLIDA, e ripetere gli stessi numeri puliti è già
+    // progresso (Nippard/Helms). Solo se le rep escono pulite si aggiunge.
+    const restNote   = dropoff >= 4 ? ` Perdi ${dropoff} rep tra la prima e l'ultima serie: riposa un po' di più tra le serie.` : "";
+    const weightUp   = prev && (last.topKg || 0) > (prev.topKg || 0);   // hai appena alzato il peso
+    const matched    = prev && !improved && !declined;                  // stessi numeri della scorsa
+
+    // 5a) Peso appena aumentato → consolidalo prima di spingere ancora
+    if (!isBW && weightUp) {
+      return goal(`Consolida i <b>${U.fmt(last.topKg)} kg</b>: rifai <b>${last.topReps}</b> rep pulite${rirStr}`,
+        `Hai appena alzato il peso e ha tenuto: prima rendilo solido, poi aggiungi rep. Se escono facili, prova +1.${restNote}`, "go", dataLine);
+    }
+    // 5b) Stessi numeri della scorsa → va bene, è comunque progresso.
+    //     Se la scorsa era DURA, l'obiettivo è rifarla più pulita, non aggiungere.
+    if (matched) {
+      if (hard) {
+        return isBW
+          ? goal(`Rifai <b>${last.topReps}</b> rep, più pulite`, `La scorsa era dura: puntala a rifarla meglio, non c'è fretta di aggiungere.${restNote}`, "go", dataLine)
+          : goal(`Rifai <b>${U.fmt(last.topKg)} kg × ${last.topReps}</b>, più pulite${rirStr}`, `L'avevi sentita dura: rifalla più controllata prima di salire, non c'è fretta.${restNote}`, "go", dataLine);
+      }
+      return isBW
+        ? goal(`Rifai <b>${last.topReps}</b> rep, o <b>+1</b> se pulite`, `Hai ripetuto i tuoi numeri: anche restare uguale con più controllo è progresso.${restNote}`, "go", dataLine)
+        : goal(`Rifai <b>${U.fmt(last.topKg)} kg × ${last.topReps}</b>, o <b>+1</b> rep se pulite${rirStr}`, `Hai ripetuto i numeri della scorsa: va bene, la costanza fa crescere. Se le senti pulite, aggiungi 1 rep.${restNote}`, "go", dataLine);
+    }
+    // 5c) In crescita / prima volta con storico → aggiungi 1 rep
+    const reason = improved ? `Stai migliorando: aggiungi 1 rep.${restNote}` : (hard ? `La scorsa era dura: prima falla pulita, poi si sale.${restNote}` : `+1 rep verso il massimo del range.${restNote}`);
+    const act    = hard && !isBW ? `Resta a <b>${U.fmt(last.topKg)} kg</b> · rifai <b>${last.topReps}</b> rep pulite${rirStr}` : (isBW ? `Punta <b>${target}</b> rep` : `Resta a <b>${U.fmt(last.topKg)} kg</b> · punta <b>${target}</b> rep${rirStr}`);
+    return goal(act, reason, "go", dataLine);
   },
 
   // Comprime lo storico grezzo (una riga per serie) in sedute con top set e note
