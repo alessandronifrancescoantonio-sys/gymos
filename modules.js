@@ -700,7 +700,7 @@ const Volume = {
 const ProgressPhotos = {
   DBN: "gymos-photos", STORE: "photos", _db: null,
   POSE: { front: "Fronte", side: "Lato", back: "Schiena" },
-  _filter: "all", _compare: false, _cmpA: null, _cmpB: null, _pending: null, _urls: [],
+  _filter: "all", _compare: false, _cmpA: null, _cmpB: null, _pending: null, _urls: [], _cardUrls: [],
 
   _open() {
     if (this._db) return Promise.resolve(this._db);
@@ -718,43 +718,73 @@ const ProgressPhotos = {
   },
   _put(rec) { return this._st("readwrite").then(st => new Promise((res, rej) => { const r = st.put(rec); r.onsuccess = () => res(); r.onerror = () => rej(r.error); })); },
   _del(id) { return this._st("readwrite").then(st => new Promise((res, rej) => { const r = st.delete(id); r.onsuccess = () => res(); r.onerror = () => rej(r.error); })); },
+  _get(id) { return this._st("readonly").then(st => new Promise((res, rej) => { const r = st.get(id); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); })); },
 
-  _url(blob) { const u = URL.createObjectURL(blob); this._urls.push(u); return u; },
-  _revoke() { this._urls.forEach(u => { try { URL.revokeObjectURL(u); } catch (e) {} }); this._urls = []; },
+  // Data LOCALE (YYYY-MM-DD): evita l'off-by-one del fuso orario di toISOString()
+  _localDate(d) { d = d || new Date(); const p = n => String(n).padStart(2, "0"); return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()); },
+  _url(blob, bucket) { const u = URL.createObjectURL(blob); (bucket === "card" ? this._cardUrls : this._urls).push(u); return u; },
+  _revoke(bucket) {
+    const arr = bucket === "card" ? this._cardUrls : this._urls;
+    arr.forEach(u => { try { URL.revokeObjectURL(u); } catch (e) {} });
+    if (bucket === "card") this._cardUrls = []; else this._urls = [];
+  },
 
-  // Ridimensiona (max 1280px lato lungo) e comprime in JPEG, rispettando l'EXIF
+  // Ridimensiona (max 1280px) e comprime in JPEG. Tripla via robusta perché
+  // una foto dal telefono si salvi SEMPRE: createImageBitmap → <img> → dataURL.
   async _process(file) {
-    let bmp;
-    try { bmp = await createImageBitmap(file, { imageOrientation: "from-image" }); }
-    catch (e) { bmp = await createImageBitmap(file); }
-    const max = 1280; let w = bmp.width, h = bmp.height;
-    const sc = Math.min(1, max / Math.max(w, h)); w = Math.round(w * sc); h = Math.round(h * sc);
+    let src = null, w0 = 0, h0 = 0;
+    try { src = await createImageBitmap(file, { imageOrientation: "from-image" }); w0 = src.width; h0 = src.height; }
+    catch (e) { try { src = await createImageBitmap(file); w0 = src.width; h0 = src.height; } catch (e2) { src = null; } }
+    if (!src) {
+      const dataUrl = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => rej(fr.error); fr.readAsDataURL(file); });
+      src = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error("img")); im.src = dataUrl; });
+      w0 = src.naturalWidth; h0 = src.naturalHeight;
+    }
+    const max = 1280, sc = Math.min(1, max / Math.max(w0, h0));
+    const w = Math.max(1, Math.round(w0 * sc)), h = Math.max(1, Math.round(h0 * sc));
     const cv = document.createElement("canvas"); cv.width = w; cv.height = h;
-    cv.getContext("2d").drawImage(bmp, 0, 0, w, h);
-    const blob = await new Promise(r => cv.toBlob(r, "image/jpeg", 0.85));
+    cv.getContext("2d").drawImage(src, 0, 0, w, h);
+    let blob = await new Promise(r => cv.toBlob(r, "image/jpeg", 0.85));
+    if (!blob) {   // fallback estremo: dataURL → Blob
+      const durl = cv.toDataURL("image/jpeg", 0.85), bin = atob(durl.split(",")[1]), arr = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      blob = new Blob([arr], { type: "image/jpeg" });
+    }
+    if (src && src.close) { try { src.close(); } catch (e) {} }
     return { blob, w, h };
   },
 
   pick(pose) { this._pending = pose; const inp = document.getElementById("photo-file"); if (inp) { inp.value = ""; inp.click(); } },
   async onFile(file) {
     if (!file) return;
+    if (!/^image\//.test(file.type || "")) { if (typeof U !== "undefined") U.toast("Serve un'immagine", "err"); return; }
+    const pose = this._pending || "front"; this._pending = null;
     try {
+      if (typeof U !== "undefined") U.toast("Carico la foto…", "info", 1200);
       const { blob, w, h } = await this._process(file);
-      const rec = { id: "p" + Date.now() + Math.floor(Math.random() * 1000), date: new Date().toISOString(), pose: this._pending || "front", blob, w, h };
+      const now = new Date();
+      const rec = { id: "p" + Date.now() + Math.floor(Math.random() * 1000), date: this._localDate(now), ts: now.getTime(), pose, blob, w, h };
       await this._put(rec);
+      const check = await this._get(rec.id);          // verifica reale della scrittura
+      if (!check || !check.blob) throw new Error("non salvata");
       if (typeof U !== "undefined") U.toast("Foto salvata 📸", "ok");
       this.renderCard();
-      if (document.getElementById("photos-overlay") && document.getElementById("photos-overlay").style.display === "flex") { this._revoke(); this.renderOverlay(); }
-    } catch (e) { console.error("photo add:", e); if (typeof U !== "undefined") U.toast("Foto non caricata", "err"); }
+      const ov = document.getElementById("photos-overlay");
+      if (ov && ov.style.display === "flex") this.renderOverlay();
+    } catch (e) { console.error("photo add:", e); if (typeof U !== "undefined") U.toast("Foto non caricata — riprova", "err"); }
   },
+
+  _ts(r) { return r.ts || (r.date ? new Date(r.date).getTime() : 0); },
+  _day(r) { return (r.date || "").split("T")[0]; },
 
   async renderCard() {
     const wrap = document.getElementById("photos-card"); if (!wrap) return;
+    this._revoke("card");
     const all = await this._all().catch(() => []);
     const latest = ["front", "side", "back"]
-      .map(p => all.filter(x => x.pose === p).sort((a, b) => a.date < b.date ? 1 : -1)[0]).filter(Boolean);
+      .map(p => all.filter(x => x.pose === p).sort((a, b) => this._ts(b) - this._ts(a))[0]).filter(Boolean);
     const thumbs = latest.length
-      ? latest.map(r => `<div class="ph-thumb"><img src="${this._url(r.blob)}" alt=""><span>${this.POSE[r.pose]}</span></div>`).join("")
+      ? latest.map(r => `<div class="ph-thumb"><img src="${this._url(r.blob, "card")}" alt=""><span>${this.POSE[r.pose]}</span></div>`).join("")
       : `<div class="ph-empty">Nessuna foto. Aggiungi la prima da una posa qui sotto 👇</div>`;
     wrap.innerHTML = `
       <div class="card-title"><i class="ti ti-camera"></i>Foto progressi ${all.length ? `<span class="ph-count">${all.length}</span>` : ""}
@@ -771,13 +801,14 @@ const ProgressPhotos = {
 
   openGallery() { const o = document.getElementById("photos-overlay"); if (!o) return; o.style.display = "flex"; this.renderOverlay(); },
   closeGallery(ev) { if (ev && ev.target !== ev.currentTarget) return; const o = document.getElementById("photos-overlay"); if (o) o.style.display = "none"; this._revoke(); this._compare = false; },
-  setFilter(k) { this._filter = k; this._revoke(); this.renderOverlay(); },
-  toggleCompare() { this._compare = !this._compare; if (this._compare && this._filter === "all") this._filter = "front"; this._revoke(); this.renderOverlay(); },
+  setFilter(k) { this._filter = k; this.renderOverlay(); },
+  toggleCompare() { this._compare = !this._compare; if (this._compare && this._filter === "all") this._filter = "front"; this.renderOverlay(); },
 
   async renderOverlay() {
     const tabsEl = document.getElementById("ph-tabs"), gal = document.getElementById("ph-gallery");
     if (!tabsEl || !gal) return;
-    const all = (await this._all().catch(() => [])).sort((a, b) => a.date < b.date ? 1 : -1);
+    this._revoke();
+    const all = (await this._all().catch(() => [])).sort((a, b) => this._ts(b) - this._ts(a));
     const poses = [["all", "Tutte"], ["front", "Fronte"], ["side", "Lato"], ["back", "Schiena"]];
     tabsEl.innerHTML = poses.map(([k, l]) => `<button class="ph-chip${this._filter === k ? " on" : ""}" onclick="ProgressPhotos.setFilter('${k}')">${l}</button>`).join("")
       + `<button class="ph-chip ph-cmp${this._compare ? " on" : ""}" onclick="ProgressPhotos.toggleCompare()"><i class="ti ti-arrows-diff"></i> Confronta</button>`;
@@ -785,7 +816,7 @@ const ProgressPhotos = {
     if (this._compare) { gal.innerHTML = this._compareHTML(list); return; }
     if (!list.length) { gal.innerHTML = `<div class="empty-state">Nessuna foto${this._filter !== "all" ? " per questa posa" : ""}.</div>`; return; }
     const groups = {};
-    list.forEach(r => { const d = r.date.split("T")[0]; (groups[d] = groups[d] || []).push(r); });
+    list.forEach(r => { const d = this._day(r); (groups[d] = groups[d] || []).push(r); });
     gal.innerHTML = Object.keys(groups).map(d => `
       <div class="ph-day">
         <div class="ph-day-h">${U.fmtDate(d)}</div>
@@ -799,11 +830,11 @@ const ProgressPhotos = {
 
   _compareHTML(list) {
     if (list.length < 2) return `<div class="empty-state">Servono almeno 2 foto${this._filter === "all" ? " — scegli una posa per un confronto pulito" : " di questa posa"}.</div>`;
-    const chron = [...list].sort((a, b) => a.date < b.date ? -1 : 1);
+    const chron = [...list].sort((a, b) => this._ts(a) - this._ts(b));
     if (!this._cmpA || !chron.find(x => x.id === this._cmpA)) this._cmpA = chron[0].id;
     if (!this._cmpB || !chron.find(x => x.id === this._cmpB)) this._cmpB = chron[chron.length - 1].id;
     const A = chron.find(x => x.id === this._cmpA), B = chron.find(x => x.id === this._cmpB);
-    const opt = sel => chron.map(r => `<option value="${r.id}"${r.id === sel ? " selected" : ""}>${U.fmtDate(r.date.split("T")[0])}</option>`).join("");
+    const opt = sel => chron.map(r => `<option value="${r.id}"${r.id === sel ? " selected" : ""}>${U.fmtDate(this._day(r))}</option>`).join("");
     const col = (ph, which, lbl) => `
       <div class="ph-cmp-col">
         <div class="ph-cmp-tag">${lbl}</div>
@@ -820,7 +851,7 @@ const ProgressPhotos = {
     const url = this._url(r.blob);
     v.innerHTML = `
       <div class="ph-viewer-bar">
-        <span>${U.fmtDate(r.date.split("T")[0])} · ${this.POSE[r.pose]}</span>
+        <span>${U.fmtDate(this._day(r))} · ${this.POSE[r.pose]}</span>
         <div class="ph-vbtns">
           <a class="ph-vbtn" href="${url}" download="gymos-${r.pose}-${r.date.split("T")[0]}.jpg" title="Scarica"><i class="ti ti-download"></i></a>
           <button class="ph-vbtn" onclick="ProgressPhotos.del('${r.id}', this)" title="Elimina"><i class="ti ti-trash"></i></button>
@@ -838,11 +869,12 @@ const ProgressPhotos = {
       return;
     }
     this._del(id).then(() => {
-      this.closeViewer(); this._revoke();
-      if (document.getElementById("photos-overlay").style.display === "flex") this.renderOverlay();
+      this.closeViewer();
+      const ov = document.getElementById("photos-overlay");
+      if (ov && ov.style.display === "flex") this.renderOverlay();
       this.renderCard();
       if (typeof U !== "undefined") U.toast("Foto eliminata", "ok");
-    });
+    }).catch(e => { console.error("photo del:", e); if (typeof U !== "undefined") U.toast("Eliminazione fallita", "err"); });
   },
 };
 
