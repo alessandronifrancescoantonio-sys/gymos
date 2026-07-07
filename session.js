@@ -913,20 +913,29 @@ const Session = {
         `${gapDays} giorni di pausa su questo esercizio: oggi ripeti, dalla prossima si spinge.`, "hold", dataLine);
     }
 
-    // 2) Trend in discesa confermato su più sedute (regressione ≤ -1,5%/seduta)
-    // o calo sostenuto/sistemico → back-off: -10% smaltisce la fatica e riparte
-    if ((m >= 3 && slopePct <= -1.5) || sustainedDecline || (declined && this._systemicDown)) {
+    // 2) Seduta leggera SOLO con fatica accumulata vera (filosofia Israetel/Helms:
+    // mai scaricare per una-due sedute storte). Serve: forza in discesa da ≥4
+    // sedute su QUESTO esercizio E anche gli altri esercizi in calo.
+    if (m >= 4 && slopePct <= -2 && this._systemicDown) {
       return goal(
         `Oggi vai più leggero: togli <b>~10%</b> di peso${rirStr}`,
-        `La tua forza sta calando da più sedute: sei stanco. Una seduta più leggera ti fa ripartire.${sysAdd}`, "warn", dataLine);
+        `La forza cala da settimane e non solo qui: è stanchezza accumulata. Una seduta leggera oggi, poi si riparte più forti.`, "warn", dataLine);
     }
 
-    // 2b) Calo isolato (una sola seduta sotto) → riprenditi i numeri di prima,
-    // non "+1 rep" sulla seduta storta: il riferimento è la seduta buona.
+    // 2a) Due sedute in calo su questo esercizio → NON tagliare il peso: ripeti
+    // i numeri della tua seduta migliore e sistema le basi (sonno, cibo, recuperi)
+    if (sustainedDecline) {
+      const best = stats[bestIdx];
+      return goal(
+        isBW ? `Riprova le <b>${best.topReps}</b> rep della tua migliore` : `Riprova <b>${U.fmt(best.topKg)} kg</b> × <b>${best.topReps}</b> (la tua migliore)${rirStr}`,
+        `Due sedute sotto tono su questo esercizio: prima di cambiare pesi, controlla sonno, cibo e riposo tra le serie — di solito basta quello.${sysAdd}`, "hold", dataLine);
+    }
+
+    // 2b) UNA seduta sotto → normale, capita a tutti: riprendi i numeri di prima
     if (declined && prev) {
       return goal(
         isBW ? `Riprenditi le <b>${prev.topReps}</b> rep` : `Riprenditi <b>${U.fmt(prev.topKg)} kg</b> × <b>${prev.topReps}</b>${rirStr}`,
-        `La scorsa è andata sotto (${isBW ? last.topReps + " rep" : U.fmt(last.topKg) + "kg × " + last.topReps})${hard ? " e l'avevi sentita dura" : ""}: torna ai numeri della seduta prima, poi si riparte.`, "go", dataLine);
+        `La scorsa è andata sotto (${isBW ? last.topReps + " rep" : U.fmt(last.topKg) + "kg × " + last.topReps})${hard ? " e l'avevi sentita dura" : ""}: una seduta storta capita a tutti, non cambia nulla. Torna ai tuoi numeri.`, "go", dataLine);
     }
 
     // 2c) Best set SOTTO il fondo del range → carico troppo alto per il range
