@@ -844,42 +844,47 @@ const Session = {
       return t.length > 62 ? t.slice(0, 60) + "…" : t;
     })();
 
-    const tol = Math.max(0.5, last.e1 * 0.02);
-    const improved = prev ? last.e1 > prev.e1 + tol : true;
-    const declined = prev ? last.e1 < prev.e1 - tol : false;
-    const sustainedDecline = declined && prev2 && prev.e1 <= prev2.e1 + tol;
+    // ── SCORE ANCORATO AL REP RANGE (fondamentale) ──
+    // Le rep OLTRE il top del range non contano di più: sono "peso troppo
+    // leggero". Cappiamo le rep a rrMax nel calcolo dell'1RM stimato, così
+    // 50kg×16 (range 8–10) vale come 50kg×10, e passare a 57kg×9 risulta una
+    // PROGRESSIONE (sei rientrato nel range con più peso), non un calo.
+    const capE1 = (kg, reps) => { const r = Math.min(reps || 0, rrMax); return (kg > 0) ? kg * (1 + r / 30) : r; };
+    const ce = g => capE1(g.topKg, g.topReps);
+    const lastE = ce(last), prevE = prev ? ce(prev) : 0, prev2E = prev2 ? ce(prev2) : 0;
+
+    const tol = Math.max(0.5, lastE * 0.02);
+    let improved = prev ? lastE > prevE + tol : true;
+    let declined = prev ? lastE < prevE - tol : false;
+    // Aumento di peso restando dentro il range (≥ fondo) = progressione, MAI calo.
+    const weightUp = prev && (last.topKg || 0) > (prev.topKg || 0);
+    if (weightUp && last.topReps >= rrMin) { improved = true; declined = false; }
+    const sustainedDecline = declined && prev2 && prevE <= prev2E + tol;
     const atTop = last.topReps >= rrMax;
     const target = Math.min(last.topReps + 1, rrMax);
     const sysAdd = this._systemicDown ? " Anche altri esercizi sono in calo: occhio a recupero, sonno e alimentazione." : "";
-    // Doppia progressione da manuale: si sale di peso quando TUTTE le serie
-    // chiudono il top del range, non solo la migliore.
+    // Doppia progressione: si sale di peso quando TUTTE le serie chiudono il top.
     const setsArr    = last.sets || [];
     const atTopCount = setsArr.filter(s => s.reps >= rrMax).length;
     const allAtTop   = setsArr.length > 0 && atTopCount === setsArr.length;
     const prevSetsArr = (prev && prev.sets) || [];
-    // Regola ACSM "2-for-2": top del range raggiunto per DUE sedute consecutive
     const twoForTwo  = allAtTop && prevSetsArr.length > 0 && prevSetsArr.every(s => s.reps >= rrMax);
-    // Giorni dall'ultima volta che hai fatto QUESTO esercizio (detraining)
     const gapDays = Math.round((Date.now() - new Date(last.date).getTime()) / 86400000);
 
-    // ── METRICHE OGGETTIVE (evidence-based) ──
-    // Trend e1RM: regressione lineare sulle ultime ≤5 sedute (%/seduta).
-    // Un punto solo non dice nulla: conta la direzione ripetuta.
+    // ── METRICHE OGGETTIVE: trend sull'1RM stimato CAPPATO al range ──
     const win = stats.slice(-5), m = win.length;
     let slopePct = 0;
     if (m >= 2) {
-      const xs = win.map((_, i) => i), ys = win.map(g => g.e1);
+      const xs = win.map((_, i) => i), ys = win.map(g => ce(g));
       const mx = xs.reduce((a, b) => a + b, 0) / m, my = ys.reduce((a, b) => a + b, 0) / m;
       let num = 0, den = 0;
       xs.forEach((x, i) => { num += (x - mx) * (ys[i] - my); den += (x - mx) * (x - mx); });
       const slope = den > 0 ? num / den : 0;
       slopePct = my > 0 ? Math.round(slope / my * 1000) / 10 : 0;
     }
-    // Plateau: sedute passate dalla MIGLIOR prestazione (e1RM), non solo "uguale a ieri"
-    // ">" stretto: a parità di e1RM il best resta la PRIMA seduta che l'ha fatto,
-    // così "fermo allo stesso valore da 4 sedute" conta davvero come plateau.
+    // Plateau: sedute dalla MIGLIOR prestazione (score cappato), ">" stretto.
     let bestIdx = 0;
-    stats.forEach((g, i) => { if (g.e1 > stats[bestIdx].e1) bestIdx = i; });
+    stats.forEach((g, i) => { if (ce(g) > ce(stats[bestIdx])) bestIdx = i; });
     const sinceBest = n - 1 - bestIdx;
     // Drop-off intra-seduta: crollo di rep tra la prima e l'ultima serie = fatica
     // dentro la sessione (recupero corto o carico alto sulle prime serie)
@@ -981,7 +986,6 @@ const Session = {
     // dopo un aumento si CONSOLIDA, e ripetere gli stessi numeri puliti è già
     // progresso (Nippard/Helms). Solo se le rep escono pulite si aggiunge.
     const restNote   = dropoff >= 4 ? ` Perdi ${dropoff} rep tra la prima e l'ultima serie: riposa un po' di più tra le serie.` : "";
-    const weightUp   = prev && (last.topKg || 0) > (prev.topKg || 0);   // hai appena alzato il peso
     const matched    = prev && !improved && !declined;                  // stessi numeri della scorsa
 
     // 5a) Peso appena aumentato → consolidalo prima di spingere ancora
