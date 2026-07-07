@@ -1298,6 +1298,51 @@ body::before, body::after { will-change:transform, opacity; }
   .modal-box, .app-modal-box, .ex-block > .ex-body, .set-card > .set-body { animation:none !important; }
 }
 
+/* ═══════════════ FOTO PROGRESSI ═══════════════ */
+.ph-count { font-family:'DM Mono',monospace; font-size:11px; color:var(--accent); background:rgba(255,59,47,.1); border:1px solid rgba(255,59,47,.25); padding:1px 8px; border-radius:100px; margin-left:2px; }
+.ph-latest { display:flex; gap:8px; margin-bottom:12px; }
+.ph-thumb { position:relative; flex:1; aspect-ratio:3/4; border-radius:10px; overflow:hidden; background:var(--ink3); border:1px solid var(--ink4); }
+.ph-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+.ph-thumb span { position:absolute; left:0; right:0; bottom:0; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#fff; text-align:center; padding:4px 0 3px; background:linear-gradient(transparent, rgba(0,0,0,.75)); }
+.ph-empty { flex:1; text-align:center; font-size:12px; color:var(--dim); padding:22px 10px; background:var(--ink3); border:1px dashed var(--ink4); border-radius:10px; }
+.ph-add-row { display:flex; gap:8px; }
+.ph-add { flex:1; display:inline-flex; align-items:center; justify-content:center; gap:5px; font-size:12px; font-weight:600; color:var(--text); background:var(--ink3); border:1px solid var(--ink4); border-radius:10px; padding:10px 6px; transition:all .15s; }
+.ph-add i { font-size:14px; color:var(--accent); }
+.ph-add:active { transform:scale(.97); border-color:var(--accent); }
+.ph-note { display:flex; align-items:center; gap:6px; font-size:10.5px; color:var(--muted); margin-top:10px; }
+.ph-note i { font-size:12px; }
+
+/* Overlay galleria */
+.photos-overlay { position:fixed; inset:0; z-index:545; background:rgba(0,0,0,.82); backdrop-filter:blur(6px); display:flex; align-items:center; justify-content:center; padding:14px; animation:fadeIn .2s ease; }
+.ph-box { width:100%; max-width:460px; max-height:90vh; display:flex; flex-direction:column; background:var(--ink2); border:1px solid var(--ink3); border-radius:var(--radius-lg); overflow:hidden; box-shadow:var(--sh-3); }
+.ph-head { display:flex; align-items:center; justify-content:space-between; padding:15px 18px; border-bottom:1px solid var(--ink3); }
+.ph-head-title { font-size:16px; font-weight:600; display:flex; align-items:center; gap:8px; }
+.ph-tabs { display:flex; gap:7px; padding:12px 16px 6px; overflow-x:auto; flex-shrink:0; }
+.ph-chip { flex-shrink:0; font-size:12px; font-weight:600; color:var(--dim); background:var(--ink3); border:1px solid var(--ink4); border-radius:100px; padding:6px 13px; }
+.ph-chip.on { background:rgba(255,59,47,.14); border-color:rgba(255,59,47,.4); color:var(--accent); }
+.ph-chip.ph-cmp { margin-left:auto; display:inline-flex; align-items:center; gap:4px; }
+.ph-chip.ph-cmp i { font-size:13px; }
+.ph-body { overflow-y:auto; padding:8px 16px calc(18px + env(safe-area-inset-bottom)); }
+.ph-day-h { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--dim); margin:12px 2px 8px; }
+.ph-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+.ph-cell { position:relative; aspect-ratio:3/4; border-radius:10px; overflow:hidden; background:var(--ink3); border:1px solid var(--ink4); }
+.ph-cell img { width:100%; height:100%; object-fit:cover; display:block; }
+.ph-cell:active { transform:scale(.98); }
+.ph-cell-pose { position:absolute; left:5px; bottom:5px; font-size:9px; font-weight:700; color:#fff; background:rgba(0,0,0,.55); border-radius:100px; padding:2px 7px; }
+.ph-compare { display:grid; grid-template-columns:1fr 1fr; gap:10px; padding-top:6px; }
+.ph-cmp-col { display:flex; flex-direction:column; gap:8px; }
+.ph-cmp-col > img { width:100%; aspect-ratio:3/4; object-fit:cover; border-radius:12px; border:1px solid var(--ink4); background:var(--ink3); }
+.ph-cmp-tag { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--accent); text-align:center; }
+.ph-cmp-sel { background:var(--ink3); border:1px solid var(--ink4); border-radius:8px; color:var(--text); font-size:12px; padding:7px; font-family:inherit; text-align:center; }
+
+/* Visore singola foto */
+.ph-viewer { position:fixed; inset:0; z-index:560; background:rgba(0,0,0,.94); display:flex; flex-direction:column; animation:fadeIn .15s ease; }
+.ph-viewer-bar { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:16px 18px calc(12px + env(safe-area-inset-top)); color:var(--text); font-size:13px; font-weight:600; }
+.ph-vbtns { display:flex; gap:8px; }
+.ph-vbtn { width:38px; height:38px; border-radius:10px; background:var(--ink3); border:1px solid var(--ink4); color:var(--text); display:inline-flex; align-items:center; justify-content:center; font-size:17px; }
+.ph-vbtn.armed { background:var(--red); border-color:var(--red); color:#fff; }
+.ph-viewer-img { flex:1; min-height:0; width:100%; object-fit:contain; padding:0 12px 24px; }
+
 /* ═══════════════════════════════════════════════════════════════════════════
    DESIGN PRO — layer di raffinamento visivo (solo estetica, zero logica)
    Superfici multilivello, ombre a doppia sorgente, gradienti di accento,

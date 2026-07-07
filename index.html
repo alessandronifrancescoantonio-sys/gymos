@@ -15,7 +15,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-<link rel="stylesheet" href="style.css?v=27">
+<link rel="stylesheet" href="style.css?v=28">
 </head>
 <body>
 
@@ -321,6 +321,9 @@
       <div class="chart-tooltip" id="misura-tt"></div>
     </div>
 
+    <!-- Foto progressi (solo sul dispositivo) -->
+    <div class="card" id="photos-card"></div>
+
     <!-- Check-in form -->
     <div class="card">
       <div class="card-title"><i class="ti ti-plus-circle" style="color:var(--accent)"></i>Nuovo check-in</div>
@@ -557,6 +560,19 @@
   </div>
 </div>
 
+<!-- FOTO PROGRESSI: galleria + confronto (solo su questo dispositivo) -->
+<input type="file" id="photo-file" accept="image/*" style="display:none" onchange="ProgressPhotos.onFile(this.files && this.files[0])">
+<div class="photos-overlay" id="photos-overlay" style="display:none" onclick="ProgressPhotos.closeGallery(event)">
+  <div class="ph-box">
+    <div class="ph-head">
+      <div class="ph-head-title"><i class="ti ti-camera"></i> Foto progressi</div>
+      <button class="archive-close" onclick="ProgressPhotos.closeGallery()" aria-label="Chiudi"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="ph-tabs" id="ph-tabs"></div>
+    <div class="ph-body" id="ph-gallery"></div>
+  </div>
+</div>
+
 <!-- VOLUME SETTIMANALE: dettaglio + editor muscoli -->
 <div class="vol-overlay" id="vol-modal" style="display:none" onclick="Volume.closeEditor(event)">
   <div class="vol-box">
@@ -624,12 +640,12 @@
   </div>
 </div>
 
-<script src="config.js?v=27"></script>
-<script src="api.js?v=27"></script>
-<script src="session.js?v=27"></script>
-<script src="modules.js?v=27"></script>
-<script src="timers.js?v=27"></script>
-<script src="app.js?v=27"></script>
+<script src="config.js?v=28"></script>
+<script src="api.js?v=28"></script>
+<script src="session.js?v=28"></script>
+<script src="modules.js?v=28"></script>
+<script src="timers.js?v=28"></script>
+<script src="app.js?v=28"></script>
 <script>
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(function(){});

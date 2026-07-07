@@ -243,6 +243,7 @@ const Body = {
     this.buildMisuraChart();
     this.buildFaseRow();
     this.buildHistTable();
+    if (typeof ProgressPhotos !== "undefined") ProgressPhotos.renderCard();
   },
 
   last()  { return this.checkins[this.checkins.length - 1] || {}; },
@@ -688,6 +689,161 @@ const Volume = {
   },
 
   _esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); },
+};
+
+// ═══════════════════════════════════════════════
+//  GymOS — Foto progressi (fisico/estetica)
+//  Salvate SOLO sul dispositivo (IndexedDB), private, offline. Pose fronte/
+//  lato/schiena, galleria per data, confronto prima/dopo. Immagini ridotte a
+//  max 1280px per risparmiare spazio.
+// ═══════════════════════════════════════════════
+const ProgressPhotos = {
+  DBN: "gymos-photos", STORE: "photos", _db: null,
+  POSE: { front: "Fronte", side: "Lato", back: "Schiena" },
+  _filter: "all", _compare: false, _cmpA: null, _cmpB: null, _pending: null, _urls: [],
+
+  _open() {
+    if (this._db) return Promise.resolve(this._db);
+    return new Promise((res, rej) => {
+      const r = indexedDB.open(this.DBN, 1);
+      r.onupgradeneeded = () => { const db = r.result; if (!db.objectStoreNames.contains(this.STORE)) db.createObjectStore(this.STORE, { keyPath: "id" }); };
+      r.onsuccess = () => { this._db = r.result; res(this._db); };
+      r.onerror = () => rej(r.error);
+    });
+  },
+  _st(mode) { return this._open().then(db => db.transaction(this.STORE, mode).objectStore(this.STORE)); },
+  async _all() {
+    const st = await this._st("readonly");
+    return new Promise((res, rej) => { const out = []; const c = st.openCursor(); c.onsuccess = e => { const cur = e.target.result; if (cur) { out.push(cur.value); cur.continue(); } else res(out); }; c.onerror = () => rej(c.error); });
+  },
+  _put(rec) { return this._st("readwrite").then(st => new Promise((res, rej) => { const r = st.put(rec); r.onsuccess = () => res(); r.onerror = () => rej(r.error); })); },
+  _del(id) { return this._st("readwrite").then(st => new Promise((res, rej) => { const r = st.delete(id); r.onsuccess = () => res(); r.onerror = () => rej(r.error); })); },
+
+  _url(blob) { const u = URL.createObjectURL(blob); this._urls.push(u); return u; },
+  _revoke() { this._urls.forEach(u => { try { URL.revokeObjectURL(u); } catch (e) {} }); this._urls = []; },
+
+  // Ridimensiona (max 1280px lato lungo) e comprime in JPEG, rispettando l'EXIF
+  async _process(file) {
+    let bmp;
+    try { bmp = await createImageBitmap(file, { imageOrientation: "from-image" }); }
+    catch (e) { bmp = await createImageBitmap(file); }
+    const max = 1280; let w = bmp.width, h = bmp.height;
+    const sc = Math.min(1, max / Math.max(w, h)); w = Math.round(w * sc); h = Math.round(h * sc);
+    const cv = document.createElement("canvas"); cv.width = w; cv.height = h;
+    cv.getContext("2d").drawImage(bmp, 0, 0, w, h);
+    const blob = await new Promise(r => cv.toBlob(r, "image/jpeg", 0.85));
+    return { blob, w, h };
+  },
+
+  pick(pose) { this._pending = pose; const inp = document.getElementById("photo-file"); if (inp) { inp.value = ""; inp.click(); } },
+  async onFile(file) {
+    if (!file) return;
+    try {
+      const { blob, w, h } = await this._process(file);
+      const rec = { id: "p" + Date.now() + Math.floor(Math.random() * 1000), date: new Date().toISOString(), pose: this._pending || "front", blob, w, h };
+      await this._put(rec);
+      if (typeof U !== "undefined") U.toast("Foto salvata 📸", "ok");
+      this.renderCard();
+      if (document.getElementById("photos-overlay") && document.getElementById("photos-overlay").style.display === "flex") { this._revoke(); this.renderOverlay(); }
+    } catch (e) { console.error("photo add:", e); if (typeof U !== "undefined") U.toast("Foto non caricata", "err"); }
+  },
+
+  async renderCard() {
+    const wrap = document.getElementById("photos-card"); if (!wrap) return;
+    const all = await this._all().catch(() => []);
+    const latest = ["front", "side", "back"]
+      .map(p => all.filter(x => x.pose === p).sort((a, b) => a.date < b.date ? 1 : -1)[0]).filter(Boolean);
+    const thumbs = latest.length
+      ? latest.map(r => `<div class="ph-thumb"><img src="${this._url(r.blob)}" alt=""><span>${this.POSE[r.pose]}</span></div>`).join("")
+      : `<div class="ph-empty">Nessuna foto. Aggiungi la prima da una posa qui sotto 👇</div>`;
+    wrap.innerHTML = `
+      <div class="card-title"><i class="ti ti-camera"></i>Foto progressi ${all.length ? `<span class="ph-count">${all.length}</span>` : ""}
+        <button class="vol-edit-btn" onclick="ProgressPhotos.openGallery()"><i class="ti ti-photo"></i> Galleria</button>
+      </div>
+      <div class="ph-latest">${thumbs}</div>
+      <div class="ph-add-row">
+        <button class="ph-add" onclick="ProgressPhotos.pick('front')"><i class="ti ti-plus"></i> Fronte</button>
+        <button class="ph-add" onclick="ProgressPhotos.pick('side')"><i class="ti ti-plus"></i> Lato</button>
+        <button class="ph-add" onclick="ProgressPhotos.pick('back')"><i class="ti ti-plus"></i> Schiena</button>
+      </div>
+      <div class="ph-note"><i class="ti ti-lock"></i> Le foto restano solo sul tuo telefono, private.</div>`;
+  },
+
+  openGallery() { const o = document.getElementById("photos-overlay"); if (!o) return; o.style.display = "flex"; this.renderOverlay(); },
+  closeGallery(ev) { if (ev && ev.target !== ev.currentTarget) return; const o = document.getElementById("photos-overlay"); if (o) o.style.display = "none"; this._revoke(); this._compare = false; },
+  setFilter(k) { this._filter = k; this._revoke(); this.renderOverlay(); },
+  toggleCompare() { this._compare = !this._compare; if (this._compare && this._filter === "all") this._filter = "front"; this._revoke(); this.renderOverlay(); },
+
+  async renderOverlay() {
+    const tabsEl = document.getElementById("ph-tabs"), gal = document.getElementById("ph-gallery");
+    if (!tabsEl || !gal) return;
+    const all = (await this._all().catch(() => [])).sort((a, b) => a.date < b.date ? 1 : -1);
+    const poses = [["all", "Tutte"], ["front", "Fronte"], ["side", "Lato"], ["back", "Schiena"]];
+    tabsEl.innerHTML = poses.map(([k, l]) => `<button class="ph-chip${this._filter === k ? " on" : ""}" onclick="ProgressPhotos.setFilter('${k}')">${l}</button>`).join("")
+      + `<button class="ph-chip ph-cmp${this._compare ? " on" : ""}" onclick="ProgressPhotos.toggleCompare()"><i class="ti ti-arrows-diff"></i> Confronta</button>`;
+    const list = this._filter === "all" ? all : all.filter(x => x.pose === this._filter);
+    if (this._compare) { gal.innerHTML = this._compareHTML(list); return; }
+    if (!list.length) { gal.innerHTML = `<div class="empty-state">Nessuna foto${this._filter !== "all" ? " per questa posa" : ""}.</div>`; return; }
+    const groups = {};
+    list.forEach(r => { const d = r.date.split("T")[0]; (groups[d] = groups[d] || []).push(r); });
+    gal.innerHTML = Object.keys(groups).map(d => `
+      <div class="ph-day">
+        <div class="ph-day-h">${U.fmtDate(d)}</div>
+        <div class="ph-grid">${groups[d].map(r => `
+          <button class="ph-cell" onclick="ProgressPhotos.view('${r.id}')">
+            <img src="${this._url(r.blob)}" alt="" loading="lazy">
+            <span class="ph-cell-pose">${this.POSE[r.pose]}</span>
+          </button>`).join("")}</div>
+      </div>`).join("");
+  },
+
+  _compareHTML(list) {
+    if (list.length < 2) return `<div class="empty-state">Servono almeno 2 foto${this._filter === "all" ? " — scegli una posa per un confronto pulito" : " di questa posa"}.</div>`;
+    const chron = [...list].sort((a, b) => a.date < b.date ? -1 : 1);
+    if (!this._cmpA || !chron.find(x => x.id === this._cmpA)) this._cmpA = chron[0].id;
+    if (!this._cmpB || !chron.find(x => x.id === this._cmpB)) this._cmpB = chron[chron.length - 1].id;
+    const A = chron.find(x => x.id === this._cmpA), B = chron.find(x => x.id === this._cmpB);
+    const opt = sel => chron.map(r => `<option value="${r.id}"${r.id === sel ? " selected" : ""}>${U.fmtDate(r.date.split("T")[0])}</option>`).join("");
+    const col = (ph, which, lbl) => `
+      <div class="ph-cmp-col">
+        <div class="ph-cmp-tag">${lbl}</div>
+        <img src="${this._url(ph.blob)}" alt="">
+        <select class="ph-cmp-sel" onchange="ProgressPhotos._cmp${which}=this.value;ProgressPhotos._revoke();ProgressPhotos.renderOverlay()">${opt(which === "A" ? this._cmpA : this._cmpB)}</select>
+      </div>`;
+    return `<div class="ph-compare">${col(A, "A", "Prima")}${col(B, "B", "Dopo")}</div>`;
+  },
+
+  async view(id) {
+    const all = await this._all(); const r = all.find(x => x.id === id); if (!r) return;
+    let v = document.getElementById("ph-viewer");
+    if (!v) { v = document.createElement("div"); v.id = "ph-viewer"; v.className = "ph-viewer"; document.body.appendChild(v); }
+    const url = this._url(r.blob);
+    v.innerHTML = `
+      <div class="ph-viewer-bar">
+        <span>${U.fmtDate(r.date.split("T")[0])} · ${this.POSE[r.pose]}</span>
+        <div class="ph-vbtns">
+          <a class="ph-vbtn" href="${url}" download="gymos-${r.pose}-${r.date.split("T")[0]}.jpg" title="Scarica"><i class="ti ti-download"></i></a>
+          <button class="ph-vbtn" onclick="ProgressPhotos.del('${r.id}', this)" title="Elimina"><i class="ti ti-trash"></i></button>
+          <button class="ph-vbtn" onclick="ProgressPhotos.closeViewer()" title="Chiudi"><i class="ti ti-x"></i></button>
+        </div>
+      </div>
+      <img class="ph-viewer-img" src="${url}" alt="">`;
+    v.style.display = "flex";
+  },
+  closeViewer() { const v = document.getElementById("ph-viewer"); if (v) v.style.display = "none"; },
+  del(id, btn) {
+    if (btn && btn.dataset.armed !== "1") {
+      btn.dataset.armed = "1"; btn.classList.add("armed"); btn.innerHTML = '<i class="ti ti-check"></i>';
+      setTimeout(() => { if (btn) { btn.dataset.armed = "0"; btn.classList.remove("armed"); btn.innerHTML = '<i class="ti ti-trash"></i>'; } }, 3000);
+      return;
+    }
+    this._del(id).then(() => {
+      this.closeViewer(); this._revoke();
+      if (document.getElementById("photos-overlay").style.display === "flex") this.renderOverlay();
+      this.renderCard();
+      if (typeof U !== "undefined") U.toast("Foto eliminata", "ok");
+    });
+  },
 };
 
 const Dashboard = {
