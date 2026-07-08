@@ -163,19 +163,21 @@ const Session = {
     // della scheda; toglie quelli rimossi dalla scheda solo se senza dati).
     if (sess.done === false) await this.reconcileWithScheda(sess).catch(console.error);
 
-    // Ordine: usa exOrder salvato per questa sessione, o quello di arrivo da Notion
+    // Ordine esercizi. Priorità:
+    //  1) ordine che TU hai dato a questa sessione (gymos_order_<id>);
+    //  2) altrimenti l'ordine FISSO della seduta del programma attivo → così ogni
+    //     nuova sessione parte identica alla scorsa corrispondente e le
+    //     progressioni non sono "casuali" per ordini diversi;
+    //  3) altrimenti l'ordine di arrivo da Notion.
     const grouped = this.groupByExercise(this.exercises);
     const keys = Object.keys(grouped);
-    // Mantieni ordine custom se compatibile, altrimenti usa quello di Notion
     const savedOrder = JSON.parse(localStorage.getItem(`gymos_order_${id}`) || "null");
-    if (savedOrder && savedOrder.length) {
-      // mantieni l'ordine salvato per gli esercizi ancora presenti, scarta quelli
-      // rimossi, e appendi quelli nuovi (es. aggiunti dalla scheda) in fondo
-      this.exOrder = savedOrder.filter(n => keys.includes(n))
-        .concat(keys.filter(k => !savedOrder.includes(k)));
-    } else {
-      this.exOrder = keys;
-    }
+    const scheda = (typeof CONFIG !== "undefined" && CONFIG.SCHEDE) ? CONFIG.SCHEDE[sess.name] : null;
+    const progOrder = scheda ? (scheda.exercises || []).map(it => U.exName(it)).filter(Boolean) : [];
+    const byOrder = ord => ord.filter(n => keys.includes(n)).concat(keys.filter(k => !ord.includes(k)));
+    if (savedOrder && savedOrder.length)      this.exOrder = byOrder(savedOrder);
+    else if (progOrder.length)                this.exOrder = byOrder(progOrder);
+    else                                      this.exOrder = keys;
 
     // Sessione precedente stesso tipo
     const sameType = this.sessions.filter(s => s.id !== id && s.type === sess.type);
@@ -833,7 +835,11 @@ const Session = {
     const n = stats.length;
     const last = stats[n - 1], prev = stats[n - 2] || null, prev2 = stats[n - 3] || null;
     const isBW = (last.topKg || 0) === 0;
-    const nl = (last.notes || []).join(" · ").toLowerCase();
+    // Note dell'esercizio + NOTA DELLA SESSIONE di quel giorno (entrambe pesano)
+    const nl = ((last.notes || []).join(" · ") + " · " + (last.sessNote || "")).toLowerCase();
+    // Intoppo segnalato la scorsa volta (macchinario occupato, poco tempo, ecc.)
+    const issue = /(occupat|poco tempo|di fretta|\bfretta\b|saltat|interrott|affollat|\bcoda\b|niente tempo|senza tempo|riscaldament|non riscaldat)/.test(nl);
+    const issueNote = issue ? " La scorsa c'era un intoppo (poco tempo/macchinario occupato): tienine conto." : "";
     // Confini di parola: "male" NON deve matchare "normale", "dura" non "durata",
     // "tira" non "tirata" (che è un esercizio). Meglio perdere un segnale che inventarlo.
     const pain = /(dolor|fastidi|infortun|pizzic|contrattur|strapp|tendinit|acciacc|infiamm)\w*|\bfitt[ae]\b|\bmale\b|\bmal\s+di\b|\btirone\b/.test(nl);
@@ -938,9 +944,10 @@ const Session = {
 
     // 2b) UNA seduta sotto → normale, capita a tutti: riprendi i numeri di prima
     if (declined && prev) {
+      const why = issue ? ` — c'era un intoppo (poco tempo/macchinario occupato), è normale` : (hard ? " e l'avevi sentita dura" : "");
       return goal(
         isBW ? `Riprenditi le <b>${prev.topReps}</b> rep` : `Riprenditi <b>${U.fmt(prev.topKg)} kg</b> × <b>${prev.topReps}</b>${rirStr}`,
-        `La scorsa è andata sotto (${isBW ? last.topReps + " rep" : U.fmt(last.topKg) + "kg × " + last.topReps})${hard ? " e l'avevi sentita dura" : ""}: una seduta storta capita a tutti, non cambia nulla. Torna ai tuoi numeri.`, "go", dataLine);
+        `La scorsa è andata sotto (${isBW ? last.topReps + " rep" : U.fmt(last.topKg) + "kg × " + last.topReps})${why}: una seduta storta capita a tutti. Torna ai tuoi numeri.`, "go", dataLine);
     }
 
     // 2c) Best set SOTTO il fondo del range → carico troppo alto per il range
@@ -1006,7 +1013,8 @@ const Session = {
         : goal(`Rifai <b>${U.fmt(last.topKg)} kg × ${last.topReps}</b>, o <b>+1</b> rep se pulite${rirStr}`, `Hai ripetuto i numeri della scorsa: va bene, la costanza fa crescere. Se le senti pulite, aggiungi 1 rep.${restNote}`, "go", dataLine);
     }
     // 5c) In crescita / prima volta con storico → aggiungi 1 rep
-    const reason = improved ? `Stai migliorando: aggiungi 1 rep.${restNote}` : (hard ? `La scorsa era dura: prima falla pulita, poi si sale.${restNote}` : `+1 rep verso il massimo del range.${restNote}`);
+    const improvedTxt = issue ? "Sei migliorato pure con un intoppo la scorsa: oggi che è liscio, aggiungi 1 rep." : "Stai migliorando: aggiungi 1 rep.";
+    const reason = improved ? `${improvedTxt}${restNote}` : (hard ? `La scorsa era dura: prima falla pulita, poi si sale.${restNote}` : `+1 rep verso il massimo del range.${restNote}`);
     const act    = hard && !isBW ? `Resta a <b>${U.fmt(last.topKg)} kg</b> · rifai <b>${last.topReps}</b> rep pulite${rirStr}` : (isBW ? `Punta <b>${target}</b> rep` : `Resta a <b>${U.fmt(last.topKg)} kg</b> · punta <b>${target}</b> rep${rirStr}`);
     return goal(act, reason, "go", dataLine);
   },
@@ -1055,13 +1063,23 @@ const Session = {
     this._exStats = {};
     const cur = this.sessions.find(s => s.id === this.activeId);
     const curDate = cur ? cur.date : null;
+    // Mappa data → nota della SESSIONE (stesso tipo dell'attuale): serve al motore
+    // per capire se una seduta storta/insolita aveva un problema segnalato.
+    const noteByDate = {};
+    (this.sessions || []).forEach(s => {
+      if (s.note && (!cur || s.type === cur.type) && s.date !== curDate)
+        noteByDate[s.date] = ((noteByDate[s.date] || "") + " · " + s.note).trim();
+    });
     for (const ex of (exNames || [])) {
       if (!ex) continue;
       try {
         const hist = await API.getExerciseHistory(ex);
         if (token !== this._intelToken) return;   // sessione cambiata: abbandona
         // stats SENZA la seduta di oggi (l'obiettivo si basa sul passato)
-        this._exStats[ex] = this._statsFromHistory(hist).filter(g => g.date !== curDate);
+        const st = this._statsFromHistory(hist).filter(g => g.date !== curDate);
+        // Attacca a ogni seduta la NOTA DI SESSIONE di quel giorno (stesso tipo)
+        st.forEach(g => { g.sessNote = noteByDate[g.date] || ""; });
+        this._exStats[ex] = st;
         if (!seeded.has(ex)) {
           const rec = store[ex] || { w: 0, e1rm: 0, repsAt: {} };
           if (!rec.repsAt) rec.repsAt = {};
