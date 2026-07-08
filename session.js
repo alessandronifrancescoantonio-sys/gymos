@@ -1115,6 +1115,35 @@ const Session = {
     });
   },
 
+  // Consiglio per QUESTA serie in base alla serie PRECEDENTE della stessa
+  // sessione (già fatta): aumenta / cala / mantieni per restare nel rep range.
+  _setHintHTML(exName, si, rrMin, rrMax) {
+    if (si <= 0) return "";
+    const sets = this.groupByExercise(this.exercises)[exName] || [];
+    const prev = sets[si - 1];
+    if (!prev || (prev.reps || 0) <= 0) return "";   // serie precedente non ancora fatta
+    const r = prev.reps, kg = prev.kg || 0, bw = kg === 0;
+    let cls, ic, txt;
+    if (r > rrMax) {
+      cls = "sh-up"; ic = "ti-arrow-up-right";
+      txt = bw ? `Serie facile (${r} rep): rendila più difficile` : `Serie leggera (${r} rep): <b>aumenta</b> un po' il peso`;
+    } else if (r < rrMin) {
+      cls = "sh-dn"; ic = "ti-arrow-down-right";
+      txt = bw ? `Poche rep (${r}): recupera un attimo di più` : `Serie pesante (${r} rep): <b>cala</b> un po' il peso`;
+    } else {
+      cls = "sh-ok"; ic = "ti-equal";
+      txt = bw ? `Bene: <b>mantieni</b>, punta ${r} rep` : `Bene: <b>mantieni</b> ${U.fmt(kg)}kg, punta ${r} rep`;
+    }
+    return `<i class="ti ${ic} ${cls}"></i><span>${txt}</span>`;
+  },
+  // Riaggiorna gli hint delle serie di un esercizio (dopo aver fatto una serie)
+  refreshSetHints(exName) {
+    if (this.viewMode || this.sessionDone) return;
+    const sets = this.groupByExercise(this.exercises)[exName] || [];
+    const rrMin = sets[0]?.rrMin || 8, rrMax = sets[0]?.rrMax || 12;
+    sets.forEach((s, i) => { const el = document.getElementById(`hint-${s.id}`); if (el) el.innerHTML = this._setHintHTML(exName, i, rrMin, rrMax); });
+  },
+
   buildSetRow(set, si, prevSet, exName, rrMin, rrMax, prevMax, total, expanded) {
     const done = !!((this._done && this._done.has(set.id)) || (this.sessionDone && (set.reps || 0) > 0));
     const row = document.createElement("div");
@@ -1163,6 +1192,7 @@ const Session = {
           </button>
         </div>
         ${prevRow}
+        <div class="set-hint" id="hint-${set.id}">${(!this.viewMode && !this.sessionDone) ? this._setHintHTML(exName, si, rrMin, rrMax) : ""}</div>
         <div class="stepper-row">
           <span class="stepper-lbl">Kg</span>
           <button class="adj" data-id="${set.id}" data-f="k" data-d="-2.5" data-ex="${exName}">−</button>
@@ -1708,6 +1738,7 @@ const Session = {
       ? '<i class="ti ti-rotate-2"></i> Annulla'
       : '<i class="ti ti-check"></i> Serie fatta';
     this.refreshExDone(exName);
+    this.refreshSetHints(exName);   // aggiorna i consigli delle serie successive
 
     if (nowDone) {
       if (navigator.vibrate) navigator.vibrate(20);
@@ -1825,6 +1856,7 @@ const Session = {
       this.getProgression(set, prevSet), set, exName, set.rrMin || 8, set.rrMax || 12, prevMax
     );
     this.updateStats();
+    this.refreshSetHints(exName);   // consigli serie successive in base a questa
     this.autosave(set);   // salvataggio automatico
   },
 
