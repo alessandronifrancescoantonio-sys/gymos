@@ -979,8 +979,11 @@ const Dashboard = {
     if (last) {
       document.getElementById("d-peso").textContent = U.fmt(last.peso) + " kg";
       if (checkins.length > 1) {
-        const d = Math.round((last.peso - checkins[checkins.length - 2].peso) * 10) / 10;
-        document.getElementById("d-peso-sub").textContent = (d > 0 ? "+" : "") + U.fmt(d) + " kg vs prec.";
+        const sub = document.getElementById("d-peso-sub");
+        if (sub) {
+          const d = Math.round((last.peso - checkins[checkins.length - 2].peso) * 10) / 10;
+          sub.textContent = (d > 0 ? "+" : "") + U.fmt(d) + " kg vs prec.";
+        }
       }
     } else {
       document.getElementById("d-peso").textContent = "—";
