@@ -213,6 +213,21 @@ const Session = {
     }
   },
 
+  // #3 — Rileva se l'esercizio si è spostato di posizione rispetto alla sessione
+  // precedente corrispondente (volontario o no, es. "macchinario occupato" ti fa
+  // scambiare due esercizi). Un esercizio spostato molto più avanti arriva con
+  // più fatica accumulata: il motore deve saperlo per non leggere un calo come
+  // vero calo di forza.
+  _orderShift(exName) {
+    const prevOrder = [];
+    (this.prevExercises || []).forEach(s => { const n = s.name.split(" – ")[0]; if (!prevOrder.includes(n)) prevOrder.push(n); });
+    const todayIdx = this.exOrder.indexOf(exName), prevIdx = prevOrder.indexOf(exName);
+    if (todayIdx < 0 || prevIdx < 0 || prevOrder.length < 2) return null;
+    const shift = todayIdx - prevIdx;
+    if (Math.abs(shift) < 2) return null;   // spostamenti minimi: irrilevanti
+    return { shift, laterThanUsual: shift > 0 };
+  },
+
   renderExercises() {
     const container = document.getElementById("exercises-container");
     container.innerHTML = "";
@@ -267,7 +282,7 @@ const Session = {
           <i class="ti ti-chevron-down ex-chevron"></i>
         </div>
         <div class="ex-body">
-          ${(!this.viewMode && !this.sessionDone) ? this.progressionGoalHTML(exName, prevSets, rrMin, rrMax, rir) : ""}
+          ${(!this.viewMode && !this.sessionDone) ? this.progressionGoalHTML(exName, prevSets, rrMin, rrMax, rir, this._orderShift(exName)) : ""}
           ${this.prevNotesHTML(prevSets)}
           <div id="sets-${sid}"></div>
           <div class="add-set-row">
@@ -797,7 +812,7 @@ const Session = {
   // ═══ SUGGERIMENTO DI PROGRESSIONE (doppia progressione) ═══════════════════
   // Prima aggiungi rep dentro il range; raggiunto il top del range, aumenti il
   // peso e riparti dal basso. Guarda la seduta precedente (prevSets).
-  progressionGoalHTML(exName, prevSets, rrMin, rrMax, rir) {
+  progressionGoalHTML(exName, prevSets, rrMin, rrMax, rir, orderShift) {
     const rirStr = (rir != null && rir !== "") ? ` a RIR ${rir}` : "";
     const goal = (main, sub, tone, data) => {
       const ic = tone === "warn" ? "ti-alert-triangle" : tone === "hold" ? "ti-refresh" : "ti-target";
@@ -840,6 +855,14 @@ const Session = {
     // Intoppo segnalato la scorsa volta (macchinario occupato, poco tempo, ecc.)
     const issue = /(occupat|poco tempo|di fretta|\bfretta\b|saltat|interrott|affollat|\bcoda\b|niente tempo|senza tempo|riscaldament|non riscaldat)/.test(nl);
     const issueNote = issue ? " La scorsa c'era un intoppo (poco tempo/macchinario occupato): tienine conto." : "";
+    // #3 — Esercizio spostato di posizione rispetto alla sessione scorsa: se ora
+    // arriva più tardi nella sessione, un calo può dipendere dalla fatica
+    // accumulata di prima, non dall'esercizio in sé.
+    const movedLater = orderShift && orderShift.laterThanUsual;
+    const movedEarlier = orderShift && !orderShift.laterThanUsual;
+    const shiftNote = movedLater
+      ? " Oggi lo fai più avanti nella sessione del solito: un po' di fatica in più è normale."
+      : (movedEarlier ? " Oggi lo fai prima del solito nella sessione: più fresco, meglio così." : "");
     // Confini di parola: "male" NON deve matchare "normale", "dura" non "durata",
     // "tira" non "tirata" (che è un esercizio). Meglio perdere un segnale che inventarlo.
     const pain = /(dolor|fastidi|infortun|pizzic|contrattur|strapp|tendinit|acciacc|infiamm)\w*|\bfitt[ae]\b|\bmale\b|\bmal\s+di\b|\btirone\b/.test(nl);
@@ -939,7 +962,7 @@ const Session = {
       const best = stats[bestIdx];
       return goal(
         isBW ? `Riprova le <b>${best.topReps}</b> rep della tua migliore` : `Riprova <b>${U.fmt(best.topKg)} kg</b> × <b>${best.topReps}</b> (la tua migliore)${rirStr}`,
-        `Due sedute sotto tono su questo esercizio: prima di cambiare pesi, controlla sonno, cibo e riposo tra le serie — di solito basta quello.${sysAdd}`, "hold", dataLine);
+        `Due sedute sotto tono su questo esercizio: prima di cambiare pesi, controlla sonno, cibo e riposo tra le serie — di solito basta quello.${sysAdd}${shiftNote}`, "hold", dataLine);
     }
 
     // 2b) UNA seduta sotto → normale, capita a tutti: riprendi i numeri di prima
@@ -947,7 +970,7 @@ const Session = {
       const why = issue ? ` — c'era un intoppo (poco tempo/macchinario occupato), è normale` : (hard ? " e l'avevi sentita dura" : "");
       return goal(
         isBW ? `Riprenditi le <b>${prev.topReps}</b> rep` : `Riprenditi <b>${U.fmt(prev.topKg)} kg</b> × <b>${prev.topReps}</b>${rirStr}`,
-        `La scorsa è andata sotto (${isBW ? last.topReps + " rep" : U.fmt(last.topKg) + "kg × " + last.topReps})${why}: una seduta storta capita a tutti. Torna ai tuoi numeri.`, "go", dataLine);
+        `La scorsa è andata sotto (${isBW ? last.topReps + " rep" : U.fmt(last.topKg) + "kg × " + last.topReps})${why}: una seduta storta capita a tutti. Torna ai tuoi numeri.${shiftNote}`, "go", dataLine);
     }
 
     // 2c) Best set SOTTO il fondo del range → carico troppo alto per il range
@@ -1111,7 +1134,7 @@ const Session = {
       if (!ex || !tg) return;  // in sola-visualizzazione il banner non c'è
       const sets = grouped[ex] || [];
       const rrMin = sets[0]?.rrMin || 8, rrMax = sets[0]?.rrMax || 12, rir = sets[0]?.rir ?? "";
-      tg.outerHTML = this.progressionGoalHTML(ex, prevG[ex] || [], rrMin, rrMax, rir);
+      tg.outerHTML = this.progressionGoalHTML(ex, prevG[ex] || [], rrMin, rrMax, rir, this._orderShift(ex));
     });
   },
 
