@@ -1525,6 +1525,18 @@ body::before, body::after { will-change:transform, opacity; }
              linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.03) 30%, rgba(255,59,47,.12)) border-box;
   box-shadow:var(--sh-pop); }
 
+/* #G — export PDF: pulsante archivio + dialog di configurazione */
+.archive-export { display:inline-flex; align-items:center; gap:6px; margin-left:auto; margin-right:8px;
+  font-size:12px; font-weight:700; color:var(--accent); background:rgba(255,59,47,.1);
+  border:1px solid rgba(255,59,47,.28); border-radius:100px; padding:6px 12px; cursor:pointer; }
+.archive-export i { font-size:15px; }
+.exp-box { width:100%; max-width:340px; display:flex; flex-direction:column; gap:6px; padding:18px; }
+.exp-title { display:flex; align-items:center; gap:8px; font-size:15px; font-weight:700; color:var(--text); margin-bottom:8px; }
+.exp-title i { color:var(--accent); }
+.exp-lbl { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:var(--dim); margin-top:8px; }
+.exp-actions { display:flex; gap:10px; margin-top:18px; }
+.exp-actions .btn-primary, .exp-actions .btn-secondary { flex:1; justify-content:center; }
+
 /* #F — nota per singolo esercizio (on-device, per sessione) */
 .ex-note-wrap { display:flex; align-items:flex-start; gap:8px; margin:2px 0 12px; padding:8px 11px;
   background:rgba(255,255,255,.03); border:1px solid var(--line-soft); border-radius:10px; }
