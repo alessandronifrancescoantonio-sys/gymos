@@ -846,6 +846,7 @@ const Session = {
   // pesanti; isolamento e macchine leggere non ne hanno bisogno.
   warmupRampHTML(exName, W) {
     try {
+      if (this._suppressWarmup) return "";   // oggi è scarico o dolore: niente rampa
       if (typeof Volume === "undefined" || !Volume.pattern) return "";
       const pat = Volume.pattern(exName);
       if (!["squat", "hinge", "push", "pull"].includes(pat)) return "";   // no isolamento
@@ -870,6 +871,10 @@ const Session = {
   },
 
   progressionGoalHTML(exName, prevSets, rrMin, rrMax, rir, orderShift, sameMuscle) {
+    // #5 — se oggi l'obiettivo è scarico o dolore, la rampa di riscaldamento
+    // (che punta all'ultimo peso di lavoro) va nascosta: contraddirebbe il "vai
+    // leggero". Il flag lo legge warmupRampHTML, chiamata subito dopo nel render.
+    this._suppressWarmup = false;
     const rirStr = (rir != null && rir !== "") ? ` a RIR ${rir}` : "";
     const goal = (main, sub, tone, data) => {
       const ic = tone === "warn" ? "ti-alert-triangle" : tone === "hold" ? "ti-refresh" : "ti-target";
@@ -1058,6 +1063,7 @@ const Session = {
     // resta SOTTO la soglia del dolore. Si ferma solo il dolore severo o che
     // persiste/aumenta da più sedute (segnale di sovraccarico reale).
     if (pain) {
+      this._suppressWarmup = true;   // #5 — niente rampa quando c'è dolore
       const trendNote = painEasing
         ? " Rispetto alle scorse volte il fastidio è meno: probabile buon adattamento, ma non forzare."
         : "";
@@ -1098,6 +1104,7 @@ const Session = {
     // letteratura (RCT) mostra che uno scarico anticipato può PEGGIORARE la
     // forza: meglio non suggerirlo mai troppo presto.
     if (m >= 4 && spanDays >= 14 && slopePct <= -2 && this._systemicDown && !acuteFatigue) {
+      this._suppressWarmup = true;   // #5 — niente rampa in giornata di scarico
       return goal(
         `Oggi vai più leggero: togli <b>~10%</b> di peso${rirStr}`,
         `La forza cala da settimane (${spanDays} giorni) e non solo qui: è stanchezza accumulata. Una seduta leggera oggi, poi si riparte più forti.`, "warn", dataLine);
