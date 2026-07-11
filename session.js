@@ -308,6 +308,7 @@ const Session = {
         </div>
         <div class="ex-body">
           ${(!this.viewMode && !this.sessionDone) ? this.progressionGoalHTML(exName, prevSets, rrMin, rrMax, rir, this._orderShift(exName), this._sameMuscleDirect(exName)) : ""}
+          ${(!this.viewMode && !this.sessionDone) ? this.warmupRampHTML(exName, prevMax) : ""}
           ${this.prevNotesHTML(prevSets)}
           <div id="sets-${sid}"></div>
           <div class="add-set-row">
@@ -837,6 +838,37 @@ const Session = {
   // ═══ SUGGERIMENTO DI PROGRESSIONE (doppia progressione) ═══════════════════
   // Prima aggiungi rep dentro il range; raggiunto il top del range, aumenti il
   // peso e riparti dal basso. Guarda la seduta precedente (prevSets).
+  // #5 PT scientifico — RAMPA di RISCALDAMENTO. Onestà scientifica: la
+  // potenziazione (PAP) ha effetto piccolo e riguarda la potenza ESPLOSIVA
+  // (salto/sprint), NON il tipico lavoro in palestra per forza/ipertrofia. La
+  // rampa serve ad arrivare al peso di lavoro in SICUREZZA e a tarare tecnica e
+  // sensazioni del giorno — non ad "aumentare la performance". Solo per compound
+  // pesanti; isolamento e macchine leggere non ne hanno bisogno.
+  warmupRampHTML(exName, W) {
+    try {
+      if (typeof Volume === "undefined" || !Volume.pattern) return "";
+      const pat = Volume.pattern(exName);
+      if (!["squat", "hinge", "push", "pull"].includes(pat)) return "";   // no isolamento
+      W = Math.round(W || 0);
+      if (W < 30) return "";   // troppo leggero / corpo libero: la rampa non serve
+      // Frazioni del peso di lavoro; più step quanto più è pesante il compound.
+      const plan = W >= 120 ? [[0.4, 5], [0.55, 4], [0.7, 3], [0.82, 2], [0.92, 1]]
+                 : W >= 80  ? [[0.4, 5], [0.6, 4], [0.75, 3], [0.88, 2]]
+                 :            [[0.5, 5], [0.7, 3], [0.85, 2]];
+      const round = kg => W >= 40 ? Math.round(kg / 2.5) * 2.5 : Math.round(kg);
+      const steps = plan.map(([f, reps]) => ({ kg: round(W * f), reps }))
+        .filter((s, i, a) => s.kg > 0 && (i === 0 || s.kg > a[i - 1].kg));  // niente step doppioni
+      if (!steps.length) return "";
+      const chips = steps.map(s => `<span class="wu-step"><b>${U.fmt(s.kg)}</b> kg × ${s.reps}</span>`).join("");
+      return `
+        <details class="warmup">
+          <summary><i class="ti ti-flame"></i> Riscaldamento <span class="wu-hint">arriva ai ${U.fmt(W)} kg in sicurezza</span></summary>
+          <div class="wu-steps">${chips}<span class="wu-work">→ poi il lavoro</span></div>
+          <div class="wu-note">Serve a scaldarti e a testare come ti senti oggi, non ad aumentare la forza. Recupera poco tra queste (30–60s).</div>
+        </details>`;
+    } catch (e) { return ""; }
+  },
+
   progressionGoalHTML(exName, prevSets, rrMin, rrMax, rir, orderShift, sameMuscle) {
     const rirStr = (rir != null && rir !== "") ? ` a RIR ${rir}` : "";
     const goal = (main, sub, tone, data) => {

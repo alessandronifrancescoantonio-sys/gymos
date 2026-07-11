@@ -1516,6 +1516,18 @@ body::before, body::after { will-change:transform, opacity; }
              linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.03) 30%, rgba(255,59,47,.12)) border-box;
   box-shadow:var(--sh-pop); }
 
+/* #5 PT scientifico — rampa di riscaldamento (collassabile, tono neutro) */
+.warmup { margin:2px 0 12px; border:1px solid var(--line-soft); border-radius:12px; background:rgba(255,255,255,.02); overflow:hidden; }
+.warmup > summary { display:flex; align-items:center; gap:8px; padding:9px 12px; cursor:pointer; font-size:12px; font-weight:600; color:var(--text); list-style:none; }
+.warmup > summary::-webkit-details-marker { display:none; }
+.warmup > summary > i { color:var(--amber); font-size:15px; }
+.wu-hint { font-size:11px; font-weight:400; color:var(--dim); margin-left:auto; }
+.wu-steps { display:flex; flex-wrap:wrap; gap:6px; padding:2px 12px 10px; align-items:center; }
+.wu-step { font-family:'DM Mono',monospace; font-size:11px; color:var(--text); background:rgba(255,255,255,.04); border:1px solid var(--line-soft); padding:3px 8px; border-radius:100px; }
+.wu-step b { color:var(--accent); }
+.wu-work { font-size:11px; font-weight:600; color:var(--accent); }
+.wu-note { padding:0 12px 10px; font-size:11px; color:var(--dim); line-height:1.4; }
+
 /* #6 PT scientifico — avviso energia disponibile (RED-S), tono ambra (cautela) */
 .energy-flag { display:flex; align-items:flex-start; gap:10px; margin-bottom:16px; padding:12px 14px;
   background:linear-gradient(180deg, rgba(245,166,35,.12), rgba(245,166,35,.03));
