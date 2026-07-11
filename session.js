@@ -933,6 +933,16 @@ const Session = {
 
     // ── METRICHE OGGETTIVE: trend sull'1RM stimato CAPPATO al range ──
     const win = stats.slice(-5), m = win.length;
+    // #1 SCARICO — arco di CALENDARIO coperto dalla finestra (non "N sedute").
+    // 4 sedute possono essere 4 giorni o 4 settimane: un calo va confermato nel
+    // TEMPO. Consenso ECSS/ACSM (Meeusen): un calo che rientra in GIORNI è
+    // Functional Overreaching (normale); il segnale vero (NFOR) dura SETTIMANE.
+    const spanDays = m >= 2 ? Math.round((new Date(win[m - 1].date) - new Date(win[0].date)) / 86400000) : 0;
+    // #1 SCARICO — falso positivo da fatica acuta: se lo STESSO muscolo è stato
+    // allenato a cedimento (<48h prima dell'ultima seduta), un calo è
+    // FISIOLOGICAMENTE ATTESO (recupero neuromuscolare fino a 48h) — non prova
+    // di stanchezza accumulata. Va escluso dal trigger di scarico.
+    const acuteFatigue = this._recentSameMuscleFatigue(exName, last.date);
     let slopePct = 0;
     if (m >= 2) {
       const xs = win.map((_, i) => i), ys = win.map(g => ce(g));
@@ -981,10 +991,16 @@ const Session = {
     // 2) Seduta leggera SOLO con fatica accumulata vera (filosofia Israetel/Helms:
     // mai scaricare per una-due sedute storte). Serve: forza in discesa da ≥4
     // sedute su QUESTO esercizio E anche gli altri esercizi in calo.
-    if (m >= 4 && slopePct <= -2 && this._systemicDown) {
+    // #1 SCARICO — reso ANCORA più conservativo: al segnale già forte (calo su
+    // ≥4 sedute su questo esercizio + sistemico) aggiungiamo che il calo deve
+    // durare ≥14 GIORNI di calendario (NFOR, non semplice fatica di giornata) e
+    // NON essere spiegato da un allenamento a cedimento nelle ultime 48h. La
+    // letteratura (RCT) mostra che uno scarico anticipato può PEGGIORARE la
+    // forza: meglio non suggerirlo mai troppo presto.
+    if (m >= 4 && spanDays >= 14 && slopePct <= -2 && this._systemicDown && !acuteFatigue) {
       return goal(
         `Oggi vai più leggero: togli <b>~10%</b> di peso${rirStr}`,
-        `La forza cala da settimane e non solo qui: è stanchezza accumulata. Una seduta leggera oggi, poi si riparte più forti.`, "warn", dataLine);
+        `La forza cala da settimane (${spanDays} giorni) e non solo qui: è stanchezza accumulata. Una seduta leggera oggi, poi si riparte più forti.`, "warn", dataLine);
     }
 
     // 2a) Due sedute in calo su questo esercizio → NON tagliare il peso: ripeti
@@ -1103,6 +1119,36 @@ const Session = {
       if (last.e1 < prev.e1 - tol) down++;
     });
     return withHist >= 3 && down / withHist >= 0.5;
+  },
+
+  // #1 SCARICO — falso positivo da fatica acuta. Cerca se lo STESSO muscolo
+  // primario di `exName` è stato allenato A CEDIMENTO (parole chiave nelle note)
+  // nelle 48 ore PRIMA di `beforeDate`. In tal caso un calo è recupero
+  // neuromuscolare atteso (fino a 48h dopo un lavoro vicino al cedimento),
+  // non stanchezza accumulata: NON deve far scattare il consiglio di scarico.
+  _recentSameMuscleFatigue(exName, beforeDate) {
+    try {
+      if (typeof Volume === "undefined" || !this._exStats) return false;
+      const primaryOf = ex => {
+        const mus = Volume.musclesFor(ex) || {};
+        return Object.keys(mus).find(k => mus[k] >= 1) || null;
+      };
+      const p = primaryOf(exName);
+      if (!p) return false;
+      const t0 = new Date(beforeDate).getTime();
+      // Solo cedimento reale (RIR 0-1): parole forti, per non escludere troppo.
+      const near = /(cediment|fallit|grind)\w*|non ce la|al massimo|al limite/;
+      for (const ex of Object.keys(this._exStats)) {
+        if (primaryOf(ex) !== p) continue;
+        for (const g of (this._exStats[ex] || [])) {
+          const dh = (t0 - new Date(g.date).getTime()) / 3600000; // ore prima
+          if (dh <= 0 || dh >= 48) continue;                      // finestra 0-48h
+          const txt = ((g.notes || []).join(" ") + " " + (g.sessNote || "")).toLowerCase();
+          if (near.test(txt)) return true;
+        }
+      }
+    } catch (e) {}
+    return false;
   },
 
   // Carica lo storico di ogni esercizio (in background): alimenta l'analisi degli
