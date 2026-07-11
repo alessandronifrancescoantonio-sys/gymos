@@ -238,12 +238,66 @@ const Body = {
 
   render() {
     this.buildStats();
+    this.buildEnergyFlag();
     this.buildPesoChart();
     this.buildMisureGrid();
     this.buildMisuraChart();
     this.buildFaseRow();
     this.buildHistTable();
     if (typeof ProgressPhotos !== "undefined") ProgressPhotos.renderCard();
+  },
+
+  // #6 PT scientifico — ENERGIA DISPONIBILE (RED-S). Se coincidono un calo di
+  // forza DIFFUSO (segnale persistito da Session, non un solo esercizio) e una
+  // perdita di peso RAPIDA (>~1%/settimana), avvisa: può essere troppo poca
+  // energia disponibile → calano forza, ormoni, recupero (consenso IOC 2023).
+  // NON calcola l'EA precisa (servirebbe un diario alimentare, fuori scope):
+  // cita il concetto e la soglia proteica evidence-based (Morton 2018: la
+  // curva si appiattisce a ~1,6 g/kg, tetto difendibile ~2,2 g/kg).
+  _energyFlag() {
+    try {
+      const sig = JSON.parse(localStorage.getItem("gymos_strength_signal") || "null");
+      if (!sig || !sig.down) return null;
+      // Segnale forza troppo vecchio (>28 gg) → non più affidabile
+      if (sig.ts && (Date.now() - sig.ts) > 28 * 86400000) return null;
+
+      const w = this.checkins.filter(c => c.peso != null && c.peso > 0);
+      if (w.length < 2) return null;
+      const last = w[w.length - 1];
+      const lastT = new Date(last.date).getTime();
+      // Riferimento: il check-in più vecchio in una finestra di 10-45 giorni
+      let ref = null;
+      for (const c of w) {
+        const dd = (lastT - new Date(c.date).getTime()) / 86400000;
+        if (dd >= 10 && dd <= 45) { ref = c; break; }
+      }
+      if (!ref) return null;
+      const days = (lastT - new Date(ref.date).getTime()) / 86400000;
+      const dKg  = Math.round((last.peso - ref.peso) * 10) / 10;
+      if (dKg >= 0 || days <= 0) return null;                 // non sta calando
+      const pctPerWeek = (dKg / ref.peso) * 100 / (days / 7);
+      if (pctPerWeek > -1.0) return null;                     // calo non "rapido"
+
+      const pMin = Math.round(last.peso * 1.6);
+      const pMax = Math.round(last.peso * 2.2);
+      return { dKg: Math.abs(dKg), days: Math.round(days), pMin, pMax,
+        rate: Math.abs(Math.round(pctPerWeek * 10) / 10) };
+    } catch (e) { return null; }
+  },
+
+  buildEnergyFlag() {
+    const el = document.getElementById("energy-flag");
+    if (!el) return;
+    const f = this._energyFlag();
+    if (!f) { el.innerHTML = ""; return; }
+    el.innerHTML = `
+      <div class="energy-flag">
+        <i class="ti ti-bolt"></i>
+        <div class="ef-txt">
+          <span class="ef-title">Occhio all'energia disponibile</span>
+          <span class="ef-body">La forza cala su più esercizi <b>e</b> il peso scende in fretta (−${U.fmt(f.dKg)} kg in ${f.days} giorni, ~${U.fmt(f.rate)}%/settimana). Un deficit troppo aggressivo (RED-S) fa calare forza, ormoni e recupero. Tieni le proteine alte — per te <b>~${f.pMin}–${f.pMax} g al giorno</b> — e valuta di rallentare il taglio.</span>
+        </div>
+      </div>`;
   },
 
   last()  { return this.checkins[this.checkins.length - 1] || {}; },

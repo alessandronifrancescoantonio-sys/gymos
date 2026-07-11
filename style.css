@@ -1515,3 +1515,13 @@ body::before, body::after { will-change:transform, opacity; }
   background:linear-gradient(#161619, #161619) padding-box,
              linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.03) 30%, rgba(255,59,47,.12)) border-box;
   box-shadow:var(--sh-pop); }
+
+/* #6 PT scientifico — avviso energia disponibile (RED-S), tono ambra (cautela) */
+.energy-flag { display:flex; align-items:flex-start; gap:10px; margin-bottom:16px; padding:12px 14px;
+  background:linear-gradient(180deg, rgba(245,166,35,.12), rgba(245,166,35,.03));
+  border:1px solid rgba(245,166,35,.28); border-radius:12px; }
+.energy-flag > i { font-size:19px; color:var(--amber); margin-top:1px; flex-shrink:0; }
+.ef-txt { display:flex; flex-direction:column; gap:3px; min-width:0; }
+.ef-title { font-size:12px; font-weight:700; letter-spacing:.02em; color:var(--amber); }
+.ef-body { font-size:12px; color:var(--dim); line-height:1.45; }
+.ef-body b { color:var(--text); font-weight:700; }

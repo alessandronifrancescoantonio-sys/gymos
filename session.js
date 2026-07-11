@@ -1197,6 +1197,17 @@ const Session = {
     this.prSaveStore();
     try { localStorage.setItem("gymos_pr_seeded", JSON.stringify([...seeded])); } catch(e){}
     this._systemicDown = this._computeSystemic(exNames);
+    // #6 PT scientifico — persisti il segnale di forza diffusa così la vista
+    // Misurazioni può incrociarlo col trend di peso (RED-S) anche a sessione
+    // chiusa. Salvo solo un booleano + la data della seduta (per la recency).
+    try {
+      const withHist = (exNames || []).filter(ex => (this._exStats[ex] || []).length >= 2).length;
+      if (withHist >= 3) {
+        localStorage.setItem("gymos_strength_signal", JSON.stringify({
+          down: !!this._systemicDown, date: curDate || null, ts: Date.now(),
+        }));
+      }
+    } catch (e) {}
     this.refreshBadges();
     this.refreshGoals();
   },
