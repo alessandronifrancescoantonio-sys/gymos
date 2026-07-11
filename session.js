@@ -30,6 +30,10 @@ const Session = {
   toggleViewMode() {
     this.viewMode = !this.viewMode;
     this.applyViewMode();
+    // Gli esercizi sono costruiti UNA volta con lo stato viewMode di allora
+    // (banner "Obiettivo di oggi", hint per-serie, chip "Usa" sono gated a
+    // render-time): senza ri-renderizzare restano nascosti anche sbloccando.
+    if (this.exercises && this.exercises.length) this.renderExercises();
     U.toast(this.viewMode ? "Sola visualizzazione — modifiche bloccate" : "Modifica attiva",
             this.viewMode ? "info" : "ok");
   },
@@ -184,6 +188,10 @@ const Session = {
     this.prevExercises = sameType.length > 0
       ? await API.getSessionExercises(sameType[0].id)
       : [];
+    // Ordine esercizi della sessione precedente (una volta sola per sessione,
+    // non ad ogni esercizio): usato da _orderShift per il #3.
+    this._prevOrder = [];
+    this.prevExercises.forEach(s => { const n = s.name.split(" – ")[0]; if (!this._prevOrder.includes(n)) this._prevOrder.push(n); });
 
     // Note della SESSIONE (intera): nota corrente + nota della precedente corrispondente
     this.renderSessionNote(sess, sameType[0]);
@@ -219,8 +227,7 @@ const Session = {
   // più fatica accumulata: il motore deve saperlo per non leggere un calo come
   // vero calo di forza.
   _orderShift(exName) {
-    const prevOrder = [];
-    (this.prevExercises || []).forEach(s => { const n = s.name.split(" – ")[0]; if (!prevOrder.includes(n)) prevOrder.push(n); });
+    const prevOrder = this._prevOrder || [];   // calcolato una volta in loadSession
     const todayIdx = this.exOrder.indexOf(exName), prevIdx = prevOrder.indexOf(exName);
     if (todayIdx < 0 || prevIdx < 0 || prevOrder.length < 2) return null;
     const shift = todayIdx - prevIdx;

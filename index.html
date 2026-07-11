@@ -15,7 +15,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-<link rel="stylesheet" href="style.css?v=35">
+<link rel="stylesheet" href="style.css?v=38">
 </head>
 <body>
 
@@ -112,7 +112,7 @@
         <div class="stat-card stat-clickable" onclick="App.navigate('body')">
           <div class="stat-label"><i class="ti ti-scale"></i>Peso attuale</div>
           <div class="stat-val" id="d-peso">—</div>
-          <div class="stat-sub">tocca per misurare <i class="ti ti-chevron-right" style="font-size:11px"></i></div>
+          <div class="stat-sub" id="d-peso-sub">tocca per misurare <i class="ti ti-chevron-right" style="font-size:11px"></i></div>
         </div>
         <div class="stat-card stat-clickable" onclick="App.navigate('diary')">
           <div class="stat-label"><i class="ti ti-moon"></i>Sonno medio</div>
@@ -640,12 +640,12 @@
   </div>
 </div>
 
-<script src="config.js?v=35"></script>
-<script src="api.js?v=35"></script>
-<script src="session.js?v=35"></script>
-<script src="modules.js?v=35"></script>
-<script src="timers.js?v=35"></script>
-<script src="app.js?v=35"></script>
+<script src="config.js?v=38"></script>
+<script src="api.js?v=38"></script>
+<script src="session.js?v=38"></script>
+<script src="modules.js?v=38"></script>
+<script src="timers.js?v=38"></script>
+<script src="app.js?v=38"></script>
 <script>
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(function(){});
