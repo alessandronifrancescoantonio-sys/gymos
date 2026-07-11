@@ -178,7 +178,7 @@ const Session = {
     const savedOrder = JSON.parse(localStorage.getItem(`gymos_order_${id}`) || "null");
     const scheda = (typeof CONFIG !== "undefined" && CONFIG.SCHEDE) ? CONFIG.SCHEDE[sess.name] : null;
     const progOrder = scheda ? (scheda.exercises || []).map(it => U.exName(it)).filter(Boolean) : [];
-    const byOrder = ord => ord.filter(n => keys.includes(n)).concat(keys.filter(k => !ord.includes(k)));
+    const byOrder = ord => { const on = ord.map(n => U.exBase(n)); return on.filter(n => keys.includes(n)).concat(keys.filter(k => !on.includes(k))); };
     if (savedOrder && savedOrder.length)      this.exOrder = byOrder(savedOrder);
     else if (progOrder.length)                this.exOrder = byOrder(progOrder);
     else                                      this.exOrder = keys;
@@ -191,7 +191,7 @@ const Session = {
     // Ordine esercizi della sessione precedente (una volta sola per sessione,
     // non ad ogni esercizio): usato da _orderShift per il #3.
     this._prevOrder = [];
-    this.prevExercises.forEach(s => { const n = s.name.split(" – ")[0]; if (!this._prevOrder.includes(n)) this._prevOrder.push(n); });
+    this.prevExercises.forEach(s => { const n = U.exBase(s.name); if (!this._prevOrder.includes(n)) this._prevOrder.push(n); });
 
     // Note della SESSIONE (intera): nota corrente + nota della precedente corrispondente
     this.renderSessionNote(sess, sameType[0]);
@@ -208,7 +208,7 @@ const Session = {
   groupByExercise(entries) {
     const map = {};
     entries.forEach(e => {
-      const name = e.name.split(" – ")[0] || e.name;
+      const name = U.exBase(e.name) || e.name;
       if (!map[name]) map[name] = [];
       map[name].push(e);
     });
@@ -1488,7 +1488,7 @@ const Session = {
 
     // Trova il page ID dell'esercizio in Esercizi Master
     const masterEntry = this.exercises.find(e =>
-      e.name.split(" – ")[0] === exName
+      U.exBase(e.name) === U.exBase(exName)
     );
 
     // Crea nuova entry in Notion
@@ -1512,7 +1512,7 @@ const Session = {
     // Aggiungi relazione esercizio se disponibile
     if (masterEntry) {
       // cerca l'ID dell'esercizio master dalla prima entry esistente
-      const firstEntry = this.exercises.find(e => e.name.split(" – ")[0] === exName);
+      const firstEntry = this.exercises.find(e => U.exBase(e.name) === U.exBase(exName));
       // Non possiamo ottenere l'ID master facilmente senza una query aggiuntiva
       // Omettiamo per ora — la relazione è opzionale per il funzionamento
     }
@@ -1650,7 +1650,7 @@ const Session = {
     this.setSyncState("saving");
     try {
       await Promise.all(sets.map(s => API.archivePage(s.id).catch(console.error)));
-      this.exercises = this.exercises.filter(e => e.name.split(" – ")[0] !== exName);
+      this.exercises = this.exercises.filter(e => U.exBase(e.name) !== U.exBase(exName));
       this.exOrder = this.exOrder.filter(n => n !== exName);
       this.saveOrder();
       this.renderExercises();
@@ -1771,7 +1771,7 @@ const Session = {
     });
     const archive = async name => {
       await Promise.all(grouped[name].map(s => API.archivePage(s.id).catch(() => {})));
-      this.exercises = this.exercises.filter(x => x.name.split(" – ")[0] !== name);
+      this.exercises = this.exercises.filter(x => U.exBase(x.name) !== U.exBase(name));
     };
     // Senza dati: rimuovi subito (recuperabili dal cestino Notion)
     for (const name of noData) await archive(name);
@@ -2234,9 +2234,9 @@ const Session = {
       if (s.reps > 0) prevVol += s.reps * (s.kg || 0);
     });
     this.exercises.forEach(s => {
-      const exName   = s.name.split(" – ")[0];
+      const exName   = U.exBase(s.name);
       const prevSets = prevG[exName] || [];
-      const si       = this.exercises.filter(e => e.name.split(" – ")[0] === exName).indexOf(s);
+      const si       = this.exercises.filter(e => U.exBase(e.name) === exName).indexOf(s);
       if (this.getProgression(s, prevSets[si] || null) === "up") ups++;
     });
     const d    = Math.round((vol - prevVol) * 10) / 10;
@@ -2262,7 +2262,7 @@ const Session = {
       set.note = note;
       // Una nota (dolore/facile/duro) è una situazione reale: l'hint della
       // serie successiva deve saperlo SUBITO, non solo dopo aver toccato kg/rep.
-      this.refreshSetHints(set.name.split(" – ")[0]);
+      this.refreshSetHints(U.exBase(set.name));
     }
     this.setSyncState("saving");
     try {
@@ -2324,14 +2324,14 @@ const Session = {
     this.exercises.forEach(s => { if (s.reps > 0) { vol += s.reps * (s.kg || 0); done++; } });
     this.prevExercises.forEach(s => { if (s.reps > 0) prevVol += s.reps * (s.kg || 0); });
     this.exercises.forEach(s => {
-      const exName = s.name.split(" – ")[0];
-      const si = this.exercises.filter(e => e.name.split(" – ")[0] === exName).indexOf(s);
+      const exName = U.exBase(s.name);
+      const si = this.exercises.filter(e => U.exBase(e.name) === exName).indexOf(s);
       if (this.getProgression(s, (prevG[exName] || [])[si] || null) === "up") ups++;
     });
     // Esercizi che hanno segnato un record in questa sessione
     const prExs = [...new Set(this.exercises
       .filter(s => this._prSets && this._prSets.has(s.id))
-      .map(s => s.name.split(" – ")[0]))];
+      .map(s => U.exBase(s.name)))];
     const sess = this.sessions.find(s => s.id === this.activeId);
     return { name: sess ? sess.name : "", mins, vol, prevVol, done, ups, prExs };
   },

@@ -663,7 +663,7 @@ const Volume = {
         ex.forEach(row => {
           if ((row.reps || 0) <= 0) return;
           any = true;
-          const name = (row.name || "").split(" – ")[0];
+          const name = U.exBase(row.name);
           const m = this.musclesFor(name);
           Object.keys(m).forEach(mus => {
             if (actual[mus] == null) { actual[mus] = 0; aDir[mus] = 0; aInd[mus] = 0; }

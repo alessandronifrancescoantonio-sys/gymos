@@ -195,11 +195,16 @@ const API = {
 
   // Storico di un esercizio specifico (per progression tracker)
   async getExerciseHistory(exerciseName) {
+    // Nome-base normalizzato (allineato a U.exBase): senza, un drift del nome
+    // (spazio finale/doppio) faceva fallire il match esatto e lo storico
+    // risultava vuoto → "mai fatto / trova un carico".
+    const norm = s => String(s == null ? "" : s).split(" – ")[0].trim().replace(/\s+/g, " ");
+    const target = norm(exerciseName);
     const pages = await this.query(
       CONFIG.DB.ESERCIZI_LOG,
       {
         property: CONFIG.PROPS.EL_NAME,
-        rich_text: { contains: exerciseName }
+        rich_text: { contains: target }
       },
       // Discendente: con il limite a 50 righe prendi le sedute più RECENTI
       // (ascendente prenderebbe le più vecchie e l'analisi resterebbe indietro).
@@ -217,8 +222,8 @@ const API = {
       note: this.read.rich_text(p, CONFIG.PROPS.EL_NOTE),
     })).filter(e => e.date)
       // "contains" di Notion è un match per sottostringa: "Leg Curl" pescherebbe
-      // anche "Leg Curl Seduto". Filtra sul nome esatto (prima parte del titolo).
-      .filter(e => (e.name || "").split(" – ")[0] === exerciseName);
+      // anche "Leg Curl Seduto". Filtra sul nome-base NORMALIZZATO (robusto al drift).
+      .filter(e => norm(e.name) === target);
   },
 
   // Body metrics (check-in corporei)

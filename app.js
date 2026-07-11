@@ -163,6 +163,12 @@ const U = {
   // Un esercizio di una scheda può essere una stringa (vecchio formato) o
   // un oggetto { nome, serie } (nuovo formato). Questi helper li normalizzano.
   exName: item => typeof item === "string" ? item : ((item && item.nome) || ""),
+  // Nome-base NORMALIZZATO di un esercizio: primo segmento del titolo log
+  // ("Nome – Sessione – S1" → "Nome") ripulito da spazi estremi/doppi. Serve a
+  // far combaciare storico e "volta scorsa" anche quando il nome ha un drift
+  // (spazio finale, doppio spazio): senza, il confronto per nome esatto falliva
+  // e un esercizio già fatto risultava "mai fatto".
+  exBase: t => String(t == null ? "" : t).split(" – ")[0].trim().replace(/\s+/g, " "),
   exSets: item => typeof item === "string" ? 1 : Math.max(1, (item && item.serie) || 1),
   exRest: item => (item && typeof item === "object" && item.recupero != null) ? item.recupero : null,
   exRir:  item => (item && typeof item === "object" && item.rir != null) ? item.rir : null,
