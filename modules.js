@@ -511,11 +511,15 @@ const Volume = {
     // Deltoidi posteriori PRIMA di "spalle" generico: niente tricipiti fantasma
     if (t(/rear|posterior|pec back|reverse|face pull/)) return { Spalle: 1 };
     if (t(/alz lat|laterali|lateral raise|alzate/)) return { Spalle: 1 };
-    if (t(/shoulder press|overhead press|military|lento avanti|arnold|spalle/)) return { Spalle: 1, Tricipiti: 0.5 };
+    // "distensioni sopra la testa / militari / lento" = spinte sopra la testa →
+    // SPALLE, da distinguere dalle "distensioni su panca/manubri" = PETTO sotto.
+    if (t(/shoulder press|overhead press|militar|lento avanti|lento dietro|arnold|spalle|distensioni.*(sopra|alto|testa|dietro)/)) return { Spalle: 1, Tricipiti: 0.5 };
     if (t(/row|pulley|rematore|low row|lat mach|pulldown|trazion|pull ?up|upper back|dorso/)) return { Dorso: 1, Bicipiti: 0.5 };
     // Croci/fly: il gomito non si estende → niente tricipiti
     if (t(/croci|fly|pec deck/)) return { Petto: 1, Spalle: 0.5 };
-    if (t(/pec|chest|panca|bench|dist |piegament|push ?up|press/)) return { Petto: 1, Spalle: 0.5, Tricipiti: 0.5 };
+    // "distensioni/distensione" (IT per le spinte) = petto di default (panca,
+    // manubri, inclinata); le varianti sopra la testa sono già andate a Spalle.
+    if (t(/pec|chest|panca|bench|dist |distension|piegament|push ?up|press/)) return { Petto: 1, Spalle: 0.5, Tricipiti: 0.5 };
     return {};   // sconosciuto → l'utente assegna a mano
   },
 
@@ -538,7 +542,7 @@ const Volume = {
     if (t(/alz lat|laterali|lateral raise|alzate|rear|posterior|reverse|face pull|croci|\bfly\b|pec deck/)) return "iso";
     if (t(/avambracc|wrist|polso|forearm/)) return "iso";
     if (t(/row|pulley|rematore|low row|lat mach|pulldown|trazion|pull ?up|upper back/)) return "pull";
-    if (t(/shoulder press|overhead press|military|lento|arnold|panca|bench|dist |piegament|push ?up|\bdip\b|press|chest/)) return "push";
+    if (t(/shoulder press|overhead press|military|lento|arnold|panca|bench|dist |distension|piegament|push ?up|\bdip\b|press|chest/)) return "push";
     return "";
   },
 
