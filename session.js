@@ -998,6 +998,24 @@ const Session = {
         if (["Petto", "Dorso", "Quadricipiti", "Femorali", "Glutei"].includes(primary)) incr = "5–10%";
       }
     } catch (e) {}
+    // #2 PT scientifico — ZONA dedotta dal REP-RANGE che l'utente GIÀ imposta
+    // (niente campo nuovo: il range esprime l'intento). L'unica distinzione che
+    // cambia davvero la programmazione è FORZA (pesante, poche reps, recupero
+    // lungo — specificità); ipertrofia (load-independent vicino al cedimento,
+    // Schoenfeld) e resistenza si sovrappongono, quindi NON fingo differenze.
+    const zone = rrMax <= 6 ? "forza" : (rrMin >= 15 ? "resist" : "ipertr");
+    const zoneNote = zone === "forza"
+      ? " Per la forza conta il carico e il recupero lungo (2–3 min tra le serie)."
+      : (zone === "resist"
+        ? " In questo range alto alleni anche l'ipertrofia, non solo la resistenza: si sovrappongono."
+        : "");
+    // Scetticismo RIR (meta-analisi: il RIR è sottostimato, e peggiora sopra le
+    // ~12 reps). Su serie ad alte reps un "facile / ne avevo in serbo" va preso
+    // con le pinze: la riserva reale è spesso minore di quella percepita.
+    const highRep = rrMax >= 15 || (last.topReps || 0) > 12;
+    const rirCaution = (highRep && easy)
+      ? " A rep alte è facile credere di avere più margine di quanto hai: aggiungi poco, o prima aggiungi qualche rep."
+      : "";
     // Riga dati oggettiva mostrata nel banner (trasparenza dell'analisi)
     const trendStr = m >= 3 ? `Forza ${slopePct > 0 ? "+" : ""}${String(slopePct).replace(".", ",")}% a seduta` : "Servono più sedute";
     const bestStr  = sinceBest === 0 ? "ultima = la migliore" : `migliore ${sinceBest} ${sinceBest === 1 ? "seduta" : "sedute"} fa`;
@@ -1085,7 +1103,7 @@ const Session = {
           : "prova +1 rep con una mini-pausa, oppure togli un 5% e risali.";
       return goal(
         isBW ? `Fermo da ${sinceBest} sedute — punta <b>${target}</b> rep` : `Fermo a <b>${U.fmt(last.topKg)} kg</b> da ${sinceBest} sedute`,
-        `Per sbloccarti: ${trick}`, "hold", dataLine);
+        `Per sbloccarti: ${trick}${rirCaution}`, "hold", dataLine);
     }
 
     // 4) TUTTE le serie al top del range → si sale di peso (doppia progressione,
@@ -1094,7 +1112,7 @@ const Session = {
       const conf = twoForTwo ? " Confermato per 2 sedute di fila." : "";
       return isBW
         ? goal(`Punta <b>${last.topReps + 1}</b> rep`, `Tutte le serie al massimo del range: aggiungi rep.${conf}`, "go", dataLine)
-        : goal(`Aumenta il peso di <b>~${incr}</b> · riparti da <b>${rrMin}</b> rep${rirStr}`, `Hai chiuso tutte le serie a ${rrMax} rep con ${U.fmt(last.topKg)}kg${easy ? ", e le hai sentite facili" : ""}: sei pronto a salire.${conf}`, "go", dataLine);
+        : goal(`Aumenta il peso di <b>~${incr}</b> · riparti da <b>${rrMin}</b> rep${rirStr}`, `Hai chiuso tutte le serie a ${rrMax} rep con ${U.fmt(last.topKg)}kg${easy ? ", e le hai sentite facili" : ""}: sei pronto a salire.${conf}${zoneNote}${rirCaution}`, "go", dataLine);
     }
 
     // 4b) Solo il best set al top → prima chiudi TUTTE le serie al top, POI si sale
@@ -1106,7 +1124,7 @@ const Session = {
     if (atTop) {
       return isBW
         ? goal(`Punta <b>${last.topReps + 1}</b> rep`, `Sei al massimo del range: aggiungi rep.`, "go", dataLine)
-        : goal(`Aumenta il peso di <b>~${incr}</b> · riparti da <b>${rrMin}</b> rep${rirStr}`, `Hai chiuso ${rrMin}–${rrMax} a ${U.fmt(last.topKg)}kg${easy ? " e l'avevi sentito facile" : ""}.`, "go", dataLine);
+        : goal(`Aumenta il peso di <b>~${incr}</b> · riparti da <b>${rrMin}</b> rep${rirStr}`, `Hai chiuso ${rrMin}–${rrMax} a ${U.fmt(last.topKg)}kg${easy ? " e l'avevi sentito facile" : ""}.${zoneNote}${rirCaution}`, "go", dataLine);
     }
 
     // 5) Sotto il top → progressione. Non è obbligatorio salire ogni volta:
