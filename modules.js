@@ -571,26 +571,40 @@ const Volume = {
   },
 
   _overrides: null,
+  // Chiave normalizzata: gli override del muscolo erano agganciati al nome
+  // ESATTO, quindi uno spazio finale, una rinomina o uno spelling diverso tra
+  // schede li orfanava (l'assegnazione "non si salvava"/"non si rifletteva").
+  // Normalizzando (trim + spazi interni singoli) la scelta manuale combacia
+  // col nome dell'esercizio ovunque venga usato (volume previsto E fatto).
+  _normKey(name) { return String(name == null ? "" : name).trim().replace(/\s+/g, " "); },
   loadOverrides() {
     if (!this._overrides) {
-      try { this._overrides = JSON.parse(localStorage.getItem("gymos_muscle_map") || "{}"); }
-      catch(e) { this._overrides = {}; }
+      let raw;
+      try { raw = JSON.parse(localStorage.getItem("gymos_muscle_map") || "{}"); } catch(e) { raw = {}; }
+      // Migrazione una-tantum: ri-chiava con la forma normalizzata così i
+      // vecchi override con spazi tornano a combaciare. In caso di collisione
+      // vince l'ultimo scritto.
+      const norm = {}; let changed = false;
+      Object.keys(raw).forEach(k => { const nk = this._normKey(k); if (nk !== k) changed = true; if (nk) norm[nk] = raw[k]; });
+      this._overrides = norm;
+      if (changed) this.saveOverrides();
     }
     return this._overrides;
   },
   saveOverrides() { try { localStorage.setItem("gymos_muscle_map", JSON.stringify(this._overrides || {})); } catch(e){} },
   musclesFor(name) {
-    const ov = this.loadOverrides()[name];
+    const ov = this.loadOverrides()[this._normKey(name)];
     if (ov) { const m = { [ov.p]: 1 }; (ov.s || []).forEach(x => { if (x !== ov.p) m[x] = 0.5; }); return m; }
     return this.classify(name);
   },
   setPrimary(name, muscle) {
     const ov = this.loadOverrides();
-    if (!muscle || muscle === "—") { delete ov[name]; }   // torna all'automatico
+    const key = this._normKey(name);
+    if (!muscle || muscle === "—") { delete ov[key]; }   // torna all'automatico
     else {
       const auto = this.classify(name);
       const sec = Object.keys(auto).filter(m => auto[m] < 1 && m !== muscle);
-      ov[name] = { p: muscle, s: sec };
+      ov[key] = { p: muscle, s: sec };
     }
     this.saveOverrides();
     this.renderCard();
@@ -774,7 +788,7 @@ const Volume = {
     const m = this.musclesFor(ex);
     const primary = Object.keys(m).find(k => m[k] >= 1) || "—";
     const sec = Object.keys(m).filter(k => m[k] < 1);
-    const isAuto = !this.loadOverrides()[ex];
+    const isAuto = !this.loadOverrides()[this._normKey(ex)];
     const info = [];
     if (sec.length) info.push("+ " + sec.join(", ") + " (½)");
     if (primary === "—") info.push("da assegnare");
