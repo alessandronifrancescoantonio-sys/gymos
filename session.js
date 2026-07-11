@@ -1984,6 +1984,10 @@ const Session = {
       if (field === "min") s.rrMin = parseInt(val) || 0;
       if (field === "max") s.rrMax = parseInt(val) || 0;
     });
+    // Il range appena cambiato è il nuovo bersaglio: aggiorna SUBITO il banner
+    // e gli hint delle serie, non solo dopo il salvataggio su Notion.
+    this.refreshGoals();
+    this.refreshSetHints(exName);
     // Salva il range su tutte le serie dell'esercizio
     if (sets[0]) {
       clearTimeout(this._saveTimers["rr_" + exName]);
@@ -2026,6 +2030,7 @@ const Session = {
     const sets = this.groupByExercise(this.exercises)[exName] || [];
     const v = (val === "" ? null : Number(val));
     sets.forEach(s => { s.rir = v; });
+    this.refreshGoals();   // il banner cita il RIR: aggiornalo subito
     if (sets[0]) {
       clearTimeout(this._saveTimers["rir_" + exName]);
       this._saveTimers["rir_" + exName] = setTimeout(async () => {
@@ -2073,7 +2078,12 @@ const Session = {
   async saveNote(id, note) {
     if (this.viewMode) return;
     const set = this.exercises.find(e => e.id === id);
-    if (set) set.note = note;
+    if (set) {
+      set.note = note;
+      // Una nota (dolore/facile/duro) è una situazione reale: l'hint della
+      // serie successiva deve saperlo SUBITO, non solo dopo aver toccato kg/rep.
+      this.refreshSetHints(set.name.split(" – ")[0]);
+    }
     this.setSyncState("saving");
     try {
       await API.update(id, { [CONFIG.PROPS.EL_NOTE]: API.prop.rich_text(note) });
