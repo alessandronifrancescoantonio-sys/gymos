@@ -2383,6 +2383,31 @@ const Session = {
     document.getElementById("workout-summary").style.display = "none";
   },
 
+  // #D — Conferma prima di concludere: il tasto Salva marca l'allenamento come
+  // FATTO (irreversibile a colpo d'occhio), e capitava di premerlo per sbaglio
+  // salvando una sessione non finita. Mostra quante serie mancano.
+  async confirmAndSave() {
+    if (this.viewMode) { U.toast("Sei in sola visualizzazione — sblocca per salvare", "info"); return; }
+    const grouped = this.groupByExercise(this.exercises);
+    const exNames = Object.keys(grouped);
+    const totalEx  = exNames.length;
+    const doneEx   = exNames.filter(n => (grouped[n] || []).some(s => (s.reps || 0) > 0)).length;
+    const totalSets = this.exercises.length;
+    const doneSets  = this.exercises.filter(s => (s.reps || 0) > 0).length;
+    const allDone   = totalSets > 0 && doneSets === totalSets;
+    let msg;
+    if (doneSets === 0) {
+      msg = "Non hai ancora registrato nessuna serie. Vuoi davvero concludere e salvare l'allenamento?";
+    } else if (!allDone) {
+      const miss = totalSets - doneSets;
+      msg = `Hai fatto ${doneEx}/${totalEx} esercizi (${doneSets}/${totalSets} serie): ${miss} ${miss === 1 ? "serie manca" : "serie mancano"} ancora. Concludere e salvare comunque?`;
+    } else {
+      msg = `Tutto completato: ${doneEx}/${totalEx} esercizi, ${doneSets} serie. Concludere e salvare l'allenamento?`;
+    }
+    const ok = await U.confirm(msg, { title: "Concludere l'allenamento?", okText: "Sì, salva", danger: !allDone });
+    if (ok) this.saveSession();
+  },
+
   async saveSession() {
     if (this.viewMode) { U.toast("Sei in sola visualizzazione — sblocca per salvare", "info"); return; }
     // I veri bottoni Salva (desktop + barra mobile) — NON il primo .btn-primary
@@ -2427,7 +2452,7 @@ const Session = {
 };
 
 function switchSession(id) { Session.loadSession(id); }
-function saveSession()     { Session.saveSession();   }
+function saveSession()     { Session.confirmAndSave(); }
 
 // Riprendendo l'app (torna in primo piano) ricontrolla auto-avvio/auto-salvataggio
 // della sessione in corso (i setTimeout in background possono essere sospesi).
