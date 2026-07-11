@@ -205,6 +205,20 @@ const Session = {
     this.loadExerciseIntel(Object.keys(grouped));
   },
 
+  // #F — Note per singolo esercizio, per sessione, salvate ON-DEVICE
+  // (localStorage), come le foto progressi. Non toccano lo schema Notion.
+  _exNoteKey() { return `gymos_exnote_${this.activeId || "none"}`; },
+  _exNoteMap() { try { return JSON.parse(localStorage.getItem(this._exNoteKey()) || "{}"); } catch (e) { return {}; } },
+  getExNote(exName) { return this._exNoteMap()[U.exBase(exName)] || ""; },
+  setExNote(exName, text) {
+    clearTimeout(this._exNoteTimer);
+    this._exNoteTimer = setTimeout(() => {
+      const map = this._exNoteMap(), k = U.exBase(exName), t = (text || "").trim();
+      if (t) map[k] = t; else delete map[k];
+      try { localStorage.setItem(this._exNoteKey(), JSON.stringify(map)); } catch (e) {}
+    }, 400);
+  },
+
   groupByExercise(entries) {
     const map = {};
     entries.forEach(e => {
@@ -316,6 +330,16 @@ const Session = {
               <i class="ti ti-plus"></i> Aggiungi serie
             </button>
           </div>
+          ${(() => {
+            // #F — nota per singolo esercizio (per QUESTA sessione, on-device).
+            const n = this.getExNote(exName);
+            if (this.viewMode && !n) return "";                 // in sola-lettura mostra solo se c'è
+            const esc = String(n).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            return `<div class="ex-note-wrap">
+              <i class="ti ti-note ex-note-ic"></i>
+              <textarea class="ex-note-in" rows="1" ${this.viewMode ? "readonly" : ""} placeholder="Nota su questo esercizio (solo oggi)…" oninput="Session.setExNote('${exName}', this.value)">${esc}</textarea>
+            </div>`;
+          })()}
           <div class="ex-tech${(ex.tecnica && ex.tecnica.length) || ex.gruppo ? " has-tech" : ""}" id="extech-${sid}">
             ${this.exTechInnerHTML(exName, ex)}
           </div>

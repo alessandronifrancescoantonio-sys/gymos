@@ -1517,6 +1517,14 @@ body::before, body::after { will-change:transform, opacity; }
              linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.03) 30%, rgba(255,59,47,.12)) border-box;
   box-shadow:var(--sh-pop); }
 
+/* #F — nota per singolo esercizio (on-device, per sessione) */
+.ex-note-wrap { display:flex; align-items:flex-start; gap:8px; margin:2px 0 12px; padding:8px 11px;
+  background:rgba(255,255,255,.03); border:1px solid var(--line-soft); border-radius:10px; }
+.ex-note-ic { color:var(--dim); font-size:16px; margin-top:2px; flex-shrink:0; }
+.ex-note-in { flex:1; min-width:0; background:transparent; border:0; resize:none; color:var(--text);
+  font-family:inherit; font-size:12.5px; line-height:1.4; padding:0; outline:none; }
+.ex-note-in::placeholder { color:var(--dim); }
+
 /* #5 PT scientifico — rampa di riscaldamento (collassabile, tono neutro) */
 .warmup { margin:2px 0 12px; border:1px solid var(--line-soft); border-radius:12px; background:rgba(255,255,255,.02); overflow:hidden; }
 .warmup > summary { display:flex; align-items:center; gap:8px; padding:9px 12px; cursor:pointer; font-size:12px; font-weight:600; color:var(--text); list-style:none; }
