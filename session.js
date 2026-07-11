@@ -235,6 +235,24 @@ const Session = {
     return { shift, laterThanUsual: shift > 0 };
   },
 
+  // #5 — Diretto vs indiretto NELLA STESSA SEDUTA: se il muscolo primario di
+  // questo esercizio è già stato colpito DIRETTAMENTE da un altro esercizio
+  // fatto prima oggi (stesso allenamento), conta come fatica locale già
+  // accumulata — utile per non aspettarsi lo stesso rendimento del "primo".
+  _sameMuscleDirect(exName) {
+    if (typeof Volume === "undefined") return null;
+    const mine = Volume.musclesFor(exName);
+    const primary = Object.keys(mine).find(k => mine[k] >= 1);
+    if (!primary) return null;
+    const before = this.exOrder.slice(0, this.exOrder.indexOf(exName));
+    const others = before.filter(n => {
+      const m = Volume.musclesFor(n);
+      return (m[primary] || 0) >= 1;   // diretto sullo stesso muscolo, prima di oggi
+    });
+    if (!others.length) return null;
+    return { muscle: primary, count: others.length, names: others };
+  },
+
   renderExercises() {
     const container = document.getElementById("exercises-container");
     container.innerHTML = "";
@@ -289,7 +307,7 @@ const Session = {
           <i class="ti ti-chevron-down ex-chevron"></i>
         </div>
         <div class="ex-body">
-          ${(!this.viewMode && !this.sessionDone) ? this.progressionGoalHTML(exName, prevSets, rrMin, rrMax, rir, this._orderShift(exName)) : ""}
+          ${(!this.viewMode && !this.sessionDone) ? this.progressionGoalHTML(exName, prevSets, rrMin, rrMax, rir, this._orderShift(exName), this._sameMuscleDirect(exName)) : ""}
           ${this.prevNotesHTML(prevSets)}
           <div id="sets-${sid}"></div>
           <div class="add-set-row">
@@ -819,7 +837,7 @@ const Session = {
   // ═══ SUGGERIMENTO DI PROGRESSIONE (doppia progressione) ═══════════════════
   // Prima aggiungi rep dentro il range; raggiunto il top del range, aumenti il
   // peso e riparti dal basso. Guarda la seduta precedente (prevSets).
-  progressionGoalHTML(exName, prevSets, rrMin, rrMax, rir, orderShift) {
+  progressionGoalHTML(exName, prevSets, rrMin, rrMax, rir, orderShift, sameMuscle) {
     const rirStr = (rir != null && rir !== "") ? ` a RIR ${rir}` : "";
     const goal = (main, sub, tone, data) => {
       const ic = tone === "warn" ? "ti-alert-triangle" : tone === "hold" ? "ti-refresh" : "ti-target";
@@ -870,6 +888,12 @@ const Session = {
     const shiftNote = movedLater
       ? " Oggi lo fai più avanti nella sessione del solito: un po' di fatica in più è normale."
       : (movedEarlier ? " Oggi lo fai prima del solito nella sessione: più fresco, meglio così." : "");
+    // #5 — Diretto vs indiretto nella stessa seduta: se un altro esercizio ha già
+    // colpito DIRETTAMENTE lo stesso muscolo prima nella sessione di oggi, la
+    // fatica locale è già alta: un calo qui è normale, non un segnale di stallo.
+    const muscleNote = sameMuscle
+      ? ` Hai già allenato ${sameMuscle.muscle} direttamente con ${sameMuscle.names[sameMuscle.names.length - 1]} prima oggi: un po' di fatica locale è normale.`
+      : "";
     // Confini di parola: "male" NON deve matchare "normale", "dura" non "durata",
     // "tira" non "tirata" (che è un esercizio). Meglio perdere un segnale che inventarlo.
     const pain = /(dolor|fastidi|infortun|pizzic|contrattur|strapp|tendinit|acciacc|infiamm)\w*|\bfitt[ae]\b|\bmale\b|\bmal\s+di\b|\btirone\b/.test(nl);
@@ -969,7 +993,7 @@ const Session = {
       const best = stats[bestIdx];
       return goal(
         isBW ? `Riprova le <b>${best.topReps}</b> rep della tua migliore` : `Riprova <b>${U.fmt(best.topKg)} kg</b> × <b>${best.topReps}</b> (la tua migliore)${rirStr}`,
-        `Due sedute sotto tono su questo esercizio: prima di cambiare pesi, controlla sonno, cibo e riposo tra le serie — di solito basta quello.${sysAdd}${shiftNote}`, "hold", dataLine);
+        `Due sedute sotto tono su questo esercizio: prima di cambiare pesi, controlla sonno, cibo e riposo tra le serie — di solito basta quello.${sysAdd}${shiftNote}${muscleNote}`, "hold", dataLine);
     }
 
     // 2b) UNA seduta sotto → normale, capita a tutti: riprendi i numeri di prima
@@ -977,7 +1001,7 @@ const Session = {
       const why = issue ? ` — c'era un intoppo (poco tempo/macchinario occupato), è normale` : (hard ? " e l'avevi sentita dura" : "");
       return goal(
         isBW ? `Riprenditi le <b>${prev.topReps}</b> rep` : `Riprenditi <b>${U.fmt(prev.topKg)} kg</b> × <b>${prev.topReps}</b>${rirStr}`,
-        `La scorsa è andata sotto (${isBW ? last.topReps + " rep" : U.fmt(last.topKg) + "kg × " + last.topReps})${why}: una seduta storta capita a tutti. Torna ai tuoi numeri.${shiftNote}`, "go", dataLine);
+        `La scorsa è andata sotto (${isBW ? last.topReps + " rep" : U.fmt(last.topKg) + "kg × " + last.topReps})${why}: una seduta storta capita a tutti. Torna ai tuoi numeri.${shiftNote}${muscleNote}`, "go", dataLine);
     }
 
     // 2c) Best set SOTTO il fondo del range → carico troppo alto per il range
@@ -1141,7 +1165,7 @@ const Session = {
       if (!ex || !tg) return;  // in sola-visualizzazione il banner non c'è
       const sets = grouped[ex] || [];
       const rrMin = sets[0]?.rrMin || 8, rrMax = sets[0]?.rrMax || 12, rir = sets[0]?.rir ?? "";
-      tg.outerHTML = this.progressionGoalHTML(ex, prevG[ex] || [], rrMin, rrMax, rir, this._orderShift(ex));
+      tg.outerHTML = this.progressionGoalHTML(ex, prevG[ex] || [], rrMin, rrMax, rir, this._orderShift(ex), this._sameMuscleDirect(ex));
     });
   },
 
