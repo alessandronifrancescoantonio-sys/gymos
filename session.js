@@ -1170,12 +1170,24 @@ const Session = {
   },
 
   // Consiglio per QUESTA serie in base alla serie PRECEDENTE della stessa
-  // sessione (già fatta): aumenta / cala / mantieni per restare nel rep range.
+  // sessione (già fatta): aumenta / cala / mantieni per restare nel rep range —
+  // MA prima guarda la NOTA che hai scritto su quella serie: dolore vince
+  // sempre su qualunque calcolo di peso/rep (stesse analisi del motore ricco).
   _setHintHTML(exName, si, rrMin, rrMax) {
     if (si <= 0) return "";
     const sets = this.groupByExercise(this.exercises)[exName] || [];
     const prev = sets[si - 1];
     if (!prev || (prev.reps || 0) <= 0) return "";   // serie precedente non ancora fatta
+    const note = (prev.note || "").toLowerCase();
+    // Stessi pattern del motore principale, per coerenza dell'analisi
+    const pain = /(dolor|fastidi|infortun|pizzic|contrattur|strapp|tendinit|acciacc|infiamm)\w*|\bfitt[ae]\b|\bmale\b|\bmal\s+di\b|\btirone\b/.test(note);
+    const hard = /(cediment|difficil|duriss|pesant|faticos|soffert|sudat|fallit|grind|tost)\w*|\bdur[ae]\b|\bmort[oa]\b|non ce la|al massimo|al limite/.test(note);
+    const easy = /(facil|comod)\w*|\blegger[oa]\b|\bscaric\w*|troppo poco/.test(note);
+    if (pain) {
+      const snip = prev.note.trim().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      return `<i class="ti ti-alert-triangle sh-dn"></i><span>Nella serie prima hai scritto «${snip}»: <b>vai piano</b>, non forzare</span>`;
+    }
+
     const r = prev.reps, kg = prev.kg || 0, bw = kg === 0;
     let cls, ic, txt;
     if (r > rrMax) {
@@ -1184,6 +1196,14 @@ const Session = {
     } else if (r < rrMin) {
       cls = "sh-dn"; ic = "ti-arrow-down-right";
       txt = bw ? `Poche rep (${r}): recupera un attimo di più` : `Serie pesante (${r} rep): <b>cala</b> un po' il peso`;
+    } else if (hard) {
+      // in range ma segnata come dura → non spingere oltre, consolida
+      cls = "sh-dn"; ic = "ti-arrow-down-right";
+      txt = bw ? `L'avevi sentita dura: <b>mantieni</b> ${r} rep, non forzare` : `L'avevi sentita dura: <b>mantieni</b> ${U.fmt(kg)}kg, non forzare`;
+    } else if (easy) {
+      // in range ma segnata come facile → puoi spingere un filo di più
+      cls = "sh-up"; ic = "ti-arrow-up-right";
+      txt = bw ? `L'avevi sentita facile: prova <b>${r + 1}</b> rep` : `L'avevi sentita facile: prova ad <b>aumentare</b> un po'`;
     } else {
       cls = "sh-ok"; ic = "ti-equal";
       txt = bw ? `Bene: <b>mantieni</b>, punta ${r} rep` : `Bene: <b>mantieni</b> ${U.fmt(kg)}kg, punta ${r} rep`;
