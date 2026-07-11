@@ -1369,6 +1369,12 @@ const Session = {
     }
 
     const r = prev.reps, kg = prev.kg || 0, bw = kg === 0;
+    // #C — FATICA ACCUMULATA tra le serie. Se la serie prima era vicina al
+    // cedimento (RIR basso, note "dura/cedimento", o range chiuso al top), al
+    // pari peso è FISIOLOGICO fare qualche rep in meno: NON chiedere di ripetere
+    // le stesse rep (era il consiglio irrealistico "rifai 12×12 dopo un RIR1").
+    const rirNum = (prev.rir != null && prev.rir !== "") ? Number(prev.rir) : 2;
+    const nearFail = hard || rirNum <= 1 || (r >= rrMax && rirNum <= 2);
     let cls, ic, txt;
     if (r > rrMax) {
       cls = "sh-up"; ic = "ti-arrow-up-right";
@@ -1376,12 +1382,16 @@ const Session = {
     } else if (r < rrMin) {
       cls = "sh-dn"; ic = "ti-arrow-down-right";
       txt = bw ? `Poche rep (${r}): recupera un attimo di più` : `Serie pesante (${r} rep): <b>cala</b> un po' il peso`;
-    } else if (hard) {
-      // in range ma segnata come dura → non spingere oltre, consolida
-      cls = "sh-dn"; ic = "ti-arrow-down-right";
-      txt = bw ? `L'avevi sentita dura: <b>mantieni</b> ${r} rep, non forzare` : `L'avevi sentita dura: <b>mantieni</b> ${U.fmt(kg)}kg, non forzare`;
+    } else if (nearFail) {
+      // vicino al limite → tieni il peso, aspettati un calo naturale delle rep
+      const tgt = Math.max(rrMin, r - 1);
+      cls = "sh-ok"; ic = "ti-equal";
+      const why = rirNum <= 1 ? "eri vicino al cedimento" : hard ? "l'avevi sentita dura" : "hai chiuso il range";
+      txt = bw
+        ? `Serie al limite (${why}): normale calare ora — punta <b>${tgt}</b>+ rep, non forzare`
+        : `Serie al limite (${why}): tieni <b>${U.fmt(kg)}kg</b>, è normale fare qualche rep in meno — punta <b>${tgt}</b>+`;
     } else if (easy) {
-      // in range ma segnata come facile → puoi spingere un filo di più
+      // in range e comoda → puoi spingere un filo di più
       cls = "sh-up"; ic = "ti-arrow-up-right";
       txt = bw ? `L'avevi sentita facile: prova <b>${r + 1}</b> rep` : `L'avevi sentita facile: prova ad <b>aumentare</b> un po'`;
     } else {
@@ -1793,11 +1803,19 @@ const Session = {
   getProgression(set, prevSet) {
     if (!set.reps || set.reps === 0) return "mt";
     if (!prevSet) return "new";
-    const vOggi  = set.reps * (set.kg  || 1);
-    const vScors = prevSet.reps * (prevSet.kg || 1);
-    if (vOggi > vScors) return "up";
-    if (vOggi === vScors) return "eq";
-    return "dn";
+    // #B — coerente col motore principale: NON volume grezzo (reps×kg), ma 1RM
+    // stimato (Epley) con le rep CAPPATE al top del range. Fare più rep del
+    // range = peso troppo leggero, non "più progressione". E salire di peso
+    // restando nel range è progresso anche se le rep calano un po'.
+    const rrMax = set.rrMax || prevSet.rrMax || 12;
+    const rrMin = set.rrMin || prevSet.rrMin || 8;
+    const capE1 = s => { const r = Math.min(s.reps || 0, rrMax); return (s.kg > 0) ? s.kg * (1 + r / 30) : r; };
+    const now = capE1(set), prev = capE1(prevSet);
+    const tol = Math.max(0.5, prev * 0.02);
+    if ((set.kg || 0) > (prevSet.kg || 0) && (set.reps || 0) >= rrMin) return "up";
+    if (now > prev + tol) return "up";
+    if (now < prev - tol) return "dn";
+    return "eq";
   },
 
   buildStatusBadge(prog, set, exName, rrMin, rrMax, prevMax) {
