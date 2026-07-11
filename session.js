@@ -901,9 +901,32 @@ const Session = {
     const muscleNote = sameMuscle
       ? ` Hai già allenato ${sameMuscle.muscle} direttamente con ${sameMuscle.names[sameMuscle.names.length - 1]} prima oggi: un po' di fatica locale è normale.`
       : "";
-    // Confini di parola: "male" NON deve matchare "normale", "dura" non "durata",
-    // "tira" non "tirata" (che è un esercizio). Meglio perdere un segnale che inventarlo.
-    const pain = /(dolor|fastidi|infortun|pizzic|contrattur|strapp|tendinit|acciacc|infiamm)\w*|\bfitt[ae]\b|\bmale\b|\bmal\s+di\b|\btirone\b/.test(nl);
+    // #4 PT scientifico — DOLORE a SEMAFORO (Cook & Purdam: la patologia del
+    // tendine è un continuum, il load management è lo strumento clinico). Da
+    // rilevamento binario a 3 livelli dedotti dalle parole:
+    //   0 nessuno · 1 lieve/🟢 (fastidio, indolenzimento) · 2 moderato/🟡
+    //   (dolore, contrattura) · 3 severo/🔴 (infortunio, dolore forte/acuto).
+    // Confini di parola: "male" non matcha "normale", "dura" non "durata".
+    const painLevel = (txt) => {
+      if (!txt) return 0;
+      const any = /(dolor|fastidi|infortun|pizzic|contrattur|strapp|stiram|tendinit|acciacc|infiamm|indolenz|lesion)\w*|\bfitt[ae]\b|\bmale\b|\bmal\s+di\b|\btirone\b/.test(txt);
+      if (!any) return 0;
+      if (/(infortun|strapp|stiram|tendinit|infiamm|lesion)\w*|dolore (fort|acut|inten|parecc|tant)|fort[ei] dolor|\bacut[oi]\b|non riesc|bloccat|gonfi/.test(txt)) return 3;
+      const mild = /un po'?\s+(di\s+)?(fastidi|dolor|tir)|legger[oa]\s+(fastidi|dolor|tension)|solo\s+(un\s+)?fastidi|\blieve\b|leggermente|indolenz|inizial/.test(txt);
+      if (mild && !/fort|acut|intens/.test(txt)) return 1;
+      return 2;
+    };
+    // Serie storica del dolore per QUESTO esercizio (dalle note già in _exStats):
+    // dolore che CALA nel tempo = buon adattamento; che SALE = sovraccarico.
+    const painSeries = stats.map(g => painLevel(((g.notes || []).join(" ") + " " + (g.sessNote || "")).toLowerCase()));
+    const curPain  = painSeries[painSeries.length - 1] || 0;
+    const prevPain = painSeries[painSeries.length - 2] || 0;
+    const pain       = curPain > 0;
+    const painPersist = curPain > 0 && prevPain > 0;          // torna da ≥2 sedute
+    // Dolore che CALA rispetto alla scorsa seduta = buon adattamento. Il caso
+    // opposto (dolore che aumenta/persiste) è già gestito, più severamente,
+    // dall'escalation a rosso su painPersist qui sotto.
+    const painEasing  = prevPain > 0 && curPain > 0 && curPain < prevPain;
     const easy = /(facil|comod)\w*|\blegger[oa]\b|\bscaric\w*|troppo poco/.test(nl);
     const hard = /(cediment|difficil|duriss|pesant|faticos|soffert|sudat|fallit|grind|tost)\w*|\bdur[ae]\b|\bmort[oa]\b|non ce la|al massimo|al limite/.test(nl);
     const noteSnip = (() => {
@@ -980,8 +1003,28 @@ const Session = {
     const bestStr  = sinceBest === 0 ? "ultima = la migliore" : `migliore ${sinceBest} ${sinceBest === 1 ? "seduta" : "sedute"} fa`;
     const dataLine = `${trendStr} · ${bestStr}${dropoff >= 3 ? ` · −${dropoff} rep a fine esercizio` : ""}`;
 
-    // 1) Dolore/fastidio → cautela (priorità massima)
-    if (pain) return goal(`Tieni leggero e cura la tecnica${rirStr}`, `Avevi segnato: «${noteSnip}». Se il fastidio resta, non caricare.`, "warn", dataLine);
+    // 1) Dolore → semaforo (priorità massima). Il movimento ha un effetto
+    // analgesico (EIH): per dolore lieve/moderato NON si elimina l'esercizio, si
+    // resta SOTTO la soglia del dolore. Si ferma solo il dolore severo o che
+    // persiste/aumenta da più sedute (segnale di sovraccarico reale).
+    if (pain) {
+      const trendNote = painEasing
+        ? " Rispetto alle scorse volte il fastidio è meno: probabile buon adattamento, ma non forzare."
+        : "";
+      // 🔴 ROSSO: severo, oppure moderato che torna da ≥2 sedute (persistente)
+      if (curPain >= 3 || (curPain >= 2 && painPersist)) {
+        return goal(`Fermati o vai molto leggero su questo esercizio`,
+          `Avevi segnato: «${noteSnip}». ${painPersist ? "Il dolore torna da più sedute" : "Dolore importante"}: non caricare. Se dura oltre 48h o peggiora, valuta un professionista.`, "warn", dataLine);
+      }
+      // 🟡 GIALLO: moderato isolato → riduci il carico, resta sotto la soglia
+      if (curPain >= 2) {
+        return goal(`Riduci il carico e resta sotto la soglia del dolore${rirStr}`,
+          `Avevi segnato: «${noteSnip}». Non serve fermarti: lavora leggero e senza sentire dolore, il movimento aiuta.${trendNote}`, "warn", dataLine);
+      }
+      // 🟢 VERDE: lieve → allenati controllato, senza arrivare a sentire male
+      return goal(`Tieniti leggero, sotto la soglia del fastidio${rirStr}`,
+        `Solo un fastidio lieve segnato: «${noteSnip}». Puoi allenarti controllato, senza arrivare a sentire male.${trendNote}`, "hold", dataLine);
+    }
 
     // 1b) Pausa lunga su questo esercizio → rientro conservativo (tendini e
     // articolazioni recuperano più lente dei muscoli; i numeri tornano in fretta)
