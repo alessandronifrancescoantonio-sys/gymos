@@ -879,7 +879,14 @@ const Session = {
     const nl = ((last.notes || []).join(" · ") + " · " + (last.sessNote || "")).toLowerCase();
     // Intoppo segnalato la scorsa volta (macchinario occupato, poco tempo, ecc.)
     const issue = /(occupat|poco tempo|di fretta|\bfretta\b|saltat|interrott|affollat|\bcoda\b|niente tempo|senza tempo|riscaldament|non riscaldat)/.test(nl);
-    const issueNote = issue ? " La scorsa c'era un intoppo (poco tempo/macchinario occupato): tienine conto." : "";
+    // #3 — Macchinario OCCUPATO/affollato la scorsa volta: proponi un sostituto
+    // equivalente tra gli esercizi che l'utente già conosce, così la prossima
+    // volta non salta l'esercizio. Segnale più stretto del generico "intoppo".
+    const occupied = /(occupat|affollat|\bcoda\b|\bfila\b|tutte prese|non liber|era pres[oa])/.test(nl);
+    const subAlt = occupied ? this._subFor(exName) : null;
+    const subNote = subAlt
+      ? ` La scorsa la macchina era occupata: se ricapita, un ${subAlt.level === "A" ? "ottimo" : "buon"} sostituto è <b>${subAlt.name}</b> (stesso lavoro).`
+      : "";
     // #3 — Esercizio spostato di posizione rispetto alla sessione scorsa: se ora
     // arriva più tardi nella sessione, un calo può dipendere dalla fatica
     // accumulata di prima, non dall'esercizio in sé.
@@ -1009,7 +1016,7 @@ const Session = {
       const best = stats[bestIdx];
       return goal(
         isBW ? `Riprova le <b>${best.topReps}</b> rep della tua migliore` : `Riprova <b>${U.fmt(best.topKg)} kg</b> × <b>${best.topReps}</b> (la tua migliore)${rirStr}`,
-        `Due sedute sotto tono su questo esercizio: prima di cambiare pesi, controlla sonno, cibo e riposo tra le serie — di solito basta quello.${sysAdd}${shiftNote}${muscleNote}`, "hold", dataLine);
+        `Due sedute sotto tono su questo esercizio: prima di cambiare pesi, controlla sonno, cibo e riposo tra le serie — di solito basta quello.${sysAdd}${shiftNote}${muscleNote}${subNote}`, "hold", dataLine);
     }
 
     // 2b) UNA seduta sotto → normale, capita a tutti: riprendi i numeri di prima
@@ -1017,7 +1024,7 @@ const Session = {
       const why = issue ? ` — c'era un intoppo (poco tempo/macchinario occupato), è normale` : (hard ? " e l'avevi sentita dura" : "");
       return goal(
         isBW ? `Riprenditi le <b>${prev.topReps}</b> rep` : `Riprenditi <b>${U.fmt(prev.topKg)} kg</b> × <b>${prev.topReps}</b>${rirStr}`,
-        `La scorsa è andata sotto (${isBW ? last.topReps + " rep" : U.fmt(last.topKg) + "kg × " + last.topReps})${why}: una seduta storta capita a tutti. Torna ai tuoi numeri.${shiftNote}${muscleNote}`, "go", dataLine);
+        `La scorsa è andata sotto (${isBW ? last.topReps + " rep" : U.fmt(last.topKg) + "kg × " + last.topReps})${why}: una seduta storta capita a tutti. Torna ai tuoi numeri.${shiftNote}${muscleNote}${subNote}`, "go", dataLine);
     }
 
     // 2c) Best set SOTTO il fondo del range → carico troppo alto per il range
@@ -1086,7 +1093,7 @@ const Session = {
     const improvedTxt = issue ? "Sei migliorato pure con un intoppo la scorsa: oggi che è liscio, aggiungi 1 rep." : "Stai migliorando: aggiungi 1 rep.";
     const reason = improved ? `${improvedTxt}${restNote}` : (hard ? `La scorsa era dura: prima falla pulita, poi si sale.${restNote}` : `+1 rep verso il massimo del range.${restNote}`);
     const act    = hard && !isBW ? `Resta a <b>${U.fmt(last.topKg)} kg</b> · rifai <b>${last.topReps}</b> rep pulite${rirStr}` : (isBW ? `Punta <b>${target}</b> rep` : `Resta a <b>${U.fmt(last.topKg)} kg</b> · punta <b>${target}</b> rep${rirStr}`);
-    return goal(act, reason, "go", dataLine);
+    return goal(act, reason + subNote, "go", dataLine);
   },
 
   // Comprime lo storico grezzo (una riga per serie) in sedute con top set e note
@@ -1119,6 +1126,22 @@ const Session = {
       if (last.e1 < prev.e1 - tol) down++;
     });
     return withHist >= 3 && down / withHist >= 0.5;
+  },
+
+  // #3 PT scientifico — SOSTITUZIONE. Cerca, tra gli esercizi che l'utente già
+  // conosce (schede + storico), il miglior sostituto di `exName` (stesso muscolo
+  // primario + stesso pattern = Livello A; solo muscolo = Livello B). Usato
+  // quando la scorsa seduta segnalava un macchinario occupato.
+  _subFor(exName) {
+    try {
+      if (typeof Volume === "undefined" || !Volume.bestSubstitute) return null;
+      const pool = new Set();
+      Object.values((typeof CONFIG !== "undefined" && CONFIG.SCHEDE) || {}).forEach(sc =>
+        (sc.exercises || []).forEach(it => { const n = U.exName(it); if (n) pool.add(n); }));
+      Object.keys(this._exStats || {}).forEach(n => pool.add(n));
+      pool.delete(exName);
+      return Volume.bestSubstitute(exName, [...pool]);
+    } catch (e) { return null; }
   },
 
   // #1 SCARICO — falso positivo da fatica acuta. Cerca se lo STESSO muscolo

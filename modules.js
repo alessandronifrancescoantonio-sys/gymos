@@ -519,6 +519,57 @@ const Volume = {
     return {};   // sconosciuto → l'utente assegna a mano
   },
 
+  // #3 PT scientifico — PATTERN di movimento, per valutare quanto un esercizio
+  // è un buon SOSTITUTO di un altro (macchinario occupato ecc.). Non basta lo
+  // stesso muscolo: la panca e le croci colpiscono il petto ma con pattern
+  // diversi (spinta vs isolamento). L'isolamento monoarticolare va riconosciuto
+  // PRIMA dei composti, e i composti hinge PRIMA dell'isolamento gambe (un RDL
+  // non è isolamento). Ritorna: push | pull | squat | hinge | iso | core | calf.
+  pattern(name) {
+    const s = " " + (name || "").toLowerCase() + " ";
+    const t = re => re.test(s);
+    if (t(/polpacc|calf/)) return "calf";
+    if (t(/addome|crunch|plank|abs |core|oblique|addutt/)) return "core";
+    if (t(/rdl|stacco|romanian|good morning|hip thrust|deadlift/)) return "hinge";
+    if (t(/squat|pressa|leg press|pendulum|belt|hack|affond|lunge|pistol/)) return "squat";
+    if (t(/leg ext|leg curl|nordic|femoral/)) return "iso";
+    if (t(/curl|scott|bayes|preacher|martell|hammer|bicip/)) return "iso";
+    if (t(/push ?down|skull|french|overhead ext|kick ?back|tric/)) return "iso";
+    if (t(/alz lat|laterali|lateral raise|alzate|rear|posterior|reverse|face pull|croci|\bfly\b|pec deck/)) return "iso";
+    if (t(/avambracc|wrist|polso|forearm/)) return "iso";
+    if (t(/row|pulley|rematore|low row|lat mach|pulldown|trazion|pull ?up|upper back/)) return "pull";
+    if (t(/shoulder press|overhead press|military|lento|arnold|panca|bench|dist |piegament|push ?up|\bdip\b|press|chest/)) return "push";
+    return "";
+  },
+
+  _primary(name) {
+    const m = this.musclesFor(name) || {};
+    return Object.keys(m).find(k => m[k] >= 1) || null;
+  },
+
+  // Livello di `cand` come sostituto di `name`:
+  //  "A" = stesso muscolo primario E stesso pattern (ottimo sostituto)
+  //  "B" = stesso muscolo primario, pattern diverso (sostituto parziale)
+  //  null = non è un sostituto
+  subLevel(name, cand) {
+    if (!name || !cand || name === cand) return null;
+    const pa = this._primary(name), pb = this._primary(cand);
+    if (!pa || !pb || pa !== pb) return null;
+    const ma = this.pattern(name), mb = this.pattern(cand);
+    return (ma && ma === mb) ? "A" : "B";
+  },
+
+  // Miglior sostituto tra gli esercizi già noti all'utente: preferisce il Livello A.
+  bestSubstitute(name, candidates) {
+    let a = null, b = null;
+    (candidates || []).forEach(c => {
+      const lvl = this.subLevel(name, c);
+      if (lvl === "A" && !a) a = c;
+      else if (lvl === "B" && !b) b = c;
+    });
+    return a ? { name: a, level: "A" } : (b ? { name: b, level: "B" } : null);
+  },
+
   _overrides: null,
   loadOverrides() {
     if (!this._overrides) {
