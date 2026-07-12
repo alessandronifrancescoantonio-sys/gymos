@@ -849,23 +849,25 @@ const ProgressPhotos = {
   POSE: { front: "Fronte", side: "Lato", back: "Schiena" },
   _filter: "all", _compare: false, _cmpA: null, _cmpB: null, _pending: null, _urls: [], _cardUrls: [],
 
+  // Wrapper Promise-based su IndexedDB (idb di Jake Archibald), caricato con
+  // import() dinamico: gli script dell'app sono classici (non type="module",
+  // altrimenti le variabili top-level smetterebbero di essere globali per
+  // session.js/app.js), ma import() dinamico funziona ovunque.
   _open() {
     if (this._db) return Promise.resolve(this._db);
-    return new Promise((res, rej) => {
-      const r = indexedDB.open(this.DBN, 1);
-      r.onupgradeneeded = () => { const db = r.result; if (!db.objectStoreNames.contains(this.STORE)) db.createObjectStore(this.STORE, { keyPath: "id" }); };
-      r.onsuccess = () => { this._db = r.result; res(this._db); };
-      r.onerror = () => rej(r.error);
-    });
+    if (!this._openPromise) {
+      this._openPromise = import("https://cdn.jsdelivr.net/npm/idb@8/+esm")
+        .then(({ openDB }) => openDB(this.DBN, 1, {
+          upgrade: db => { if (!db.objectStoreNames.contains(this.STORE)) db.createObjectStore(this.STORE, { keyPath: "id" }); },
+        }))
+        .then(db => { this._db = db; return db; });
+    }
+    return this._openPromise;
   },
-  _st(mode) { return this._open().then(db => db.transaction(this.STORE, mode).objectStore(this.STORE)); },
-  async _all() {
-    const st = await this._st("readonly");
-    return new Promise((res, rej) => { const out = []; const c = st.openCursor(); c.onsuccess = e => { const cur = e.target.result; if (cur) { out.push(cur.value); cur.continue(); } else res(out); }; c.onerror = () => rej(c.error); });
-  },
-  _put(rec) { return this._st("readwrite").then(st => new Promise((res, rej) => { const r = st.put(rec); r.onsuccess = () => res(); r.onerror = () => rej(r.error); })); },
-  _del(id) { return this._st("readwrite").then(st => new Promise((res, rej) => { const r = st.delete(id); r.onsuccess = () => res(); r.onerror = () => rej(r.error); })); },
-  _get(id) { return this._st("readonly").then(st => new Promise((res, rej) => { const r = st.get(id); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); })); },
+  async _all() { const db = await this._open(); return db.getAll(this.STORE); },
+  async _put(rec) { const db = await this._open(); return db.put(this.STORE, rec); },
+  async _del(id) { const db = await this._open(); return db.delete(this.STORE, id); },
+  async _get(id) { const db = await this._open(); return db.get(this.STORE, id); },
 
   // Data LOCALE (YYYY-MM-DD): evita l'off-by-one del fuso orario di toISOString()
   _localDate(d) { d = d || new Date(); const p = n => String(n).padStart(2, "0"); return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()); },
