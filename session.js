@@ -210,6 +210,8 @@ const Session = {
     // Carica lo storico di ogni esercizio (background): alimenta gli obiettivi
     // intelligenti e semina i record personali. Non blocca l'UI.
     this.loadExerciseIntel(Object.keys(grouped));
+    // Sonno di stanotte (background): dà contesto ai consigli per-esercizio.
+    this.loadSleepContext();
   },
 
   // #F — Note per singolo esercizio, per sessione, salvate ON-DEVICE
@@ -632,6 +634,33 @@ const Session = {
     Object.keys(this.groupByExercise(this.exercises)).forEach(n => this.refreshExDone(n));
   },
 
+  // #batch2 — quando l'ULTIMA serie di un esercizio viene segnata fatta, chiudi
+  // la sua tendina e apri automaticamente quella dell'esercizio successivo
+  // (stesso comportamento del tap manuale su un header, ma automatico). Solo
+  // se l'esercizio corrente era quello aperto (focus mode) — non forzare il
+  // focus su chi sta guardando qualcos'altro.
+  autoAdvanceExercise(exName) {
+    const blocks = [...document.querySelectorAll("#exercises-container .ex-block")];
+    const block = blocks.find(b => b.dataset.ex === exName);
+    if (!block || block.classList.contains("collapsed")) return;
+    const idx = this.exOrder.indexOf(exName);
+    const nextName = idx >= 0 ? this.exOrder[idx + 1] : null;
+    const nextBlock = nextName ? blocks.find(b => b.dataset.ex === nextName) : null;
+    if (nextBlock) {
+      blocks.forEach(b => {
+        b.classList.add("collapsed");
+        b.classList.toggle("ex-focused", b === nextBlock);
+        b.classList.toggle("ex-dimmed", b !== nextBlock);
+      });
+      nextBlock.classList.remove("collapsed");
+      this.scrollToBlock(nextBlock);
+    } else {
+      // ultimo esercizio della scheda: chiudi e torna alla vista normale
+      blocks.forEach(b => b.classList.remove("ex-focused", "ex-dimmed"));
+      block.classList.add("collapsed");
+    }
+  },
+
   renumberBlocks() {
     document.querySelectorAll(".ex-block").forEach((b, i) => {
       const num = b.querySelector(".ex-num");
@@ -1021,6 +1050,13 @@ const Session = {
     const atTop = last.topReps >= rrMax;
     const target = Math.min(last.topReps + 1, rrMax);
     const sysAdd = this._systemicDown ? " Anche altri esercizi sono in calo: occhio a recupero, sonno e alimentazione." : "";
+    // #batch2 — il sonno di stanotte, quando è scarso, dà contesto onesto a un
+    // calo/plateau (stessa soglia del semaforo recovery in home: HRV<45 o <6h =
+    // netto, <7h = moderato). Solo contesto: non cambia le soglie di scarico.
+    const sl = this._sleepInfo;
+    const sleepNote = !sl ? "" : (sl.level === "rosso"
+      ? ` Stanotte hai dormito poco${sl.ore != null ? ` (${U.fmt(sl.ore)}h)` : ""}${sl.hrv ? `, HRV ${sl.hrv}ms` : ""}: oggi potresti sentirti più stanco del solito, non è detto sia un passo indietro.`
+      : (sl.level === "giallo" ? ` Hai dormito meno del solito stanotte: tienine conto oggi.` : ""));
     // Doppia progressione: si sale di peso quando TUTTE le serie chiudono il top.
     const setsArr    = last.sets || [];
     const atTopCount = setsArr.filter(s => s.reps >= rrMax).length;
@@ -1138,7 +1174,7 @@ const Session = {
       this._suppressWarmup = true;   // #5 — niente rampa in giornata di scarico
       return goal(
         `Oggi vai più leggero: togli <b>~10%</b> di peso${rirStr}`,
-        `La forza cala da settimane (${spanDays} giorni) e non solo qui: è stanchezza accumulata. Una seduta leggera oggi, poi si riparte più forti.`, "warn", dataLine);
+        `La forza cala da settimane (${spanDays} giorni) e non solo qui: è stanchezza accumulata. Una seduta leggera oggi, poi si riparte più forti.${sleepNote}`, "warn", dataLine);
     }
 
     // 2a) Due sedute in calo su questo esercizio → NON tagliare il peso: ripeti
@@ -1147,7 +1183,7 @@ const Session = {
       const best = stats[bestIdx];
       return goal(
         isBW ? `Riprova le <b>${best.topReps}</b> rep della tua migliore` : `Riprova <b>${U.fmt(best.topKg)} kg</b> × <b>${best.topReps}</b> (la tua migliore)${rirStr}`,
-        `Due sedute sotto tono su questo esercizio: prima di cambiare pesi, controlla sonno, cibo e riposo tra le serie — di solito basta quello.${sysAdd}${shiftNote}${muscleNote}${subNote}`, "hold", dataLine);
+        `Due sedute sotto tono su questo esercizio: prima di cambiare pesi, controlla sonno, cibo e riposo tra le serie — di solito basta quello.${sysAdd}${shiftNote}${muscleNote}${subNote}${sleepNote}`, "hold", dataLine);
     }
 
     // 2b) UNA seduta sotto → normale, capita a tutti: riprendi i numeri di prima
@@ -1155,7 +1191,7 @@ const Session = {
       const why = issue ? ` — c'era un intoppo (poco tempo/macchinario occupato), è normale` : (hard ? " e l'avevi sentita dura" : "");
       return goal(
         isBW ? `Riprenditi le <b>${prev.topReps}</b> rep` : `Riprenditi <b>${U.fmt(prev.topKg)} kg</b> × <b>${prev.topReps}</b>${rirStr}`,
-        `La scorsa è andata sotto (${isBW ? last.topReps + " rep" : U.fmt(last.topKg) + "kg × " + last.topReps})${why}: una seduta storta capita a tutti. Torna ai tuoi numeri.${shiftNote}${muscleNote}${subNote}`, "go", dataLine);
+        `La scorsa è andata sotto (${isBW ? last.topReps + " rep" : U.fmt(last.topKg) + "kg × " + last.topReps})${why}: una seduta storta capita a tutti. Torna ai tuoi numeri.${shiftNote}${muscleNote}${subNote}${sleepNote}`, "go", dataLine);
     }
 
     // 2c) Best set SOTTO il fondo del range → carico troppo alto per il range
@@ -1307,6 +1343,26 @@ const Session = {
 
   // Carica lo storico di ogni esercizio (in background): alimenta l'analisi degli
   // obiettivi E semina i record personali con una sola lettura per esercizio.
+  // #batch2 — Sonno di stanotte, per dare contesto onesto ai consigli PER
+  // ESERCIZIO (finora il sonno influenzava solo il semaforo recovery in home).
+  // Stesse soglie di Dashboard.buildSemaforo, per coerenza: HRV<45 o <6h =
+  // rosso, <7h = giallo. In background, non blocca l'apertura della sessione.
+  async loadSleepContext() {
+    const token = (this._sleepToken = (this._sleepToken || 0) + 1);
+    try {
+      const rows = await API.getRecentSleep(1);
+      if (token !== this._sleepToken) return;
+      const last = rows && rows[0];
+      if (!last) { this._sleepInfo = null; return; }
+      const hrv = last.hrv, ore = last.ore != null ? last.ore : null;
+      let level = "verde";
+      if ((hrv && hrv < 45) || (ore != null && ore < 6)) level = "rosso";
+      else if (ore != null && ore < 7) level = "giallo";
+      this._sleepInfo = { ore, hrv, level };
+    } catch (e) { this._sleepInfo = null; }
+    this.refreshGoals();
+  },
+
   async loadExerciseIntel(exNames) {
     // Token anti-sovrapposizione: se nel frattempo apri un'altra sessione,
     // il caricamento vecchio si ferma (niente statistiche mescolate).
@@ -2042,6 +2098,12 @@ const Session = {
       : '<i class="ti ti-check"></i> Serie fatta';
     this.refreshExDone(exName);
     this.refreshSetHints(exName);   // aggiorna i consigli delle serie successive
+
+    // #batch2 — ultima serie di questo esercizio completata → avanza alla tendina successiva
+    const setsOfEx = this.groupByExercise(this.exercises)[exName] || [];
+    if (nowDone && setsOfEx.length > 0 && setsOfEx.every(s => this._done.has(s.id))) {
+      this.autoAdvanceExercise(exName);
+    }
 
     if (nowDone) {
       if (navigator.vibrate) navigator.vibrate(20);
