@@ -1988,21 +1988,16 @@ const ExportPDF = {
       try { ex = await API.getSessionExercises(s.id); } catch (e) {}
       withEx.push({ ...s, exercises: ex });
     }
-    const perEx = {};
-    withEx.forEach(s => {
-      const g = {};
-      s.exercises.forEach(r => { if ((r.reps || 0) <= 0) return; const k = U.exBase(r.name); (g[k] = g[k] || []).push(r); });
-      Object.keys(g).forEach(k => {
-        let top = g[k][0];
-        g[k].forEach(r => { if (this._e1(r.kg, r.reps) > this._e1(top.kg, top.reps)) top = r; });
-        (perEx[k] = perEx[k] || []).push({ date: s.date, e1: Math.round(this._e1(top.kg, top.reps) * 10) / 10, kg: top.kg, reps: top.reps });
-      });
+    // Progressione PER SESSIONE: volume totale (tonnellaggio = Σ kg×reps sulle
+    // serie fatte) per ogni seduta, nell'ordine cronologico delle N scelte.
+    const series = withEx.map(s => {
+      let vol = 0, sets = 0;
+      s.exercises.forEach(r => { if ((r.reps || 0) > 0) { vol += (r.kg || 0) * r.reps; sets++; } });
+      return { date: s.date, e1: Math.round(vol), sets };
     });
-    const charts = {};
-    for (const [name, pts] of Object.entries(perEx)) {
-      if (pts.length >= 2) { try { charts[name] = this._chartURL(name, pts); } catch (e) {} }
-    }
-    this._printHTML(this._buildHTML(type, withEx, charts));
+    let chart = null;
+    if (series.filter(p => p.e1 > 0).length >= 2) { try { chart = this._chartURL("Volume per sessione", series); } catch (e) {} }
+    this._printHTML(this._buildHTML(type, withEx, chart, series));
   },
 
   _chartURL(name, pts) {
@@ -2024,12 +2019,18 @@ const ExportPDF = {
     return url;
   },
 
-  _buildHTML(type, sessions, charts) {
+  _buildHTML(type, sessions, chart, series) {
     const esc = this._esc.bind(this);
     const scope = (type && type !== "__all__") ? esc(type) : "Tutti i tipi";
     const range = sessions.length ? `${U.fmtDate(sessions[0].date)} – ${U.fmtDate(sessions[sessions.length - 1].date)}` : "";
-    const chartCards = Object.keys(charts).sort().map(n =>
-      `<div class="rp-chart"><div class="rp-chart-t">${esc(n)}</div><img src="${charts[n]}" alt=""></div>`).join("");
+    // delta volume tra la prima e l'ultima sessione con volume (contesto per il grafico)
+    const vs = (series || []).filter(p => p.e1 > 0);
+    const delta = vs.length >= 2 ? vs[vs.length - 1].e1 - vs[0].e1 : null;
+    const chartSec = chart
+      ? `<h2 class="rp-h2">Progressione per sessione — volume totale (kg sollevati)</h2>` +
+        `<div class="rp-chart rp-chart-wide"><img src="${chart}" alt=""></div>` +
+        (delta != null ? `<div class="rp-chart-cap">Dalla prima all'ultima sessione: <b>${delta > 0 ? "+" : ""}${U.fmt(delta)} kg</b> di volume totale</div>` : "")
+      : "";
     const sessBlocks = [...sessions].reverse().map(s => {
       let exNotes = {}; try { exNotes = JSON.parse(localStorage.getItem("gymos_exnote_" + s.id) || "{}"); } catch (e) {}
       const g = {}, order = [];
@@ -2050,7 +2051,7 @@ const ExportPDF = {
       `<style>${this._css()}</style></head><body>` +
       `<div class="rp-head"><div class="rp-logo">GYM<span>OS</span></div>` +
         `<div class="rp-meta"><div class="rp-mt">Report allenamenti</div><div>${scope} · ${sessions.length} sessioni</div><div>${range}</div></div></div>` +
-      (chartCards ? `<h2 class="rp-h2">Progressione per esercizio (1RM stimato)</h2><div class="rp-charts">${chartCards}</div>` : "") +
+      chartSec +
       `<h2 class="rp-h2">Dettaglio sessioni</h2>${sessBlocks}` +
       `<div class="rp-foot">Generato da GymOS</div></body></html>`;
   },
@@ -2065,6 +2066,7 @@ const ExportPDF = {
       .rp-charts{display:grid;grid-template-columns:1fr 1fr;gap:14px}
       .rp-chart{border:1px solid #eee;border-radius:8px;padding:8px;break-inside:avoid}
       .rp-chart-t{font-weight:700;font-size:11px;margin-bottom:4px}.rp-chart img{width:100%;height:auto;display:block}
+      .rp-chart-wide{margin-bottom:6px}.rp-chart-cap{font-size:11px;color:#555;text-align:center;margin-bottom:6px}.rp-chart-cap b{color:#1a1a1a}
       .rp-sess{border:1px solid #eee;border-radius:8px;padding:10px 12px;margin-bottom:10px;break-inside:avoid}
       .rp-sess-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
       .rp-sess-h b{font-size:13px}.rp-sess-h span{color:#666;font-size:11px}
