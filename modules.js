@@ -1988,48 +1988,61 @@ const ExportPDF = {
       try { ex = await API.getSessionExercises(s.id); } catch (e) {}
       withEx.push({ ...s, exercises: ex });
     }
-    // Progressione PER SESSIONE: volume totale (tonnellaggio = Σ kg×reps sulle
-    // serie fatte) per ogni seduta, nell'ordine cronologico delle N scelte.
-    const series = withEx.map(s => {
-      let vol = 0, sets = 0;
-      s.exercises.forEach(r => { if ((r.reps || 0) > 0) { vol += (r.kg || 0) * r.reps; sets++; } });
-      return { date: s.date, e1: Math.round(vol), sets };
+    // Progressione PER ESERCIZIO — come la zona "Progressione" dell'app: per
+    // ogni esercizio il TOP SET (kg, o rep a corpo libero) seduta per seduta,
+    // sull'arco delle N scelte, con i record (PR) evidenziati.
+    const perEx = {};
+    withEx.forEach(s => {
+      const g = {};
+      s.exercises.forEach(r => { if ((r.reps || 0) <= 0) return; const k = U.exBase(r.name); (g[k] = g[k] || []).push(r); });
+      Object.keys(g).forEach(k => {
+        const topKg = Math.max(0, ...g[k].map(r => r.kg || 0));
+        const topReps = Math.max(0, ...g[k].map(r => r.reps || 0));
+        (perEx[k] = perEx[k] || []).push({ date: s.date, topKg, topReps });
+      });
     });
-    let chart = null;
-    if (series.filter(p => p.e1 > 0).length >= 2) { try { chart = this._chartURL("Volume per sessione", series); } catch (e) {} }
-    this._printHTML(this._buildHTML(type, withEx, chart, series));
+    // record: il top kg supera tutti i precedenti (come Progression.groupSessions)
+    Object.values(perEx).forEach(pts => { let run = 0; pts.forEach((p, i) => { p.isPR = i > 0 && p.topKg > run && p.topKg > 0; run = Math.max(run, p.topKg); }); });
+    const charts = {};
+    for (const [name, pts] of Object.entries(perEx)) {
+      if (pts.length >= 2) { try { charts[name] = this._chartURL(name, pts); } catch (e) {} }
+    }
+    this._printHTML(this._buildHTML(type, withEx, charts));
   },
 
   _chartURL(name, pts) {
     const c = document.createElement("canvas");
     c.width = 680; c.height = 240;
+    const isBW = pts.every(p => p.topKg === 0);
+    const data = pts.map(p => isBW ? p.topReps : p.topKg);
+    const ptColors = pts.map(p => p.isPR ? "#F59E0B" : "#FF3B2F");   // record in ambra
+    const ptRadius = pts.map(p => p.isPR ? 6 : 3);
     const chart = new Chart(c.getContext("2d"), {
       type: "line",
       data: {
         labels: pts.map(p => U.fmtDate(p.date)),
-        datasets: [{ data: pts.map(p => p.e1), borderColor: "#FF3B2F", backgroundColor: "rgba(255,59,47,.10)",
-          fill: true, tension: .3, pointRadius: 3, pointBackgroundColor: "#FF3B2F", borderWidth: 2 }],
+        datasets: [{ data, borderColor: "#FF3B2F", backgroundColor: "rgba(255,59,47,.10)",
+          fill: true, tension: .3, pointRadius: ptRadius, pointBackgroundColor: ptColors, borderWidth: 2 }],
       },
       options: { responsive: false, animation: false, plugins: { legend: { display: false } },
         scales: { x: { ticks: { color: "#666", font: { size: 10 } }, grid: { color: "#eee" } },
-                  y: { ticks: { color: "#666", font: { size: 10 } }, grid: { color: "#eee" } } } },
+                  y: { ticks: { color: "#666", font: { size: 10 }, callback: v => U.fmt(v) + (isBW ? " r" : " kg") }, grid: { color: "#eee" } } } },
     });
     const url = c.toDataURL("image/png");
     chart.destroy();
     return url;
   },
 
-  _buildHTML(type, sessions, chart, series) {
+  _buildHTML(type, sessions, charts) {
     const esc = this._esc.bind(this);
     const scope = (type && type !== "__all__") ? esc(type) : "Tutti i tipi";
     const range = sessions.length ? `${U.fmtDate(sessions[0].date)} – ${U.fmtDate(sessions[sessions.length - 1].date)}` : "";
-    // delta volume tra la prima e l'ultima sessione con volume (contesto per il grafico)
-    const vs = (series || []).filter(p => p.e1 > 0);
-    const delta = vs.length >= 2 ? vs[vs.length - 1].e1 - vs[0].e1 : null;
-    const chartSec = chart
-      ? `<h2 class="rp-h2">Progressione per sessione — volume totale (kg sollevati)</h2>` +
-        `<div class="rp-chart rp-chart-wide"><img src="${chart}" alt=""></div>` +
-        (delta != null ? `<div class="rp-chart-cap">Dalla prima all'ultima sessione: <b>${delta > 0 ? "+" : ""}${U.fmt(delta)} kg</b> di volume totale</div>` : "")
+    // Un grafico di progressione per ESERCIZIO (come la zona Progressione dell'app)
+    const chartCards = Object.keys(charts).sort().map(n =>
+      `<div class="rp-chart"><div class="rp-chart-t">${esc(n)}</div><img src="${charts[n]}" alt=""></div>`).join("");
+    const chartSec = chartCards
+      ? `<h2 class="rp-h2">Progressione per esercizio <span class="rp-h2s">(top set · <span class="rp-pr">●</span> record)</span></h2>` +
+        `<div class="rp-charts">${chartCards}</div>`
       : "";
     const sessBlocks = [...sessions].reverse().map(s => {
       let exNotes = {}; try { exNotes = JSON.parse(localStorage.getItem("gymos_exnote_" + s.id) || "{}"); } catch (e) {}
@@ -2066,7 +2079,7 @@ const ExportPDF = {
       .rp-charts{display:grid;grid-template-columns:1fr 1fr;gap:14px}
       .rp-chart{border:1px solid #eee;border-radius:8px;padding:8px;break-inside:avoid}
       .rp-chart-t{font-weight:700;font-size:11px;margin-bottom:4px}.rp-chart img{width:100%;height:auto;display:block}
-      .rp-chart-wide{margin-bottom:6px}.rp-chart-cap{font-size:11px;color:#555;text-align:center;margin-bottom:6px}.rp-chart-cap b{color:#1a1a1a}
+      .rp-h2s{font-weight:400;font-size:11px;color:#888}.rp-pr{color:#F59E0B;font-size:12px}
       .rp-sess{border:1px solid #eee;border-radius:8px;padding:10px 12px;margin-bottom:10px;break-inside:avoid}
       .rp-sess-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
       .rp-sess-h b{font-size:13px}.rp-sess-h span{color:#666;font-size:11px}
