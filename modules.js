@@ -2389,9 +2389,52 @@ const ExerciseGuide = {
 //  qui l'attesa (10-20s) è accettabile — la chiede l'utente, non blocca
 //  l'allenamento. Errori mostrati esplicitamente (non silenziosi come il
 //  consiglio automatico): l'utente ha chiesto attivamente, deve saperlo.
+//  Modale riusabile da OVUNQUE (Home E Sessione, mentre ti alleni) —
+//  stesso pattern di ExerciseGuide (overlay creato al volo, niente HTML
+//  statico duplicato per contesto).
 // ═══════════════════════════════════════════════
 const Coach = {
   _esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); },
+
+  open() {
+    const overlay = this._ensureOverlay();
+    // Se siamo in Sessione con un esercizio a fuoco, lo mostro come contesto
+    // (solo informativo — non limita la domanda, l'utente può chiedere altro).
+    let exHint = "";
+    try {
+      if (typeof Session !== "undefined" && Session.activeId && !Session.viewMode) {
+        const focused = document.querySelector("#exercises-container .ex-block.ex-focused");
+        const exName = focused ? focused.dataset.ex : null;
+        if (exName) exHint = `<div class="coach-ex-hint"><i class="ti ti-barbell"></i>Contesto: stai facendo <b>${this._esc(exName)}</b></div>`;
+      }
+    } catch (e) {}
+    overlay.innerHTML = `
+      <div class="coach-box" onclick="event.stopPropagation()">
+        <button class="coach-close" onclick="Coach.close()"><i class="ti ti-x"></i></button>
+        <div class="coach-title"><i class="ti ti-message-chatbot"></i>Chiedi al coach</div>
+        <div class="coach-hint">Un dubbio, una domanda tecnica? Cerco online e rispondo in base alla tua situazione.</div>
+        ${exHint}
+        <textarea class="field-inp coach-ta" id="coach-q" rows="2" placeholder="Es. ha senso allenare le gambe 3 volte a settimana?"></textarea>
+        <div class="form-actions">
+          <button class="btn-primary" id="coach-btn" onclick="Coach.ask()"><i class="ti ti-send"></i>Chiedi</button>
+        </div>
+        <div id="coach-answer"></div>
+      </div>`;
+    overlay.style.display = "flex";
+    setTimeout(() => { const ta = document.getElementById("coach-q"); if (ta) ta.focus(); }, 60);
+  },
+  close() { const el = document.getElementById("coach-overlay"); if (el) el.style.display = "none"; },
+  _ensureOverlay() {
+    let el = document.getElementById("coach-overlay");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "coach-overlay";
+      el.className = "coach-overlay";
+      el.onclick = e => { if (e.target === el) this.close(); };
+      document.body.appendChild(el);
+    }
+    return el;
+  },
 
   async ask() {
     const ta = document.getElementById("coach-q");
@@ -2409,6 +2452,14 @@ const Coach = {
     if (phase) context.phase = phase;
     if (diary) context.diary = diary;
     if (typeof Session !== "undefined" && Session._sleepInfo) context.sleep = Session._sleepInfo;
+    // In sessione: l'esercizio a fuoco come contesto extra (utile per domande
+    // tipo "questo esercizio mi fa male al gomito, alternative?").
+    try {
+      if (typeof Session !== "undefined" && Session.activeId && !Session.viewMode) {
+        const focused = document.querySelector("#exercises-container .ex-block.ex-focused");
+        if (focused && focused.dataset.ex) context.currentExercise = focused.dataset.ex;
+      }
+    } catch (e) {}
 
     try {
       const ctrl = new AbortController();
