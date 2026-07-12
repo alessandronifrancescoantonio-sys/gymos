@@ -639,6 +639,29 @@ const Volume = {
 
   zone(v) { return v === 0 ? "none" : v < this.MEV ? "low" : v <= this.MAV_HI ? "ok" : "high"; },
 
+  // #batch2 raffinamento 4 — tetto di serie DIRETTE per SINGOLA seduta (non
+  // solo il totale settimanale già coperto da MEV/MAV_HI): oltre questa soglia
+  // il beneficio marginale in UNA sessione crolla (Nippard/Krieger meta-review,
+  // Israetel — convergenza multipla). Dorso/Quadricipiti/Femorali/Glutei
+  // tollerano di più per seduta.
+  SESSION_SET_CEILING: 8,
+  SESSION_SET_CEILING_HIGH: 12,
+  _HIGH_TOLERANCE: ["Dorso", "Quadricipiti", "Femorali", "Glutei"],
+  sedutaDirectSets(sc) {
+    const dir = {};
+    (sc.exercises || []).forEach(it => {
+      const name = U.exName(it), sets = U.exSets(it);
+      if (!name) return;
+      const m = this.musclesFor(name);
+      Object.keys(m).forEach(mus => { if (m[mus] >= 1) dir[mus] = (dir[mus] || 0) + sets; });
+    });
+    return dir;
+  },
+  sedutaOverCeiling(sc) {
+    const dir = this.sedutaDirectSets(sc);
+    return Object.keys(dir).filter(mus => dir[mus] > (this._HIGH_TOLERANCE.includes(mus) ? this.SESSION_SET_CEILING_HIGH : this.SESSION_SET_CEILING));
+  },
+
   // Inizio settimana corrente (lunedì 00:00), coerente con lo split settimanale
   _weekStart() {
     const now = new Date();
@@ -756,12 +779,13 @@ const Volume = {
     const sedute = Object.entries(CONFIG.SCHEDE || {}).map(([nome, sc]) => {
       const exs = (sc.exercises || []).map(it => U.exName(it)).filter(Boolean);
       const toFix = exs.filter(e => Object.keys(this.musclesFor(e)).length === 0).length;
+      const overCeiling = this.sedutaOverCeiling(sc);
       const isOpen = this._openSeds && this._openSeds.has(nome);
       return `
         <div class="vol-sed${isOpen ? " open" : ""}" data-sed="${String(nome).replace(/"/g, "&quot;")}">
           <button class="vol-sed-hd" onclick="Volume.toggleSed(this)" style="border-left:3px solid ${sc.color || "var(--accent)"}">
             <span class="vol-sed-name">${this._esc(nome)}</span>
-            <span class="vol-sed-count">${exs.length} eserc.${toFix ? ` · <span class="vz-low">${toFix} da assegnare</span>` : ""}</span>
+            <span class="vol-sed-count">${exs.length} eserc.${toFix ? ` · <span class="vz-low">${toFix} da assegnare</span>` : ""}${overCeiling.length ? ` · <span class="vz-high">tante serie: ${overCeiling.join(", ")}</span>` : ""}</span>
             <i class="ti ti-chevron-down vol-sed-chev"></i>
           </button>
           <div class="vol-sed-body">${exs.map(e => this._exRow(e)).join("")}</div>
@@ -775,7 +799,7 @@ const Volume = {
       <div class="vol-note"><i class="ti ti-info-circle"></i> Ogni totale somma le serie <b>dirette</b> (muscolo primario, 1) e <b>indirette</b> (secondario, ½). La riga sotto ogni muscolo le mostra separate.</div>
       <div class="vol-list vol-list-full">${bars}</div>
       <div class="vol-sec-title"><i class="ti ti-body-scan"></i> Muscolo di ogni esercizio</div>
-      <div class="vol-hint">Apri una seduta del programma e correggi il muscolo dove l'automatico sbaglia. Primario = 1 serie, secondari = ½.</div>
+      <div class="vol-hint">Apri una seduta del programma e correggi il muscolo dove l'automatico sbaglia. Primario = 1 serie, secondari = ½. "Tante serie" avvisa quando in UNA seduta un muscolo supera ${this.SESSION_SET_CEILING} serie dirette (${this.SESSION_SET_CEILING_HIGH} per dorso/gambe/glutei): oltre, il beneficio in quella sessione cala.</div>
       <div class="vol-sed-list">${sedute}</div>`;
   },
 

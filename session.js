@@ -1067,6 +1067,12 @@ const Session = {
 
     // ── METRICHE OGGETTIVE: trend sull'1RM stimato CAPPATO al range ──
     const win = stats.slice(-5), m = win.length;
+    // #batch2 raffinamento 2 — soglia di scarico in giorni SCALATA sull'esperienza
+    // (proxy: sedute totali storiche su QUESTO esercizio, `n`). Chi è ancora
+    // all'inizio raramente accumula fatica vera da richiedere uno scarico
+    // (Helms/Israetel: i principianti possono arrivare a 12-16+ settimane senza
+    // bisogno) — soglia più lunga invece di applicare 14 giorni piatti a tutti.
+    const deloadSpanDays = n < 6 ? 42 : (n < 12 ? 21 : 14);
     // #1 SCARICO — arco di CALENDARIO coperto dalla finestra (non "N sedute").
     // 4 sedute possono essere 4 giorni o 4 settimane: un calo va confermato nel
     // TEMPO. Consenso ECSS/ACSM (Meeusen): un calo che rientra in GIORNI è
@@ -1120,6 +1126,16 @@ const Session = {
     const rirCaution = (highRep && easy)
       ? " A rep alte è facile credere di avere più margine di quanto hai: aggiungi poco, o prima aggiungi qualche rep."
       : "";
+    // #batch2 raffinamento 5 — oltre le ~30 rip (non solo "range alto": qui il
+    // carico stesso è quasi certamente troppo leggero) le unità motorie ad alta
+    // soglia non vengono più reclutate: stimolo minimo indipendentemente dal
+    // RIR dichiarato (Israetel, Nippard — convergenza multipla). Segnale
+    // distinto dallo scetticismo RIR sopra: scatta anche senza nota "facile".
+    const junkVolumeNote = (last.topReps || 0) > 30
+      ? (isBW
+        ? " Con più di 30 rip il corpo libero non basta più come stimolo: aggiungi un sovraccarico o una variante più difficile."
+        : " Con più di 30 rip il carico è quasi certamente troppo leggero per uno stimolo reale: aumenta parecchio il peso, non le rep.")
+      : "";
     // Riga dati oggettiva mostrata nel banner (trasparenza dell'analisi)
     const trendStr = m >= 3 ? `Forza ${slopePct > 0 ? "+" : ""}${String(slopePct).replace(".", ",")}% a seduta` : "Servono più sedute";
     const bestStr  = sinceBest === 0 ? "ultima = la migliore" : `migliore ${sinceBest} ${sinceBest === 1 ? "seduta" : "sedute"} fa`;
@@ -1170,11 +1186,17 @@ const Session = {
     // NON essere spiegato da un allenamento a cedimento nelle ultime 48h. La
     // letteratura (RCT) mostra che uno scarico anticipato può PEGGIORARE la
     // forza: meglio non suggerirlo mai troppo presto.
-    if (m >= 4 && spanDays >= 14 && slopePct <= -2 && this._systemicDown && !acuteFatigue) {
+    // #batch2 raffinamento 1 — secondo segnale che RINFORZA (non sostituisce)
+    // quello a giorni: ≥2 sedute consecutive senza un nuovo record (sinceBest,
+    // già calcolato sopra). Convergenza forte in letteratura (Israetel, dati
+    // IT): il vero trigger di scarico è l'assenza prolungata di un nuovo best,
+    // non solo il calendario. Richiediamo ENTRAMBI i segnali insieme, per
+    // restare coerenti con la filosofia "mai scaricare troppo presto".
+    if (m >= 4 && spanDays >= deloadSpanDays && slopePct <= -2 && this._systemicDown && !acuteFatigue && sinceBest >= 2) {
       this._suppressWarmup = true;   // #5 — niente rampa in giornata di scarico
       return goal(
         `Oggi vai più leggero: togli <b>~10%</b> di peso${rirStr}`,
-        `La forza cala da settimane (${spanDays} giorni) e non solo qui: è stanchezza accumulata. Una seduta leggera oggi, poi si riparte più forti.${sleepNote}`, "warn", dataLine);
+        `La forza cala da settimane (${spanDays} giorni, nessun nuovo record da ${sinceBest} sedute) e non solo qui: è stanchezza accumulata. Una seduta leggera oggi, poi si riparte più forti.${sleepNote}`, "warn", dataLine);
     }
 
     // 2a) Due sedute in calo su questo esercizio → NON tagliare il peso: ripeti
@@ -1209,7 +1231,7 @@ const Session = {
           : "prova +1 rep con una mini-pausa, oppure togli un 5% e risali.";
       return goal(
         isBW ? `Fermo da ${sinceBest} sedute — punta <b>${target}</b> rep` : `Fermo a <b>${U.fmt(last.topKg)} kg</b> da ${sinceBest} sedute`,
-        `Per sbloccarti: ${trick}${rirCaution}`, "hold", dataLine);
+        `Per sbloccarti: ${trick}${rirCaution}${junkVolumeNote}`, "hold", dataLine);
     }
 
     // 4) TUTTE le serie al top del range → si sale di peso (doppia progressione,
@@ -1217,8 +1239,8 @@ const Session = {
     if (allAtTop) {
       const conf = twoForTwo ? " Confermato per 2 sedute di fila." : "";
       return isBW
-        ? goal(`Punta <b>${last.topReps + 1}</b> rep`, `Tutte le serie al massimo del range: aggiungi rep.${conf}`, "go", dataLine)
-        : goal(`Aumenta il peso di <b>~${incr}</b> · riparti da <b>${rrMin}</b> rep${rirStr}`, `Hai chiuso tutte le serie a ${rrMax} rep con ${U.fmt(last.topKg)}kg${easy ? ", e le hai sentite facili" : ""}: sei pronto a salire.${conf}${zoneNote}${rirCaution}`, "go", dataLine);
+        ? goal(`Punta <b>${last.topReps + 1}</b> rep`, `Tutte le serie al massimo del range: aggiungi rep.${conf}${junkVolumeNote}`, "go", dataLine)
+        : goal(`Aumenta il peso di <b>~${incr}</b> · riparti da <b>${rrMin}</b> rep${rirStr}`, `Hai chiuso tutte le serie a ${rrMax} rep con ${U.fmt(last.topKg)}kg${easy ? ", e le hai sentite facili" : ""}: sei pronto a salire.${conf}${zoneNote}${rirCaution}${junkVolumeNote}`, "go", dataLine);
     }
 
     // 4b) Solo il best set al top → prima chiudi TUTTE le serie al top, POI si sale
@@ -1462,6 +1484,22 @@ const Session = {
     // le stesse rep (era il consiglio irrealistico "rifai 12×12 dopo un RIR1").
     const rirNum = (prev.rir != null && prev.rir !== "") ? Number(prev.rir) : 2;
     const nearFail = hard || rirNum <= 1 || (r >= rrMax && rirNum <= 2);
+    // #batch2 raffinamento 3 — un pesante multiarticolare (squat/hinge/push/pull
+    // in zona forza, rrMax≤6) non andrebbe MAI spinto al cedimento vero, nemmeno
+    // per chi si allena da anni: il costo di fatica/rischio è sproporzionato al
+    // guadagno (Israetel e Nippard concordano indipendentemente). Vale più del
+    // generico "sei vicino al limite": qui aggiungiamo un avviso esplicito.
+    let heavyCompoundNote = "";
+    if (nearFail && rirNum <= 1 && rrMax <= 6) {
+      try {
+        if (typeof Volume !== "undefined" && Volume.pattern) {
+          const pat = Volume.pattern(exName);
+          if (["squat", "hinge", "push", "pull"].includes(pat)) {
+            heavyCompoundNote = " Su un pesante multiarticolare come questo, meglio non arrivare mai al cedimento vero: lascia sempre 1-2 rep di margine.";
+          }
+        }
+      } catch (e) {}
+    }
     let cls, ic, txt;
     if (r > rrMax) {
       cls = "sh-up"; ic = "ti-arrow-up-right";
@@ -1475,8 +1513,8 @@ const Session = {
       cls = "sh-ok"; ic = "ti-equal";
       const why = rirNum <= 1 ? "eri vicino al cedimento" : hard ? "l'avevi sentita dura" : "hai chiuso il range";
       txt = bw
-        ? `Serie al limite (${why}): normale calare ora — punta <b>${tgt}</b>+ rep, non forzare`
-        : `Serie al limite (${why}): tieni <b>${U.fmt(kg)}kg</b>, è normale fare qualche rep in meno — punta <b>${tgt}</b>+`;
+        ? `Serie al limite (${why}): normale calare ora — punta <b>${tgt}</b>+ rep, non forzare${heavyCompoundNote}`
+        : `Serie al limite (${why}): tieni <b>${U.fmt(kg)}kg</b>, è normale fare qualche rep in meno — punta <b>${tgt}</b>+${heavyCompoundNote}`;
     } else if (easy) {
       // in range e comoda → puoi spingere un filo di più
       cls = "sh-up"; ic = "ti-arrow-up-right";
