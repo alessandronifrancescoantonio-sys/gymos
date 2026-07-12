@@ -2382,3 +2382,56 @@ const ExerciseGuide = {
   },
   close() { const el = document.getElementById("eg-overlay"); if (el) el.style.display = "none"; },
 };
+
+// ═══════════════════════════════════════════════
+//  GymOS — "Chiedi al coach" (Q&A scienza-based, ricerca Google reale via
+//  Gemini grounding). Feature SEPARATA dal consiglio veloce per-serie:
+//  qui l'attesa (10-20s) è accettabile — la chiede l'utente, non blocca
+//  l'allenamento. Errori mostrati esplicitamente (non silenziosi come il
+//  consiglio automatico): l'utente ha chiesto attivamente, deve saperlo.
+// ═══════════════════════════════════════════════
+const Coach = {
+  _esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); },
+
+  async ask() {
+    const ta = document.getElementById("coach-q");
+    const question = (ta?.value || "").trim();
+    if (!question) return;
+    const btn = document.getElementById("coach-btn");
+    const out = document.getElementById("coach-answer");
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2"></i> Cerco...'; }
+    if (out) out.innerHTML = `<div class="coach-loading"><i class="ti ti-loader-2"></i> Ricerca in corso, qualche secondo...</div>`;
+
+    let phase = "", diary = "";
+    try { if (typeof Body !== "undefined" && Body.checkins && Body.checkins.length) phase = Body.checkins[Body.checkins.length - 1].fase || ""; } catch (e) {}
+    try { if (typeof Diary !== "undefined") diary = Diary.getJournal(); } catch (e) {}
+    const context = {};
+    if (phase) context.phase = phase;
+    if (diary) context.diary = diary;
+    if (typeof Session !== "undefined" && Session._sleepInfo) context.sleep = Session._sleepInfo;
+
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 25000);
+      const res = await fetch(`${CONFIG.AI_WORKER_URL}/ask`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question, context: Object.keys(context).length ? context : undefined }),
+        signal: ctrl.signal,
+      }).finally(() => clearTimeout(timer));
+      if (!res.ok) throw new Error("Il coach non ha risposto (errore " + res.status + ")");
+      const data = await res.json();
+      if (!data || !data.answer) throw new Error("Risposta vuota dal coach");
+      const sources = (data.sources || []).map(s =>
+        `<a class="coach-source" href="${this._esc(s.uri)}" target="_blank" rel="noopener">${this._esc(s.title)}</a>`).join("");
+      out.innerHTML = `
+        <div class="coach-answer-box">
+          <div class="coach-answer-txt">${this._esc(data.answer).replace(/\n/g, "<br>")}</div>
+          ${sources ? `<div class="coach-sources"><i class="ti ti-link"></i>${sources}</div>` : ""}
+        </div>`;
+    } catch (e) {
+      if (out) out.innerHTML = `<div class="coach-error"><i class="ti ti-alert-triangle"></i> ${this._esc(e.message || "Errore di rete")}. Riprova.</div>`;
+    } finally {
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-send"></i>Chiedi'; }
+    }
+  },
+};

@@ -234,7 +234,14 @@ const Session = {
         // giornata si riflette sul prossimo consiglio richiesto.
         let diary = "";
         try { if (typeof Diary !== "undefined") diary = Diary.getJournal(); } catch (e) {}
-        const payload = { exercise: exName, rrMin, rrMax, rir, history, sleep: this._sleepInfo || null, systemicDown: !!this._systemicDown, diary: diary || undefined };
+        // Fase attuale (Cut/Bulk/Mant., da Misurazioni) — contesto per il consiglio.
+        let phase = "";
+        try { if (typeof Body !== "undefined" && Body.checkins && Body.checkins.length) phase = Body.checkins[Body.checkins.length - 1].fase || ""; } catch (e) {}
+        // Esercizi già fatti OGGI in QUESTA sessione (esclude quello corrente):
+        // ogni serie completata prima alimenta il consiglio degli esercizi
+        // successivi — ricalcolato fresco ad ogni chiamata, non cache-ato.
+        const todaySession = this._todaySessionSummary(exName);
+        const payload = { exercise: exName, rrMin, rrMax, rir, history, sleep: this._sleepInfo || null, systemicDown: !!this._systemicDown, diary: diary || undefined, phase: phase || undefined, todaySession: todaySession.length ? todaySession : undefined };
 
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), 8000);
@@ -249,6 +256,21 @@ const Session = {
         this._renderAIAdvice(exName, data);
       } catch (e) { /* offline o worker down: niente, il motore a regole basta */ }
     }
+  },
+
+  // Riepilogo degli esercizi già FATTI oggi in questa sessione (serie con
+  // reps>0), esclude `excludeExName`. Alimenta il consiglio IA degli esercizi
+  // successivi con ciò che è appena successo in sessione, non solo lo storico.
+  _todaySessionSummary(excludeExName) {
+    const grouped = this.groupByExercise(this.exercises);
+    const out = [];
+    for (const name of this.exOrder || []) {
+      if (name === excludeExName) continue;
+      const sets = (grouped[name] || []).filter(s => (s.reps || 0) > 0);
+      if (!sets.length) continue;
+      out.push({ name, sets: sets.map(s => ({ kg: s.kg || 0, reps: s.reps })), notes: sets.map(s => s.note).filter(Boolean) });
+    }
+    return out;
   },
 
   _renderAIAdvice(exName, data) {
@@ -709,6 +731,10 @@ const Session = {
       });
       nextBlock.classList.remove("collapsed");
       this.scrollToBlock(nextBlock);
+      // Ri-analizza col cervello IA per l'esercizio in cui stai entrando: ora
+      // include quello appena finito nel "fatto oggi" — consiglio aggiornato
+      // con l'informazione più fresca possibile, non quella di inizio sessione.
+      this.loadAIAdvice([nextName]);
     } else {
       // ultimo esercizio della scheda: chiudi e torna alla vista normale
       blocks.forEach(b => b.classList.remove("ex-focused", "ex-dimmed"));
