@@ -302,7 +302,9 @@ const Session = {
           <span class="drag-handle" aria-label="Trascina"><i class="ti ti-grip-vertical"></i></span>
           <span class="ex-num">${exIdx + 1}</span>
           <div class="ex-hd-main">
-            <div class="ex-name">${exName}</div>
+            <div class="ex-name">${exName}
+              <button type="button" class="ex-howto-btn" title="Come si esegue?" onclick="event.stopPropagation();ExerciseGuide.open('${exName.replace(/'/g, "\\'")}')"><i class="ti ti-help-circle"></i></button>
+            </div>
             <div class="ex-sub">
               <span class="ex-target-inline">Target
                 <input class="rr-in-sm" type="number" value="${rrMin}" min="1" max="40"

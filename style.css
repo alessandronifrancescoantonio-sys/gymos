@@ -155,7 +155,9 @@ input { font-family:inherit; }
 .drag-handle:active { cursor:grabbing; }
 .ex-num { font-family:'Bebas Neue',sans-serif; font-size:20px; color:var(--accent); min-width:18px; line-height:1; flex-shrink:0; }
 .ex-hd-main { flex:1; min-width:0; }
-.ex-name { font-size:15px; font-weight:600; color:var(--text); }
+.ex-name { font-size:15px; font-weight:600; color:var(--text); display:inline-flex; align-items:center; gap:6px; }
+.ex-howto-btn { color:var(--dim); font-size:15px; line-height:0; padding:2px; border-radius:100px; flex-shrink:0; }
+.ex-howto-btn:hover, .ex-howto-btn:active { color:var(--accent); }
 .ex-sub { font-size:11px; color:var(--dim); margin-top:1px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .ex-target-inline { display:inline-flex; align-items:center; gap:4px; }
 .rr-in-sm { font-family:'DM Mono',monospace; font-size:11px; font-weight:500; color:var(--blue); background:rgba(59,130,246,.12); border:1px solid rgba(59,130,246,.25); border-radius:5px; padding:1px 0; width:28px; text-align:center; outline:none; }
@@ -1524,6 +1526,31 @@ body::before, body::after { will-change:transform, opacity; }
   background:linear-gradient(#161619, #161619) padding-box,
              linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.03) 30%, rgba(255,59,47,.12)) border-box;
   box-shadow:var(--sh-pop); }
+
+/* "Come si esegue?" — overlay guida esercizio (free-exercise-db) */
+.eg-overlay { position:fixed; inset:0; z-index:10000; display:none; align-items:flex-end;
+  justify-content:center; background:rgba(0,0,0,.6); backdrop-filter:blur(3px); }
+.eg-box { position:relative; width:100%; max-width:520px; max-height:85vh; overflow-y:auto;
+  background:var(--ink2); border-radius:20px 20px 0 0; padding:20px; box-shadow:var(--sh-3); }
+@media (min-width:640px) { .eg-overlay { align-items:center; } .eg-box { border-radius:16px; max-height:80vh; } }
+.eg-close { position:absolute; top:12px; right:12px; width:32px; height:32px; border-radius:100px;
+  background:var(--ink3); color:var(--text); display:flex; align-items:center; justify-content:center; font-size:16px; }
+.eg-title { font-size:17px; font-weight:700; color:var(--text); padding-right:36px; }
+.eg-muscle { display:inline-block; margin-top:4px; font-size:11px; font-weight:600; color:var(--accent);
+  background:rgba(255,59,47,.1); border:1px solid rgba(255,59,47,.25); padding:2px 9px; border-radius:100px; }
+.eg-img { width:100%; border-radius:12px; margin-top:12px; display:block; background:var(--ink3); }
+.eg-steps { margin:14px 0 0; padding-left:20px; display:flex; flex-direction:column; gap:8px; }
+.eg-steps li { font-size:13px; color:var(--text2); line-height:1.5; }
+.eg-src { margin-top:14px; font-size:10px; color:var(--muted); }
+.eg-empty, .eg-loading { display:flex; flex-direction:column; align-items:center; gap:8px; text-align:center;
+  padding:30px 10px; color:var(--dim); font-size:13px; }
+.eg-empty i, .eg-loading i { font-size:26px; }
+.eg-pick-lbl { font-size:13px; font-weight:600; color:var(--text); padding-right:36px; margin-bottom:12px; }
+.eg-pick-list { display:flex; flex-direction:column; gap:6px; }
+.eg-pick-item { display:flex; align-items:center; justify-content:space-between; gap:8px; text-align:left;
+  background:var(--ink3); border:1px solid var(--line-soft); border-radius:10px; padding:10px 12px;
+  font-size:13px; color:var(--text); }
+.eg-pick-item span { font-size:10px; color:var(--accent); background:rgba(255,59,47,.1); padding:2px 7px; border-radius:100px; flex-shrink:0; }
 
 /* #H — Il punto di oggi (recap/consigli giornalieri) */
 #daily-recap:empty { display:none; }
