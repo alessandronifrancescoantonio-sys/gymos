@@ -15,7 +15,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-<link rel="stylesheet" href="style.css?v=69">
+<link rel="stylesheet" href="style.css?v=70">
 </head>
 <body>
 
@@ -153,10 +153,19 @@
       <!-- #H — Il punto di oggi (recap/consigli giornalieri) -->
       <div class="card" id="daily-recap"></div>
 
-      <!-- Chiedi al coach — Q&A scienza-based con ricerca Google reale (modale, apribile da qui e dalla Sessione) -->
-      <div class="card coach-card-trigger" onclick="Coach.open()">
-        <div class="card-title"><i class="ti ti-message-chatbot"></i>Chiedi al coach</div>
-        <div class="coach-hint">Un dubbio, una domanda tecnica? L'IA cerca online e ti risponde in base alla tua situazione.</div>
+      <!-- Chiedi al coach — Q&A scienza-based, memoria delle domande passate,
+           ricerca Google reale. Zona fissa qui in Home + apribile anche dalla
+           Sessione (FAB nell'header) mentre ti alleni, stessa memoria condivisa. -->
+      <div class="card coach-chat-card">
+        <div class="card-title"><i class="ti ti-message-chatbot"></i>Chiedi al coach
+          <button class="coach-clear-btn" onclick="Coach.clearHistory()" title="Cancella conversazione"><i class="ti ti-trash"></i></button>
+        </div>
+        <div class="coach-hint">Ricorda le domande passate, la fase, se eri in sessione. Un dubbio? Chiedi.</div>
+        <div class="coach-chat-list" id="coach-list-home"></div>
+        <textarea class="field-inp coach-ta" id="coach-q-home" rows="2" placeholder="Es. ha senso allenare le gambe 3 volte a settimana?"></textarea>
+        <div class="form-actions">
+          <button class="btn-primary" id="coach-btn-home" onclick="Coach.ask('home')"><i class="ti ti-send"></i>Chiedi</button>
+        </div>
       </div>
     </div>
   </section>
@@ -665,13 +674,13 @@
   </div>
 </div>
 
-<script src="exercise-guide-index.js?v=69"></script>
-<script src="config.js?v=69"></script>
-<script src="api.js?v=69"></script>
-<script src="session.js?v=69"></script>
-<script src="modules.js?v=69"></script>
-<script src="timers.js?v=69"></script>
-<script src="app.js?v=69"></script>
+<script src="exercise-guide-index.js?v=70"></script>
+<script src="config.js?v=70"></script>
+<script src="api.js?v=70"></script>
+<script src="session.js?v=70"></script>
+<script src="modules.js?v=70"></script>
+<script src="timers.js?v=70"></script>
+<script src="app.js?v=70"></script>
 <script>
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(function(){});

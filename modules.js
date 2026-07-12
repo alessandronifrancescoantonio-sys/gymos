@@ -1093,6 +1093,7 @@ const Dashboard = {
       this.buildRecentSessions(sessions);
       this.buildSemaforo(sleepData);
       try { DailyRecap.render({ sessions, checkins, sleep: sleepData, habits, todayHabit }); } catch (e) { console.error("DailyRecap:", e); }
+      try { Coach.renderAll(); } catch (e) { console.error("Coach.renderAll:", e); }
     } catch(e) { console.error("Dashboard.load:", e); }
   },
 
@@ -2394,12 +2395,69 @@ const ExerciseGuide = {
 //  statico duplicato per contesto).
 // ═══════════════════════════════════════════════
 const Coach = {
+  HISTORY_KEY: "gymos_coach_history",
+  MAX_STORED: 60,     // storico on-device tenuto (localStorage)
+  CONTEXT_TURNS: 6,   // ultimi scambi mandati a Gemini come MEMORIA VERA (multi-turno nativo, non testo ripetuto)
+
   _esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); },
+
+  // ── Memoria persistente on-device (come diario/note-esercizio: niente
+  // nuovo schema Notion). Condivisa tra la zona in Home e il modale in
+  // Sessione — stessa conversazione ovunque la apri. ──
+  _loadHistory() { try { return JSON.parse(localStorage.getItem(this.HISTORY_KEY) || "[]"); } catch (e) { return []; } },
+  _saveHistory(arr) { try { localStorage.setItem(this.HISTORY_KEY, JSON.stringify(arr.slice(-this.MAX_STORED))); } catch (e) {} },
+  _pushHistory(entry) { const arr = this._loadHistory(); arr.push(entry); this._saveHistory(arr); },
+  async clearHistory() {
+    const ok = await U.confirm("Cancellare tutta la conversazione col coach? Non si può annullare.", { title: "Cancellare la conversazione?", danger: true, okText: "Sì, cancella" });
+    if (!ok) return;
+    try { localStorage.removeItem(this.HISTORY_KEY); } catch (e) {}
+    this.renderAll();
+  },
+
+  // Momento della giornata: in sessione / post-allenamento (fatto oggi) /
+  // pre-allenamento-giorno normale. Solo contesto per il coach, best-effort —
+  // se Session.sessions non è ancora caricato, ripiega senza inventare nulla.
+  _dayContext() {
+    try {
+      if (typeof Session !== "undefined" && Session.activeId && !Session.viewMode) return "in sessione";
+      const today = (typeof U !== "undefined") ? U.today() : new Date().toISOString().slice(0, 10);
+      const doneToday = ((typeof Session !== "undefined" && Session.sessions) || []).some(s => s.date === today && s.done);
+      return doneToday ? "post-allenamento (fatto oggi)" : "pre-allenamento / giorno normale";
+    } catch (e) { return ""; }
+  },
+  _fmtWhen(ts) {
+    const d = new Date(ts);
+    const time = d.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+    const isToday = d.toDateString() === new Date().toDateString();
+    return isToday ? time : `${d.toLocaleDateString("it-IT", { day: "numeric", month: "short" })} ${time}`;
+  },
+
+  // Ridisegna sia la zona fissa in Home sia il modale (se aperto) dalla
+  // STESSA memoria — così restano sempre in sincronia indipendentemente da
+  // dove hai fatto l'ultima domanda.
+  renderAll() {
+    this._renderList("coach-list-home", this._loadHistory());
+    if (document.getElementById("coach-overlay")) this._renderList("coach-list-modal", this._loadHistory().slice(-4));
+  },
+  _renderList(containerId, entries) {
+    const el = document.getElementById(containerId);
+    if (!el) return;
+    if (!entries.length) { el.innerHTML = '<div class="coach-empty">Ancora nessuna domanda — chiedimi qualcosa.</div>'; return; }
+    el.innerHTML = entries.map(e => {
+      const meta = [this._fmtWhen(e.ts), e.dayContext, e.exercise].filter(Boolean).map(m => this._esc(m)).join(" · ");
+      const sources = (e.sources || []).map(s =>
+        `<a class="coach-source" href="${this._esc(s.uri)}" target="_blank" rel="noopener">${this._esc(s.title)}</a>`).join("");
+      return `<div class="coach-msg">
+        <div class="coach-msg-meta">${meta}</div>
+        <div class="coach-bubble coach-bubble-q">${this._esc(e.question)}</div>
+        <div class="coach-bubble coach-bubble-a">${this._esc(e.answer).replace(/\n/g, "<br>")}${sources ? `<div class="coach-sources"><i class="ti ti-link"></i>${sources}</div>` : ""}</div>
+      </div>`;
+    }).join("");
+    el.scrollTop = el.scrollHeight;
+  },
 
   open() {
     const overlay = this._ensureOverlay();
-    // Se siamo in Sessione con un esercizio a fuoco, lo mostro come contesto
-    // (solo informativo — non limita la domanda, l'utente può chiedere altro).
     let exHint = "";
     try {
       if (typeof Session !== "undefined" && Session.activeId && !Session.viewMode) {
@@ -2412,16 +2470,16 @@ const Coach = {
       <div class="coach-box" onclick="event.stopPropagation()">
         <button class="coach-close" onclick="Coach.close()"><i class="ti ti-x"></i></button>
         <div class="coach-title"><i class="ti ti-message-chatbot"></i>Chiedi al coach</div>
-        <div class="coach-hint">Un dubbio, una domanda tecnica? Cerco online e rispondo in base alla tua situazione.</div>
         ${exHint}
-        <textarea class="field-inp coach-ta" id="coach-q" rows="2" placeholder="Es. ha senso allenare le gambe 3 volte a settimana?"></textarea>
+        <div class="coach-chat-list coach-chat-list-modal" id="coach-list-modal"></div>
+        <textarea class="field-inp coach-ta" id="coach-q-modal" rows="2" placeholder="Es. ha senso allenare le gambe 3 volte a settimana?"></textarea>
         <div class="form-actions">
-          <button class="btn-primary" id="coach-btn" onclick="Coach.ask()"><i class="ti ti-send"></i>Chiedi</button>
+          <button class="btn-primary" id="coach-btn-modal" onclick="Coach.ask('modal')"><i class="ti ti-send"></i>Chiedi</button>
         </div>
-        <div id="coach-answer"></div>
       </div>`;
     overlay.style.display = "flex";
-    setTimeout(() => { const ta = document.getElementById("coach-q"); if (ta) ta.focus(); }, 60);
+    this._renderList("coach-list-modal", this._loadHistory().slice(-4));
+    setTimeout(() => { const ta = document.getElementById("coach-q-modal"); if (ta) ta.focus(); }, 60);
   },
   close() { const el = document.getElementById("coach-overlay"); if (el) el.style.display = "none"; },
   _ensureOverlay() {
@@ -2436,51 +2494,66 @@ const Coach = {
     return el;
   },
 
-  async ask() {
-    const ta = document.getElementById("coach-q");
+  // target: "home" | "modal" — due input separati (zona fissa + modale),
+  // stessa memoria condivisa sotto.
+  async ask(target) {
+    target = target || "home";
+    const ta = document.getElementById(`coach-q-${target}`);
     const question = (ta?.value || "").trim();
     if (!question) return;
-    const btn = document.getElementById("coach-btn");
-    const out = document.getElementById("coach-answer");
+    const btn = document.getElementById(`coach-btn-${target}`);
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2"></i> Cerco...'; }
-    if (out) out.innerHTML = `<div class="coach-loading"><i class="ti ti-loader-2"></i> Ricerca in corso, qualche secondo...</div>`;
 
     let phase = "", diary = "";
     try { if (typeof Body !== "undefined" && Body.checkins && Body.checkins.length) phase = Body.checkins[Body.checkins.length - 1].fase || ""; } catch (e) {}
     try { if (typeof Diary !== "undefined") diary = Diary.getJournal(); } catch (e) {}
+    const inSession = !!(typeof Session !== "undefined" && Session.activeId && !Session.viewMode);
+    let exercise = null;
+    try {
+      if (inSession) {
+        const focused = document.querySelector("#exercises-container .ex-block.ex-focused");
+        exercise = (focused && focused.dataset.ex) || null;
+      }
+    } catch (e) {}
+    const dayContext = this._dayContext();
+
     const context = {};
     if (phase) context.phase = phase;
     if (diary) context.diary = diary;
     if (typeof Session !== "undefined" && Session._sleepInfo) context.sleep = Session._sleepInfo;
-    // In sessione: l'esercizio a fuoco come contesto extra (utile per domande
-    // tipo "questo esercizio mi fa male al gomito, alternative?").
-    try {
-      if (typeof Session !== "undefined" && Session.activeId && !Session.viewMode) {
-        const focused = document.querySelector("#exercises-container .ex-block.ex-focused");
-        if (focused && focused.dataset.ex) context.currentExercise = focused.dataset.ex;
-      }
-    } catch (e) {}
+    if (exercise) context.currentExercise = exercise;
+    if (dayContext) context.dayContext = dayContext;
+
+    // Memoria VERA per Gemini: ultimi scambi come turni multi-turno nativi
+    // (contents role user/model), non testo ripetuto nel prompt.
+    const history = this._loadHistory().slice(-this.CONTEXT_TURNS).map(e => ({ question: e.question, answer: e.answer }));
+
+    // bolla "sto pensando" temporanea — MAI persistita, solo mentre si aspetta
+    const listId = target === "home" ? "coach-list-home" : "coach-list-modal";
+    const listEl = document.getElementById(listId);
+    if (listEl) {
+      listEl.insertAdjacentHTML("beforeend", `<div class="coach-msg" id="coach-thinking-${target}"><div class="coach-bubble coach-bubble-q">${this._esc(question)}</div><div class="coach-loading"><i class="ti ti-loader-2"></i> Ricerca in corso, qualche secondo...</div></div>`);
+      listEl.scrollTop = listEl.scrollHeight;
+    }
 
     try {
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 25000);
       const res = await fetch(`${CONFIG.AI_WORKER_URL}/ask`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, context: Object.keys(context).length ? context : undefined }),
+        body: JSON.stringify({ question, context: Object.keys(context).length ? context : undefined, history }),
         signal: ctrl.signal,
       }).finally(() => clearTimeout(timer));
       if (!res.ok) throw new Error("Il coach non ha risposto (errore " + res.status + ")");
       const data = await res.json();
       if (!data || !data.answer) throw new Error("Risposta vuota dal coach");
-      const sources = (data.sources || []).map(s =>
-        `<a class="coach-source" href="${this._esc(s.uri)}" target="_blank" rel="noopener">${this._esc(s.title)}</a>`).join("");
-      out.innerHTML = `
-        <div class="coach-answer-box">
-          <div class="coach-answer-txt">${this._esc(data.answer).replace(/\n/g, "<br>")}</div>
-          ${sources ? `<div class="coach-sources"><i class="ti ti-link"></i>${sources}</div>` : ""}
-        </div>`;
+      this._pushHistory({ id: "c" + Date.now(), ts: Date.now(), question, answer: data.answer, sources: data.sources || [], inSession, phase: phase || null, exercise, dayContext });
+      if (ta) ta.value = "";
+      this.renderAll();
     } catch (e) {
-      if (out) out.innerHTML = `<div class="coach-error"><i class="ti ti-alert-triangle"></i> ${this._esc(e.message || "Errore di rete")}. Riprova.</div>`;
+      const think = document.getElementById(`coach-thinking-${target}`);
+      const msg = `<div class="coach-error"><i class="ti ti-alert-triangle"></i> ${this._esc(e.message || "Errore di rete")}. Riprova.</div>`;
+      if (think) think.outerHTML = `<div class="coach-msg">${msg}</div>`;
     } finally {
       if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-send"></i>Chiedi'; }
     }
