@@ -209,10 +209,56 @@ const Session = {
     this.armSessionTimers();   // auto-avvio durata + eventuale auto-salvataggio
     // Carica lo storico di ogni esercizio (background): alimenta gli obiettivi
     // intelligenti e semina i record personali. Non blocca l'UI.
-    this.loadExerciseIntel(Object.keys(grouped));
+    this.loadExerciseIntel(Object.keys(grouped)).then(() => this.loadAIAdvice(Object.keys(grouped)));
     // Sonno di stanotte (background): dà contesto ai consigli per-esercizio.
     this.loadSleepContext();
   },
+
+  // Cervello IA (Gemini via Worker Cloudflare separato) — ADDITIVO, mai
+  // sostituisce il motore a regole. Silenzioso su qualunque errore/offline:
+  // se fallisce, l'utente vede solo il consiglio del motore a regole, punto.
+  // Timeout breve per non far percepire l'app come lenta.
+  async loadAIAdvice(exNames) {
+    const token = (this._aiToken = (this._aiToken || 0) + 1);
+    for (const exName of (exNames || [])) {
+      if (!exName) continue;
+      try {
+        const grouped = this.groupByExercise(this.exercises);
+        const sets = grouped[exName] || [];
+        const rrMin = sets[0]?.rrMin || 8, rrMax = sets[0]?.rrMax || 12, rir = sets[0]?.rir ?? null;
+        const stats = (this._exStats && this._exStats[exName]) || [];
+        const history = stats.slice(-8).map(g => ({ date: g.date, sets: (g.sets || []).map(s => ({ kg: s.kg, reps: s.reps })), notes: g.notes || [] }));
+        const payload = { exercise: exName, rrMin, rrMax, rir, history, sleep: this._sleepInfo || null, systemicDown: !!this._systemicDown };
+
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 8000);
+        const res = await fetch(`${CONFIG.AI_WORKER_URL}/advice`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload), signal: ctrl.signal,
+        }).finally(() => clearTimeout(timer));
+        if (token !== this._aiToken) return;   // sessione cambiata: abbandona
+        if (!res.ok) continue;
+        const data = await res.json();
+        if (!data || !data.advice) continue;
+        this._renderAIAdvice(exName, data);
+      } catch (e) { /* offline o worker down: niente, il motore a regole basta */ }
+    }
+  },
+
+  _renderAIAdvice(exName, data) {
+    const sid = this.sanitize(exName);
+    const el = document.getElementById(`ai-${sid}`);
+    if (!el) return;
+    const tone = ["go", "hold", "warn"].includes(data.tone) ? data.tone : "go";
+    const ic = tone === "warn" ? "ti-sparkles" : tone === "hold" ? "ti-sparkles" : "ti-sparkles";
+    const confLbl = data.confidence === "bassa" ? " · poca certezza" : "";
+    el.innerHTML = `
+      <div class="ai-advice-box ai-${tone}">
+        <i class="ti ${ic}"></i>
+        <div class="ai-txt"><span class="ai-lbl">IA${confLbl}</span><span class="ai-main">${this._escAI(data.advice)}</span></div>
+      </div>`;
+  },
+  _escAI(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); },
 
   // #F — Note per singolo esercizio, per sessione, salvate ON-DEVICE
   // (localStorage), come le foto progressi. Non toccano lo schema Notion.
@@ -334,6 +380,7 @@ const Session = {
         <div class="ex-body">
           ${(!this.viewMode && !this.sessionDone) ? this.progressionGoalHTML(exName, prevSets, rrMin, rrMax, rir, this._orderShift(exName), this._sameMuscleDirect(exName)) : ""}
           ${(!this.viewMode && !this.sessionDone) ? this.warmupRampHTML(exName, prevMax) : ""}
+          ${(!this.viewMode && !this.sessionDone) ? `<div class="ai-advice" id="ai-${sid}"></div>` : ""}
           ${this.prevNotesHTML(prevSets)}
           <div id="sets-${sid}"></div>
           <div class="add-set-row">

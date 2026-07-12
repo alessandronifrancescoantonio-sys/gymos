@@ -5,6 +5,7 @@
 const CONFIG = {
 
   WORKER_URL: "https://gymos-api.alessandronifrancescoantonio.workers.dev/api",
+  AI_WORKER_URL: "https://shrill-dawn-6c16.alessandronifrancescoantonio.workers.dev",
 
   DB: {
     WORKOUT_LOG:     "8015f38fdf534c47957689203673012d",
