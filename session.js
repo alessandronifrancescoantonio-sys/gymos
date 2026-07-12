@@ -87,6 +87,13 @@ const Session = {
       // salvato), riprendilo invece di ripartire dal pulsante.
       const resume = localStorage.getItem("gymos_active");
       if (resume) {
+        // Come per `target`: se la sessione in corso non è tra le 20 più recenti
+        // (capita con più sessioni/giorni in mezzo), allarga la ricerca a 50 prima
+        // di considerarla "non più valida" — altrimenti un allenamento in corso
+        // sparisce e riparte da zero senza motivo.
+        if (!this.sessions.find(x => x.id === resume)) {
+          try { this.sessions = await API.getWorkoutSessions(50); this.buildSelect(); } catch (e) {}
+        }
         const s = this.sessions.find(x => x.id === resume);
         if (s && s.done === false) {
           this.activeId = resume;
@@ -2483,6 +2490,10 @@ function saveSession()     { Session.confirmAndSave(); }
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible" && Session.activeId && !Session.sessionDone && !Session.viewMode) {
     Session.armSessionTimers();
+    // Il timer durata (a differenza del RestTimer) non si risincronizzava al
+    // ritorno in app: se il telefono sospende il setInterval mentre sei fuori,
+    // il display restava fermo. Ricalcola subito dal timestamp reale.
+    if (typeof DurationTimer !== "undefined" && DurationTimer.startTime) DurationTimer.tick();
   }
 });
 
