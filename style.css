@@ -1527,6 +1527,11 @@ body::before, body::after { will-change:transform, opacity; }
              linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.03) 30%, rgba(255,59,47,.12)) border-box;
   box-shadow:var(--sh-pop); }
 
+/* Diario libero ("Giornata & sensazioni") — alimenta il cervello IA */
+.journal-ta { width:100%; resize:vertical; min-height:88px; font-family:inherit; line-height:1.45; margin-bottom:8px; }
+.journal-hint { display:flex; align-items:center; gap:6px; font-size:11px; color:var(--dim); }
+.journal-hint i { color:var(--purple); font-size:13px; }
+
 /* Cervello IA (Gemini) — additivo sotto l'obiettivo del motore a regole */
 .ai-advice:empty { display:none; }
 .ai-advice-box { display:flex; align-items:flex-start; gap:9px; margin-bottom:12px; padding:9px 12px;

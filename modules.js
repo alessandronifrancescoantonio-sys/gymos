@@ -1472,9 +1472,30 @@ const Diary = {
     { key:"pesoReg", label:"Peso registrato", icon:"ti-scale" },
   ],
 
+  // Diario libero ("giornata & sensazioni") — ON-DEVICE (localStorage, come
+  // note-esercizio e foto progressi), niente nuovo schema Notion. Autosave
+  // debounced mentre scrivi ("tempo reale"): il cervello IA lo legge ad ogni
+  // richiesta di consiglio (Session.loadAIAdvice), niente bottone salva.
+  _journalKey(d) { return `gymos_journal_${d || U.today()}`; },
+  getJournal(d) { try { return localStorage.getItem(this._journalKey(d)) || ""; } catch (e) { return ""; } },
+  onJournalInput(text) {
+    clearTimeout(this._journalTimer);
+    this._journalTimer = setTimeout(() => {
+      try {
+        const t = (text || "").trim();
+        if (t) localStorage.setItem(this._journalKey(), t);
+        else localStorage.removeItem(this._journalKey());
+      } catch (e) {}
+      const msg = document.getElementById("journal-save-msg");
+      if (msg) { msg.style.display = "flex"; setTimeout(() => msg.style.display = "none", 1800); }
+    }, 500);
+  },
+
   async load() {
     document.getElementById("diary-date").textContent =
       new Date().toLocaleDateString("it-IT", { weekday:"long", day:"numeric", month:"long" });
+    const ta = document.getElementById("journal-ta");
+    if (ta) ta.value = this.getJournal();
     this.qualita = null; this.energia = null; this.umore = null;
     this.buildRatings();
     this.buildEnergia();

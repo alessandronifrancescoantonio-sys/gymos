@@ -228,7 +228,13 @@ const Session = {
         const rrMin = sets[0]?.rrMin || 8, rrMax = sets[0]?.rrMax || 12, rir = sets[0]?.rir ?? null;
         const stats = (this._exStats && this._exStats[exName]) || [];
         const history = stats.slice(-8).map(g => ({ date: g.date, sets: (g.sets || []).map(s => ({ kg: s.kg, reps: s.reps })), notes: g.notes || [] }));
-        const payload = { exercise: exName, rrMin, rrMax, rir, history, sleep: this._sleepInfo || null, systemicDown: !!this._systemicDown };
+        // Diario libero di oggi ("Diario" → Giornata & sensazioni): testo
+        // scritto dall'utente, autosalvato in tempo reale. Letto FRESCO ad
+        // ogni chiamata (non cache-ato), così un aggiornamento a metà
+        // giornata si riflette sul prossimo consiglio richiesto.
+        let diary = "";
+        try { if (typeof Diary !== "undefined") diary = Diary.getJournal(); } catch (e) {}
+        const payload = { exercise: exName, rrMin, rrMax, rir, history, sleep: this._sleepInfo || null, systemicDown: !!this._systemicDown, diary: diary || undefined };
 
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), 8000);
