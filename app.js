@@ -64,15 +64,22 @@ const App = {
     const loading = document.getElementById("loading");
     const fill    = document.getElementById("loading-fill");
     const msg     = document.getElementById("loading-msg");
+    const retryBtn = document.getElementById("boot-retry-btn");
+
+    // Riavvio (via bottone Riprova): riporta la schermata allo stato iniziale
+    loading.style.display = "flex"; loading.style.opacity = "1";
+    retryBtn.style.display = "none";
 
     // Step 1 — test connessione
     setProgress(20, "Connessione a Notion...");
     const ok = await API.testConnection().catch(() => false);
 
     if (!ok) {
-      setProgress(100, "Errore connessione — controlla config.js");
+      // Prima non c'era via d'uscita se non ricaricare manualmente la pagina:
+      // ora un bottone Riprova richiama boot() senza refresh.
+      setProgress(100, "Errore connessione — controlla la rete o config.js");
       setConnStatus(false);
-      setTimeout(() => loading.style.display = "none", 2000);
+      retryBtn.style.display = "inline-flex";
       return;
     }
 

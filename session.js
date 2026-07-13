@@ -2299,6 +2299,14 @@ const Session = {
       if (set && (set.reps || 0) > 0 && !this.sessionDone) {
         const rec0 = this.prRec(exName);
         const hadRecord = !!rec0 && ((rec0.w || 0) > 0 || (rec0.e1rm || 0) > 0);
+        // Snapshot PRE-merge: se l'utente digita un peso sbagliato per errore
+        // e poi annulla la serie, senza questo il record fantasma resterebbe
+        // per sempre (Math.max non è invertibile da solo) e sopprimerebbe
+        // tutti i PR reali futuri su quell'esercizio. Solo in memoria (basta
+        // per il "mi sono accorto subito e ho annullato" — non persiste al
+        // reload, come _done/_prSets sono comunque scope-di-sessione).
+        this._prSnapshots = this._prSnapshots || {};
+        this._prSnapshots[id] = rec0 ? JSON.parse(JSON.stringify(rec0)) : { w: 0, e1rm: 0, repsAt: {} };
         const beat = this.prMerge(exName, set.kg || 0, set.reps);
         if (hadRecord && (beat.weight || beat.e1rm || beat.reps)) {
           this._prSets.add(id);
@@ -2314,6 +2322,21 @@ const Session = {
           if (navigator.vibrate) navigator.vibrate([25, 40, 35]);
         }
       }
+    } else if (this._prSets.has(id)) {
+      // Annullamento di una serie che aveva segnato un PR: ripristina il
+      // record al valore pre-merge invece di lasciare un record fantasma.
+      const snap = this._prSnapshots && this._prSnapshots[id];
+      if (snap) {
+        const store = this.prLoadStore();
+        store[exName] = snap;
+        this.prSaveStore();
+      }
+      this._prSets.delete(id);
+      this.savePrSets();
+      card.classList.remove("set-pr");
+      const el = document.getElementById(`prog-${id}`);
+      const tag = el && el.querySelector(".pr-tag");
+      if (tag) tag.remove();
     }
     // se ora è tutto spuntato → programma il salvataggio automatico (o annullalo)
     this.checkAutoSave();
@@ -2713,10 +2736,17 @@ const Session = {
       // Raccogli i numeri del riepilogo ORA (prima della pulizia dello stato)
       const summary = this._collectSummary(savedMins);
       btns.forEach(b => { b.disabled = false; b.innerHTML = '<i class="ti ti-device-floppy"></i> Salva'; });
-      // Pulizia: i flag locali di questa sessione non servono più una volta salvata
+      // Pulizia: i flag locali di questa sessione non servono più una volta
+      // salvata (Notion è ormai la fonte di verità) — senza, si accumulano
+      // per sempre in localStorage, una chiave in più per ogni sessione mai
+      // fatta (mesi/anni di uso = migliaia di chiavi morte).
       if (this.activeId) {
         localStorage.removeItem(`gymos_done_${this.activeId}`);
         localStorage.removeItem(`gymos_order_${this.activeId}`);
+        localStorage.removeItem(`gymos_pr_${this.activeId}`);
+        localStorage.removeItem(`gymos_exnote_${this.activeId}`);
+        localStorage.removeItem(`gymos_created_${this.activeId}`);
+        localStorage.removeItem(`gymos_autosave_${this.activeId}`);
       }
       // aggiorna l'elenco e torna alla schermata iniziale (pronto per il prossimo)
       try { this.sessions = await API.getWorkoutSessions(20); this.buildSelect(); } catch(_) {}
