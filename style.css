@@ -160,7 +160,11 @@ input { font-family:inherit; }
 .ex-howto-btn:hover, .ex-howto-btn:active { color:var(--accent); }
 .ex-sub { font-size:11px; color:var(--dim); margin-top:1px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .ex-target-inline { display:inline-flex; align-items:center; gap:4px; }
-.rr-in-sm { font-family:'DM Mono',monospace; font-size:11px; font-weight:500; color:var(--blue); background:rgba(59,130,246,.12); border:1px solid rgba(59,130,246,.25); border-radius:5px; padding:1px 0; width:28px; text-align:center; outline:none; }
+/* width 28px + frecce native del browser (non nascoste prima) lasciavano
+   spazio a malapena per una cifra: un numero a due cifre (es. 12) finiva
+   coperto dalle frecce su desktop, dando l'impressione di un tetto a 9. */
+.rr-in-sm { font-family:'DM Mono',monospace; font-size:11px; font-weight:500; color:var(--blue); background:rgba(59,130,246,.12); border:1px solid rgba(59,130,246,.25); border-radius:5px; padding:1px 2px; width:34px; text-align:center; outline:none; -moz-appearance:textfield; }
+.rr-in-sm::-webkit-outer-spin-button, .rr-in-sm::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
 .rr-in-sm:focus { border-color:var(--blue); }
 .ex-chevron { color:var(--muted); font-size:18px; flex-shrink:0; transition:transform .2s; }
 .ex-block.collapsed .ex-chevron { transform:rotate(-90deg); }
