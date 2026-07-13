@@ -1648,7 +1648,7 @@ const Diary = {
   LIMIT_TAGS: [
     { key: "ginocchio", label: "Ginocchio",     icon: "ti-shoe" },
     { key: "spalla",    label: "Spalla",        icon: "ti-yoga" },
-    { key: "schiena",   label: "Schiena",       icon: "ti-spine" },
+    { key: "schiena",   label: "Schiena",       icon: "ti-activity" },
     { key: "anca",      label: "Anca/bacino",   icon: "ti-walk" },
     { key: "caviglia",  label: "Caviglia/piede",icon: "ti-shoe-off" },
     { key: "polso",     label: "Polso/gomito",  icon: "ti-hand-stop" },
