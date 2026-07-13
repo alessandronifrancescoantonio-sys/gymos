@@ -1080,7 +1080,7 @@ const Dashboard = {
     try {
       const [sessions, checkins, sleepData, habits, todayHabit] = await Promise.all([
         API.getWorkoutSessions(14).catch(() => []),
-        API.getBodyMetrics(5).catch(() => []),
+        API.getBodyMetrics(12).catch(() => []),   // 12 (non 5): serve storia sufficiente per stimare da quanto si è nella fase attuale (diet-break)
         API.getRecentSleep(7).catch(() => []),
         API.getRecentHabits(7).catch(() => []),
         API.getTodayHabit().catch(() => null),
@@ -2188,6 +2188,19 @@ const DailyRecap = {
   _fmtRate(r) { const v = Math.round(r * 10) / 10; return `${v > 0 ? "+" : ""}${String(v).replace(".", ",")}%/sett`; },
   _protein(peso) { return peso ? `${Math.round(peso * 1.6)}–${Math.round(peso * 2.2)} g/die` : "1,6–2,2 g/kg"; },
 
+  // Quanti check-in CONSECUTIVI (dal più recente a ritroso) sono nella stessa
+  // fase attuale — stima grezza di "da quanto sei in questa fase" usando solo
+  // dati già tracciati (fase per check-in), niente nuovo campo. Non è un
+  // conteggio esatto di settimane (dipende da quanto spesso ti pesi), solo un
+  // segnale per capire se una fase si sta protraendo.
+  _phaseStreak(checkins, re) {
+    let n = 0;
+    for (let i = (checkins || []).length - 1; i >= 0; i--) {
+      if (re.test(checkins[i].fase || "")) n++; else break;
+    }
+    return n;
+  },
+
   build(d) {
     const ins = [];
     const add = (sev, icon, title, msg) => ins.push({ sev, icon, title, msg });
@@ -2212,6 +2225,13 @@ const DailyRecap = {
     const strDown = sigFresh && sig.down;
     if (strDown) add("warn", "ti-battery-2", "Forza in calo diffuso", "Cali su più esercizi: stai accumulando fatica. Valuta una seduta più leggera o un giorno di stacco, e cura sonno e cibo.");
 
+    // ── SCARICO PROATTIVO (calendario, non reattivo) — soft, informativo:
+    // non sostituisce/contraddice lo scarico reattivo (basato su calo reale),
+    // è solo un'idea se non ci sono già segnali e non ne parli da un po'.
+    const DELOAD_CALENDAR_DAYS = 56;   // ~8 settimane (Nippard: ogni ~2 mesi)
+    const deloadDue = !strDown && d.lastDeloadTs > 0 && (Date.now() - d.lastDeloadTs) >= DELOAD_CALENDAR_DAYS * 86400000;
+    if (deloadDue) add("info", "ti-refresh", "Scarico proattivo?", "Non hai avuto segnali di calo da un po': una settimana leggera ogni tanto (-25/50% carico-volume) aiuta tecnica e articolazioni anche senza bisogno reale — solo un'idea, non un obbligo.");
+
     // ── RECUPERO — sonno / HRV ──
     const sl = d.sleep && d.sleep[0];
     const avgSleep = d.sleep && d.sleep.length ? d.sleep.reduce((a, s) => a + (s.ore || 0), 0) / d.sleep.length : null;
@@ -2230,13 +2250,17 @@ const DailyRecap = {
     if (wt && fase) {
       const r = wt.rate, prot = this._protein(wt.peso);
       if (/cut|defin|tagl/i.test(fase)) {
-        if (r > -0.15) add("warn", "ti-flame", "Definizione ferma", `In definizione ma il peso non scende (${this._fmtRate(r)}). Se resta fermo 1–2 settimane, taglia un po' le calorie.`);
+        if (r > -0.15) {
+          const longCut = this._phaseStreak(d.checkins, /cut|defin|tagl/i) >= 8;
+          const dietBreak = longCut ? " Sei in questa fase da un po': oltre a tagliare le calorie, una pausa di 1-2 settimane a mantenimento può aiutare aderenza e fame senza rovinare i progressi." : "";
+          add("warn", "ti-flame", "Definizione ferma", `In definizione ma il peso non scende (${this._fmtRate(r)}). Se resta fermo 1–2 settimane, taglia un po' le calorie.${dietBreak}`);
+        }
         else if (r < -1.0 && strDown) add("alert", "ti-bolt", "Taglio troppo aggressivo", `Peso giù in fretta (${this._fmtRate(r)}) e forza in calo: rischio RED-S. Alza le calorie, tieni le proteine (~${prot}) e rallenta.`);
         else if (r < -1.0) add("warn", "ti-flame", "Taglio veloce", `Perdi in fretta (${this._fmtRate(r)}): occhio a non perdere muscolo. Proteine alte (~${prot}).`);
         else add("good", "ti-flame", "Definizione on track", `Perdi ~${this._fmtRate(r)}: ritmo giusto per tenere il muscolo.`);
       } else if (/bulk|massa|surplus/i.test(fase)) {
         if (r < 0.1) add("warn", "ti-trending-up", "Massa ferma", `In massa ma il peso non sale (${this._fmtRate(r)}): per crescere serve un lieve surplus, aumenta un po' le calorie.`);
-        else if (r > 1.0) add("warn", "ti-trending-up", "Massa troppo rapida", `Sali in fretta (${this._fmtRate(r)}): modera il surplus per limitare il grasso.`);
+        else if (r > 1.0) add("warn", "ti-trending-up", "Massa troppo rapida", `Sali in fretta (${this._fmtRate(r)}): modera il surplus per limitare il grasso (più sei avanzato, più conviene restare vicino a ~0,5–1%/mese).`);
         else add("good", "ti-trending-up", "Massa on track", `Cresci di ~${this._fmtRate(r)}: ritmo pulito.`);
       } else {
         if (Math.abs(r) < 0.3) add("good", "ti-equal", "Peso stabile", `Mantenimento ok (${this._fmtRate(r)}).`);
@@ -2249,7 +2273,7 @@ const DailyRecap = {
     return {
       insights: ins,
       headline: ins[0] || null,
-      stats: { done, target, avgSleep, rate: wt ? wt.rate : null, fase, strTrend },
+      stats: { done, target, avgSleep, rate: wt ? wt.rate : null, fase, strTrend, deloadFired: deloadDue },
     };
   },
 
@@ -2260,7 +2284,16 @@ const DailyRecap = {
     try { strengthSig = JSON.parse(localStorage.getItem("gymos_strength_signal") || "null"); } catch (e) {}
     let volume = null;
     try { volume = (typeof Volume !== "undefined") ? Volume.compute() : null; } catch (e) {}
-    const r = this.build({ ...data, volume, strengthSig });
+    // Scarico calendario: timestamp on-device dell'ultimo nudge/segnale, per
+    // non ripetere il consiglio ogni giorno. Al primissimo utilizzo (mai
+    // scritto prima) si "semina" senza mostrare nulla — evita di accogliere
+    // un utente nuovo con un consiglio di scarico al primo avvio.
+    let lastDeloadTs = 0;
+    try { lastDeloadTs = parseInt(localStorage.getItem("gymos_last_deload_nudge_ts") || "0", 10) || 0; } catch (e) {}
+    const r = this.build({ ...data, volume, strengthSig, lastDeloadTs });
+    try {
+      if (!lastDeloadTs || r.stats.deloadFired || strengthSig?.down) localStorage.setItem("gymos_last_deload_nudge_ts", String(Date.now()));
+    } catch (e) {}
     if (!r.insights.length) { wrap.innerHTML = ""; return; }
     const esc = s => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const hd = r.headline;
@@ -2396,8 +2429,10 @@ const ExerciseGuide = {
 // ═══════════════════════════════════════════════
 const Coach = {
   HISTORY_KEY: "gymos_coach_history",
-  MAX_STORED: 60,     // storico on-device tenuto (localStorage)
-  CONTEXT_TURNS: 6,   // ultimi scambi mandati a Gemini come MEMORIA VERA (multi-turno nativo, non testo ripetuto)
+  MAX_STORED: 60,      // storico on-device tenuto (localStorage)
+  RELEVANT_K: 8,        // quanti scambi passati recuperare per SIMILARITÀ semantica (embedding)
+  RECENT_KEEP: 3,       // ultimi scambi SEMPRE inclusi per continuità conversazionale
+  CONTEXT_CAP: 14,      // tetto totale mandato a Gemini (rilevanti + recenti, deduplicati)
 
   _esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); },
 
@@ -2407,6 +2442,68 @@ const Coach = {
   _loadHistory() { try { return JSON.parse(localStorage.getItem(this.HISTORY_KEY) || "[]"); } catch (e) { return []; } },
   _saveHistory(arr) { try { localStorage.setItem(this.HISTORY_KEY, JSON.stringify(arr.slice(-this.MAX_STORED))); } catch (e) {} },
   _pushHistory(entry) { const arr = this._loadHistory(); arr.push(entry); this._saveHistory(arr); },
+
+  // ── Memoria "a cervello" — retrieval semantico via embedding, non solo
+  // gli ultimi N messaggi in ordine cronologico. Ogni scambio passato ha un
+  // embedding (calcolato in background dopo la risposta); una nuova domanda
+  // viene confrontata via cosine similarity con TUTTO lo storico salvato
+  // (fino a 60 scambi) per trovare cosa è davvero collegato, non solo cosa
+  // è recente. Ricerca fatta interamente lato client (istantanea, nessun
+  // server/DB) — il worker calcola solo il vettore via Gemini embeddings.
+  _cosine(a, b) {
+    if (!Array.isArray(a) || !Array.isArray(b) || !a.length || a.length !== b.length) return -1;
+    let dot = 0, na = 0, nb = 0;
+    for (let i = 0; i < a.length; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
+    if (!na || !nb) return -1;
+    return dot / (Math.sqrt(na) * Math.sqrt(nb));
+  },
+  async _embed(texts) {
+    try {
+      const res = await fetch(`${CONFIG.AI_WORKER_URL}/embed`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ texts }),
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      return (data && Array.isArray(data.embeddings)) ? data.embeddings : null;
+    } catch (e) { return null; }
+  },
+  // Costruisce la selezione di storico da mandare a Gemini per una domanda:
+  // top-K per similarità semantica + ultimi RECENT_KEEP per continuità,
+  // deduplicati e riordinati cronologicamente. Fallback onesto: se
+  // l'embedding fallisce (offline/errore), usa solo la recency (comportamento
+  // precedente), niente eccezioni propagate.
+  async _relevantHistory(question) {
+    const all = this._loadHistory();
+    if (!all.length) return [];
+    let qEmb = null;
+    try { const r = await this._embed([question]); qEmb = r && r[0]; } catch (e) {}
+    if (!qEmb) return all.slice(-this.RECENT_KEEP * 2);   // fallback: solo recency
+    const scored = all.map(e => ({ e, score: e.embedding ? this._cosine(qEmb, e.embedding) : -1 }));
+    scored.sort((a, b) => b.score - a.score);
+    const topK = scored.slice(0, this.RELEVANT_K).map(s => s.e);
+    const recent = all.slice(-this.RECENT_KEEP);
+    const seen = new Set(); const merged = [];
+    recent.concat(topK).forEach(e => { if (!seen.has(e.id)) { seen.add(e.id); merged.push(e); } });
+    merged.sort((a, b) => (a.ts || 0) - (b.ts || 0));
+    return merged.slice(-this.CONTEXT_CAP);
+  },
+  // Calcola e salva (in background, mai bloccante) l'embedding di uno
+  // scambio appena risposto, così diventa recuperabile per similarità nelle
+  // domande future. Silenzioso su qualunque errore — è arricchimento, non
+  // funzionalità critica.
+  async _embedAndStore(id, question, answer) {
+    try {
+      const r = await this._embed([`${question}\n${answer}`]);
+      const emb = r && r[0];
+      if (!emb) return;
+      const arr = this._loadHistory();
+      const idx = arr.findIndex(e => e.id === id);
+      if (idx === -1) return;
+      arr[idx].embedding = emb;
+      this._saveHistory(arr);
+    } catch (e) {}
+  },
   async clearHistory() {
     const ok = await U.confirm("Cancellare tutta la conversazione col coach? Non si può annullare.", { title: "Cancellare la conversazione?", danger: true, okText: "Sì, cancella" });
     if (!ok) return;
@@ -2524,10 +2621,6 @@ const Coach = {
     if (exercise) context.currentExercise = exercise;
     if (dayContext) context.dayContext = dayContext;
 
-    // Memoria VERA per Gemini: ultimi scambi come turni multi-turno nativi
-    // (contents role user/model), non testo ripetuto nel prompt.
-    const history = this._loadHistory().slice(-this.CONTEXT_TURNS).map(e => ({ question: e.question, answer: e.answer }));
-
     // bolla "sto pensando" temporanea — MAI persistita, solo mentre si aspetta
     const listId = target === "home" ? "coach-list-home" : "coach-list-modal";
     const listEl = document.getElementById(listId);
@@ -2537,6 +2630,12 @@ const Coach = {
     }
 
     try {
+      // Memoria VERA per Gemini: scambi passati selezionati per RILEVANZA
+      // semantica (embedding) + gli ultimi per continuità, come turni
+      // multi-turno nativi (contents role user/model), non testo ripetuto.
+      const relevant = await this._relevantHistory(question);
+      const history = relevant.map(e => ({ question: e.question, answer: e.answer }));
+
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 25000);
       const res = await fetch(`${CONFIG.AI_WORKER_URL}/ask`, {
@@ -2547,9 +2646,11 @@ const Coach = {
       if (!res.ok) throw new Error("Il coach non ha risposto (errore " + res.status + ")");
       const data = await res.json();
       if (!data || !data.answer) throw new Error("Risposta vuota dal coach");
-      this._pushHistory({ id: "c" + Date.now(), ts: Date.now(), question, answer: data.answer, sources: data.sources || [], inSession, phase: phase || null, exercise, dayContext });
+      const id = "c" + Date.now();
+      this._pushHistory({ id, ts: Date.now(), question, answer: data.answer, sources: data.sources || [], inSession, phase: phase || null, exercise, dayContext });
       if (ta) ta.value = "";
       this.renderAll();
+      this._embedAndStore(id, question, data.answer);   // background, non bloccante
     } catch (e) {
       const think = document.getElementById(`coach-thinking-${target}`);
       const msg = `<div class="coach-error"><i class="ti ti-alert-triangle"></i> ${this._esc(e.message || "Errore di rete")}. Riprova.</div>`;

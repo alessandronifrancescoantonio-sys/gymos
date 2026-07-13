@@ -241,7 +241,18 @@ const Session = {
         // ogni serie completata prima alimenta il consiglio degli esercizi
         // successivi — ricalcolato fresco ad ogni chiamata, non cache-ato.
         const todaySession = this._todaySessionSummary(exName);
-        const payload = { exercise: exName, rrMin, rrMax, rir, history, sleep: this._sleepInfo || null, systemicDown: !!this._systemicDown, diary: diary || undefined, phase: phase || undefined, todaySession: todaySession.length ? todaySession : undefined };
+        // Estratti recenti dalla chat col coach: solo domande non banali
+        // (lunghezza minima, filtro grezzo per scartare "ciao"/"grazie" ecc.),
+        // Gemini stesso giudica se sono pertinenti a QUESTO esercizio — niente
+        // classificatore di rilevanza separato da costruire/mantenere.
+        let coachNotes;
+        try {
+          if (typeof Coach !== "undefined") {
+            coachNotes = Coach._loadHistory().filter(e => (e.question || "").trim().length >= 12).slice(-3)
+              .map(e => ({ question: e.question, answer: e.answer }));
+          }
+        } catch (e) {}
+        const payload = { exercise: exName, rrMin, rrMax, rir, history, sleep: this._sleepInfo || null, systemicDown: !!this._systemicDown, diary: diary || undefined, phase: phase || undefined, todaySession: todaySession.length ? todaySession : undefined, coachNotes: (coachNotes && coachNotes.length) ? coachNotes : undefined };
 
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), 8000);
