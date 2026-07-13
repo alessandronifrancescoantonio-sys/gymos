@@ -1054,28 +1054,57 @@ const Session = {
   // rampa serve ad arrivare al peso di lavoro in SICUREZZA e a tarare tecnica e
   // sensazioni del giorno — non ad "aumentare la performance". Solo per compound
   // pesanti; isolamento e macchine leggere non ne hanno bisogno.
+  // Riscaldamento per OGNI esercizio (non solo compound pesanti): scalato su
+  // PATTERN (quanto è sistemico/coinvolge SNC e articolazioni — un multi-
+  // articolare pesante ha molto più da "calibrare" di un curl bicipiti) e su
+  // QUANTO PESO c'è da caricare. La PAP (potenziamento post-attivazione) ha
+  // effetto reale solo per potenza esplosiva (salto/sprint), non per un
+  // lifter normale in palestra — comunicato onestamente come sicurezza e
+  // calibrazione ("come ti senti oggi"), mai come "aumenta la forza".
   warmupRampHTML(exName, W) {
     try {
       if (this._suppressWarmup) return "";   // oggi è scarico o dolore: niente rampa
-      if (typeof Volume === "undefined" || !Volume.pattern) return "";
-      const pat = Volume.pattern(exName);
-      if (!["squat", "hinge", "push", "pull"].includes(pat)) return "";   // no isolamento
+      let pat = "";
+      try { if (typeof Volume !== "undefined") pat = Volume.pattern(exName); } catch (e) {}
+      const heavyPattern = ["squat", "hinge", "push", "pull"].includes(pat);
       W = Math.round(W || 0);
-      if (W < 30) return "";   // troppo leggero / corpo libero: la rampa non serve
-      // Frazioni del peso di lavoro; più step quanto più è pesante il compound.
-      const plan = W >= 120 ? [[0.4, 5], [0.55, 4], [0.7, 3], [0.82, 2], [0.92, 1]]
-                 : W >= 80  ? [[0.4, 5], [0.6, 4], [0.75, 3], [0.88, 2]]
-                 :            [[0.5, 5], [0.7, 3], [0.85, 2]];
+
+      // W<=0: corpo libero VERO, oppure semplicemente nessuno storico ancora
+      // (prima volta su un esercizio a carico) — non possiamo distinguerli
+      // qui con certezza, quindi il messaggio copre onestamente entrambi i
+      // casi senza affermare "è a corpo libero" quando potrebbe non esserlo.
+      if (W <= 0) {
+        return `
+          <details class="warmup">
+            <summary><i class="ti ti-flame"></i> Riscaldamento <span class="wu-hint">calibrati prima della serie vera</span></summary>
+            <div class="wu-note">${heavyPattern ? "Fai 5-8 ripetizioni leggere/parziali (o a corpo libero) per attivare l'articolazione e sentire come va oggi, poi la serie vera." : "Un paio di ripetizioni leggere di calibrazione bastano qui — esercizio poco sistemico."}</div>
+          </details>`;
+      }
+
+      // Piano scalato: i multiarticolari pesanti coinvolgono più articolazioni/
+      // SNC e beneficiano di una rampa a più step; l'isolamento ha molto meno
+      // da calibrare — un solo step leggero basta, una rampa completa sarebbe
+      // tempo perso senza beneficio aggiuntivo.
+      let plan;
+      if (heavyPattern && W >= 120) plan = [[0.4, 5], [0.55, 4], [0.7, 3], [0.82, 2], [0.92, 1]];
+      else if (heavyPattern && W >= 80) plan = [[0.4, 5], [0.6, 4], [0.75, 3], [0.88, 2]];
+      else if (heavyPattern && W >= 30) plan = [[0.5, 5], [0.7, 3], [0.85, 2]];
+      else if (W >= 20) plan = [[0.6, 6], [0.8, 4]];   // isolamento/leggero con carico reale
+      else plan = [[0.7, 6]];                            // molto leggero: un solo step di calibrazione
+
       const round = kg => W >= 40 ? Math.round(kg / 2.5) * 2.5 : Math.round(kg);
       const steps = plan.map(([f, reps]) => ({ kg: round(W * f), reps }))
         .filter((s, i, a) => s.kg > 0 && (i === 0 || s.kg > a[i - 1].kg));  // niente step doppioni
       if (!steps.length) return "";
       const chips = steps.map(s => `<span class="wu-step"><b>${U.fmt(s.kg)}</b> kg × ${s.reps}</span>`).join("");
+      const note = heavyPattern
+        ? "Serve a scaldarti e a testare come ti senti oggi, non ad aumentare la forza. Recupera poco tra queste (30–60s)."
+        : "Basta un carico leggero per calibrarti: qui il riscaldamento graduale conta meno che su un multiarticolare (meno coinvolgimento sistemico).";
       return `
         <details class="warmup">
           <summary><i class="ti ti-flame"></i> Riscaldamento <span class="wu-hint">arriva ai ${U.fmt(W)} kg in sicurezza</span></summary>
           <div class="wu-steps">${chips}<span class="wu-work">→ poi il lavoro</span></div>
-          <div class="wu-note">Serve a scaldarti e a testare come ti senti oggi, non ad aumentare la forza. Recupera poco tra queste (30–60s).</div>
+          <div class="wu-note">${note}</div>
         </details>`;
     } catch (e) { return ""; }
   },
@@ -1295,21 +1324,44 @@ const Session = {
     // multiarticolari pesanti (drop-off di rep più marcato con recupero
     // corto: Willardson & Burkett 2006, Ratamess et al. 2007). Solo un
     // promemoria trasparente nella riga dati, non blocca né sostituisce nulla.
+    let pat = "";
+    try { if (typeof Volume !== "undefined") pat = Volume.pattern(exName); } catch (e) {}
+    const isCompound = ["squat", "hinge", "push", "pull"].includes(pat);
+    const isIsolation = ["iso", "core", "calf"].includes(pat);
+
     let restCfgNote = "";
     try {
       const restSec = (rest === "" || rest == null) ? 90 : Number(rest);
-      const pat = (typeof Volume !== "undefined") ? Volume.pattern(exName) : "";
-      const isCompound = ["squat", "hinge", "push", "pull"].includes(pat);
       const restMin = (zone === "forza" ? 120 : zone === "resist" ? 30 : 60) + (isCompound ? 30 : 0);
       if (Number.isFinite(restSec) && restSec > 0 && restSec < restMin) {
         const mins = restMin >= 60 ? `${Math.round(restMin / 6) / 10}min` : `${restMin}s`;
         restCfgNote = ` · recupero ${restSec}s forse corto per ${zone === "forza" ? "la forza" : zone === "resist" ? "la resistenza" : "l'ipertrofia"} (~${mins} indicati)`;
       }
     } catch (e) {}
+
+    // ── TARGET DI SFORZO (RIR) COME RIFERIMENTO UNICO ─────────────────────
+    // Scelta esplicita dell'utente: il cedimento (o meglio, QUANTO vicino
+    // andarci) è l'unico obiettivo fisso per ogni esercizio; peso/rep restano
+    // calcolati dal contesto (rep-range, recupero, note, RIR, storico,
+    // sessione corrente/precedente) attorno a questo target. Punto fermo di
+    // SICUREZZA che NON cambia (Israetel/Nippard, già stabilito e confermato):
+    // sui multiarticolari pesanti (squat/hinge/push/pull in zona forza) il
+    // target non scende mai sotto RIR 2 — mai cedimento vero lì. Sull'isolamento
+    // arrivare vicino/al cedimento è più sicuro (meno sistemico) e la ricerca
+    // sul vantaggio 0 vs 1 RIR è meno conclusiva, quindi meno grave sbagliare.
+    const deloadTrig = m >= 4 && spanDays >= deloadSpanDays && slopePct <= -2 && this._systemicDown && !acuteFatigue && sinceBest >= 2;
+    let targetRIR;
+    if (pain) targetRIR = curPain >= 3 ? 5 : curPain >= 2 ? 4 : 3;
+    else if (deloadTrig) targetRIR = isCompound ? 4 : 3;
+    else if (sustainedDecline || gapDays >= 14 || this._systemicDown) targetRIR = isCompound ? 3 : 2;
+    else if (sinceBest >= 3 && !atTop) targetRIR = isIsolation ? 0 : (isCompound ? 2 : 1);   // plateau: spingi un po' di più
+    else targetRIR = isCompound ? 2 : (isIsolation ? 1 : (zone === "forza" ? 2 : 1));
+    const targetRIRNote = ` · Sforzo di riferimento: RIR ~${targetRIR}`;
+
     // Riga dati oggettiva mostrata nel banner (trasparenza dell'analisi)
     const trendStr = m >= 3 ? `Forza ${slopePct > 0 ? "+" : ""}${String(slopePct).replace(".", ",")}% a seduta` : "Servono più sedute";
     const bestStr  = sinceBest === 0 ? "ultima = la migliore" : `migliore ${sinceBest} ${sinceBest === 1 ? "seduta" : "sedute"} fa`;
-    const dataLine = `${trendStr} · ${bestStr}${dropoff >= 3 ? ` · −${dropoff} rep a fine esercizio` : ""}${restCfgNote}`;
+    const dataLine = `${trendStr} · ${bestStr}${dropoff >= 3 ? ` · −${dropoff} rep a fine esercizio` : ""}${restCfgNote}${targetRIRNote}`;
 
     // 1) Dolore → semaforo (priorità massima). Il movimento ha un effetto
     // analgesico (EIH): per dolore lieve/moderato NON si elimina l'esercizio, si
