@@ -15,7 +15,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-<link rel="stylesheet" href="style.css?v=73">
+<link rel="stylesheet" href="style.css?v=74">
 </head>
 <body>
 
@@ -198,6 +198,10 @@
           <div class="page-meta" id="sess-meta"></div>
         </div>
       </div>
+
+      <!-- Diario di oggi + limitazioni: mostrati UNA VOLTA qui, non ripetuti
+           dall'IA su ogni esercizio (vedi Session.renderDiaryBanner). -->
+      <div class="diary-banner" id="diary-banner" style="display:none"></div>
 
       <div class="sess-controls">
         <div class="sess-select-wrap">
@@ -447,6 +451,27 @@
       <div class="journal-hint"><i class="ti ti-sparkles"></i> Letto dal cervello IA per i consigli di oggi in sessione.</div>
     </div>
 
+    <!-- LIMITAZIONI FISICHE (info & esenzioni) — STANDING, non solo oggi:
+         separate dal diario perché durano settimane/mesi, non un giorno. -->
+    <div class="card">
+      <div class="card-title"><i class="ti ti-first-aid-kit"></i>Limitazioni fisiche</div>
+      <div class="journal-hint"><i class="ti ti-sparkles"></i> Valgono sempre, non solo oggi — il coach ne tiene conto in ogni consiglio, senza ripeterle ad ogni esercizio.</div>
+      <div class="limit-list" id="limitations-list"></div>
+      <div class="limit-form">
+        <select class="field-inp limit-sel" id="limit-tag-sel">
+          <option value="ginocchio">Ginocchio</option>
+          <option value="spalla">Spalla</option>
+          <option value="schiena">Schiena</option>
+          <option value="anca">Anca/bacino</option>
+          <option value="caviglia">Caviglia/piede</option>
+          <option value="polso">Polso/gomito</option>
+          <option value="altro" selected>Altro</option>
+        </select>
+        <textarea class="field-inp limit-ta" id="limit-ta" rows="2" placeholder="Es. ginocchio operato nel 2023, evita affondi profondi"></textarea>
+        <button class="btn-primary" onclick="Diary.addLimitationFromForm()"><i class="ti ti-plus"></i>Aggiungi</button>
+      </div>
+    </div>
+
     <!-- SONNO -->
     <div class="card">
       <div class="card-title"><i class="ti ti-moon"></i>Sonno</div>
@@ -674,13 +699,13 @@
   </div>
 </div>
 
-<script src="exercise-guide-index.js?v=73"></script>
-<script src="config.js?v=73"></script>
-<script src="api.js?v=73"></script>
-<script src="session.js?v=73"></script>
-<script src="modules.js?v=73"></script>
-<script src="timers.js?v=73"></script>
-<script src="app.js?v=73"></script>
+<script src="exercise-guide-index.js?v=74"></script>
+<script src="config.js?v=74"></script>
+<script src="api.js?v=74"></script>
+<script src="session.js?v=74"></script>
+<script src="modules.js?v=74"></script>
+<script src="timers.js?v=74"></script>
+<script src="app.js?v=74"></script>
 <script>
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(function(){});

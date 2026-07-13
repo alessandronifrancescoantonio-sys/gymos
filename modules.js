@@ -1514,6 +1514,7 @@ const Diary = {
     this.buildRatings();
     this.buildEnergia();
     this.buildHabitChecks();
+    this.renderLimitations();
     // Carica habit di oggi se esiste
     try {
       const h = await API.getTodayHabit();
@@ -1635,6 +1636,71 @@ const Diary = {
       const msg = document.getElementById("habit-save-msg");
       if (msg) { msg.style.display="flex"; setTimeout(()=>msg.style.display="none",2500); }
     } catch(e) { console.error(e); U.alert("Errore salvataggio abitudini."); }
+  },
+
+  // ── Limitazioni fisiche STANDING (info & esenzioni) — ON-DEVICE, distinte
+  // dal diario di oggi (transitorio): "ginocchio operato" resta valido per
+  // settimane/mesi, non solo per la giornata corrente. Alimentano sia il
+  // consiglio automatico (Session.loadAIAdvice) sia il coach (Coach.ask), in
+  // un campo SEPARATO dal diario così l'IA non le confonde con una nota
+  // di oggi e non le ripete a ogni esercizio (motivo del "loop" percepito).
+  LIMIT_KEY: "gymos_limitations",
+  LIMIT_TAGS: [
+    { key: "ginocchio", label: "Ginocchio",     icon: "ti-shoe" },
+    { key: "spalla",    label: "Spalla",        icon: "ti-yoga" },
+    { key: "schiena",   label: "Schiena",       icon: "ti-spine" },
+    { key: "anca",      label: "Anca/bacino",   icon: "ti-walk" },
+    { key: "caviglia",  label: "Caviglia/piede",icon: "ti-shoe-off" },
+    { key: "polso",     label: "Polso/gomito",  icon: "ti-hand-stop" },
+    { key: "altro",     label: "Altro",         icon: "ti-notes" },
+  ],
+  getLimitations() { try { return JSON.parse(localStorage.getItem(this.LIMIT_KEY) || "[]"); } catch (e) { return []; } },
+  _saveLimitations(arr) { try { localStorage.setItem(this.LIMIT_KEY, JSON.stringify(arr)); } catch (e) {} },
+  addLimitation(text, tag) {
+    const t = (text || "").trim();
+    if (!t) return;
+    const arr = this.getLimitations();
+    arr.push({ id: "lim" + Date.now(), text: t, tag: tag || "altro", ts: Date.now() });
+    this._saveLimitations(arr);
+    this.renderLimitations();
+  },
+  async removeLimitation(id) {
+    if (!await U.confirm("Rimuovere questa limitazione?", { danger: true, okText: "Rimuovi" })) return;
+    this._saveLimitations(this.getLimitations().filter(l => l.id !== id));
+    this.renderLimitations();
+  },
+  // Riassunto compatto per l'IA: "Ginocchio: operato 2023, evita affondi profondi · Spalla: fastidio overhead"
+  standingLimitationsText() {
+    const arr = this.getLimitations();
+    if (!arr.length) return "";
+    const byTag = {};
+    arr.forEach(l => { (byTag[l.tag] = byTag[l.tag] || []).push(l.text); });
+    return Object.keys(byTag).map(tag => {
+      const lbl = (this.LIMIT_TAGS.find(t => t.key === tag) || {}).label || tag;
+      return `${lbl}: ${byTag[tag].join("; ")}`;
+    }).join(" · ");
+  },
+  renderLimitations() {
+    const wrap = document.getElementById("limitations-list");
+    if (!wrap) return;
+    const esc = s => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    const arr = this.getLimitations();
+    if (!arr.length) { wrap.innerHTML = '<div class="limit-empty">Nessuna limitazione registrata — se hai un infortunio o un fastidio ricorrente, aggiungilo qui: il coach ne terrà conto sempre, non solo oggi.</div>'; return; }
+    wrap.innerHTML = arr.map(l => {
+      const tagInfo = this.LIMIT_TAGS.find(t => t.key === l.tag) || this.LIMIT_TAGS[this.LIMIT_TAGS.length - 1];
+      return `<div class="limit-chip">
+        <i class="ti ${tagInfo.icon}"></i>
+        <div class="limit-chip-body"><span class="limit-chip-tag">${esc(tagInfo.label)}</span><span class="limit-chip-txt">${esc(l.text)}</span></div>
+        <button class="limit-chip-rm" onclick="Diary.removeLimitation('${l.id}')" aria-label="Rimuovi"><i class="ti ti-x"></i></button>
+      </div>`;
+    }).join("");
+  },
+  addLimitationFromForm() {
+    const ta = document.getElementById("limit-ta");
+    const sel = document.getElementById("limit-tag-sel");
+    if (!ta || !ta.value.trim()) return;
+    this.addLimitation(ta.value, sel ? sel.value : "altro");
+    ta.value = "";
   },
 };
 
@@ -2479,6 +2545,42 @@ const Coach = {
   // attributi (XSS) senza questo escape.
   _esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); },
 
+  // Markdown-lite → HTML per le risposte del coach (grassetto, corsivo,
+  // codice, liste, tabelle semplici). Opera SEMPRE su testo GIÀ escapato
+  // (_esc prima), quindi aggiunge solo tag sicuri attorno a testo che non può
+  // più contenere `<`/`>`/`&` grezzi — niente XSS anche su risposte Gemini
+  // "creative" o contenuto di fonti web nella risposta.
+  _inlineMd(s) {
+    return s
+      .replace(/`(.+?)`/g, "<code>$1</code>")
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      // Dopo aver consumato i ** (bold), i singoli * rimasti sono corsivo —
+      // niente lookaround necessario, non restano più coppie doppie.
+      .replace(/\*(.+?)\*/g, "<em>$1</em>")
+      .replace(/_(.+?)_/g, "<em>$1</em>");
+  },
+  _md(raw) {
+    const esc = this._esc(raw);
+    const blocks = esc.split(/\n{2,}/);
+    return blocks.map(block => {
+      const lines = block.split("\n").filter(l => l.length);
+      if (!lines.length) return "";
+      if (lines.length >= 2 && /\|/.test(lines[0]) && /^[\s|:-]+$/.test(lines[1]) && lines[1].includes("-")) {
+        const cells = l => l.replace(/^\||\|$/g, "").split("|").map(c => c.trim());
+        const head = cells(lines[0]);
+        const rows = lines.slice(2).map(cells);
+        return `<div class="coach-table-wrap"><table class="coach-table"><thead><tr>${head.map(h => `<th>${this._inlineMd(h)}</th>`).join("")}</tr></thead><tbody>${rows.map(r => `<tr>${r.map(c => `<td>${this._inlineMd(c)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+      }
+      if (lines.every(l => /^\s*[-*]\s+/.test(l))) {
+        return `<ul>${lines.map(l => `<li>${this._inlineMd(l.replace(/^\s*[-*]\s+/, ""))}</li>`).join("")}</ul>`;
+      }
+      if (lines.every(l => /^\s*\d+\.\s+/.test(l))) {
+        return `<ol>${lines.map(l => `<li>${this._inlineMd(l.replace(/^\s*\d+\.\s+/, ""))}</li>`).join("")}</ol>`;
+      }
+      return `<p>${lines.map(l => this._inlineMd(l)).join("<br>")}</p>`;
+    }).join("");
+  },
+
   // ── Memoria persistente on-device (come diario/note-esercizio: niente
   // nuovo schema Notion). Condivisa tra la zona in Home e il modale in
   // Sessione — stessa conversazione ovunque la apri. ──
@@ -2590,7 +2692,7 @@ const Coach = {
       return `<div class="coach-msg">
         <div class="coach-msg-meta">${meta}</div>
         <div class="coach-bubble coach-bubble-q">${this._esc(e.question)}</div>
-        <div class="coach-bubble coach-bubble-a">${this._esc(e.answer).replace(/\n/g, "<br>")}${sources ? `<div class="coach-sources"><i class="ti ti-link"></i>${sources}</div>` : ""}</div>
+        <div class="coach-bubble coach-bubble-a">${this._md(e.answer)}${sources ? `<div class="coach-sources"><i class="ti ti-link"></i>${sources}</div>` : ""}</div>
       </div>`;
     }).join("");
     el.scrollTop = el.scrollHeight;
@@ -2644,9 +2746,10 @@ const Coach = {
     const btn = document.getElementById(`coach-btn-${target}`);
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2"></i> Cerco...'; }
 
-    let phase = "", diary = "";
+    let phase = "", diary = "", standingLimitations = "";
     try { if (typeof Body !== "undefined" && Body.checkins && Body.checkins.length) phase = Body.checkins[Body.checkins.length - 1].fase || ""; } catch (e) {}
     try { if (typeof Diary !== "undefined") diary = Diary.getJournal(); } catch (e) {}
+    try { if (typeof Diary !== "undefined") standingLimitations = Diary.standingLimitationsText(); } catch (e) {}
     const inSession = !!(typeof Session !== "undefined" && Session.activeId && !Session.viewMode);
     let exercise = null;
     try {
@@ -2660,9 +2763,31 @@ const Coach = {
     const context = {};
     if (phase) context.phase = phase;
     if (diary) context.diary = diary;
+    if (standingLimitations) context.standingLimitations = standingLimitations;
     if (typeof Session !== "undefined" && Session._sleepInfo) context.sleep = Session._sleepInfo;
     if (exercise) context.currentExercise = exercise;
     if (dayContext) context.dayContext = dayContext;
+    // Programma attivo + sedute/esercizi: così il coach può incrociare i suoi
+    // consigli con l'allenamento REALE dell'utente, non parlare in astratto.
+    try {
+      if (typeof App !== "undefined" && App.activeProgram) context.activeProgram = App.activeProgram;
+      if (typeof CONFIG !== "undefined" && CONFIG.SCHEDE) {
+        context.schedaExercises = Object.keys(CONFIG.SCHEDE).map(nome => ({
+          nome,
+          esercizi: (CONFIG.SCHEDE[nome].exercises || []).slice(0, 8).map(it => ({
+            nome: U.exName(it), serie: U.exSets(it), rrMin: U.exRrMin(it), rrMax: U.exRrMax(it),
+          })),
+        }));
+      }
+    } catch (e) {}
+    // Andamento recente dell'esercizio a fuoco (se in sessione): stessi dati
+    // già caricati per il consiglio automatico, riusati qui senza nuove fetch.
+    try {
+      if (exercise && typeof Session !== "undefined" && Session._exStats && Session._exStats[exercise]) {
+        context.exerciseTrend = Session._exStats[exercise].slice(-3).flatMap(g =>
+          (g.sets || []).map(s => ({ date: g.date, kg: s.kg, reps: s.reps })));
+      }
+    } catch (e) {}
 
     // bolla "sto pensando" temporanea — MAI persistita, solo mentre si aspetta
     const listId = target === "home" ? "coach-list-home" : "coach-list-modal";

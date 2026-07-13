@@ -204,6 +204,7 @@ const Session = {
     this.renderSessionNote(sess, sameType[0]);
 
     this.renderExercises();
+    this.renderDiaryBanner();   // nota/limitazioni mostrate UNA VOLTA qui, non ripetute ad ogni esercizio dall'IA
     this.updateStats();
     this.applyViewMode();
     this.armSessionTimers();   // auto-avvio durata + eventuale auto-salvataggio
@@ -212,6 +213,29 @@ const Session = {
     this.loadExerciseIntel(Object.keys(grouped)).then(() => this.loadAIAdvice(Object.keys(grouped)));
     // Sonno di stanotte (background): dà contesto ai consigli per-esercizio.
     this.loadSleepContext();
+  },
+
+  // Banner UNA TANTUM (diario di oggi + limitazioni standing) in cima alla
+  // sessione: prima il diario veniva ri-letto e potenzialmente ri-menzionato
+  // dall'IA per OGNI esercizio, sentito come "ripetitivo/a loop" — ora
+  // l'utente lo vede una volta qui, e il motore IA lo cita solo se davvero
+  // pertinente all'esercizio specifico (vedi system prompt worker).
+  renderDiaryBanner() {
+    const wrap = document.getElementById("diary-banner");
+    if (!wrap) return;
+    let diary = "", limits = "";
+    try { if (typeof Diary !== "undefined") diary = Diary.getJournal(); } catch (e) {}
+    try { if (typeof Diary !== "undefined") limits = Diary.standingLimitationsText(); } catch (e) {}
+    if (!diary && !limits) { wrap.innerHTML = ""; wrap.style.display = "none"; return; }
+    const esc = s => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    wrap.style.display = "flex";
+    wrap.innerHTML = `
+      <i class="ti ti-notebook"></i>
+      <div class="db-txt">
+        ${diary ? `<div class="db-line"><b>Oggi:</b> ${esc(diary)}</div>` : ""}
+        ${limits ? `<div class="db-line"><b>Da tenere a mente:</b> ${esc(limits)}</div>` : ""}
+      </div>
+      <button class="db-close" onclick="this.parentElement.style.display='none'" aria-label="Chiudi"><i class="ti ti-x"></i></button>`;
   },
 
   // Cervello IA (Gemini via Worker Cloudflare separato) — ADDITIVO, mai
@@ -235,6 +259,11 @@ const Session = {
           .slice(-3).map(e => ({ question: e.question, answer: e.answer }));
       }
     } catch (e) {}
+    // Limitazioni fisiche STANDING (Diario → Info & esenzioni): distinte dal
+    // diario di oggi, valgono finché non le rimuovi. Lette una volta per il
+    // batch, come coachNotes.
+    let standingLimitations = "";
+    try { if (typeof Diary !== "undefined") standingLimitations = Diary.standingLimitationsText(); } catch (e) {}
     for (const exName of (exNames || [])) {
       if (!exName) continue;
       try {
@@ -256,7 +285,7 @@ const Session = {
         // ogni serie completata prima alimenta il consiglio degli esercizi
         // successivi — ricalcolato fresco ad ogni chiamata, non cache-ato.
         const todaySession = this._todaySessionSummary(exName);
-        const payload = { exercise: exName, rrMin, rrMax, rir, history, sleep: this._sleepInfo || null, systemicDown: !!this._systemicDown, diary: diary || undefined, phase: phase || undefined, todaySession: todaySession.length ? todaySession : undefined, coachNotes: (coachNotes && coachNotes.length) ? coachNotes : undefined };
+        const payload = { exercise: exName, rrMin, rrMax, rir, history, sleep: this._sleepInfo || null, systemicDown: !!this._systemicDown, diary: diary || undefined, standingLimitations: standingLimitations || undefined, phase: phase || undefined, todaySession: todaySession.length ? todaySession : undefined, coachNotes: (coachNotes && coachNotes.length) ? coachNotes : undefined };
 
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), 8000);
