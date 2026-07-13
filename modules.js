@@ -2200,6 +2200,22 @@ const DailyRecap = {
     }
     return n;
   },
+  // Giorni di calendario coperti dallo streak (dal primo check-in della
+  // sequenza all'ultimo) — un utente che si pesa più volte nello stesso
+  // giorno farebbe salire `_phaseStreak` senza che sia passato tempo reale;
+  // questo evita di scattare il diet-break dopo pochi giorni scambiati per
+  // "8 settimane" solo perché i check-in sono frequenti.
+  _phaseStreakDays(checkins, re) {
+    const arr = checkins || [];
+    let start = null;
+    for (let i = arr.length - 1; i >= 0; i--) {
+      if (!re.test(arr[i].fase || "")) break;
+      start = arr[i];
+    }
+    if (!start || !arr.length) return 0;
+    const last = arr[arr.length - 1];
+    return (new Date(last.date).getTime() - new Date(start.date).getTime()) / 86400000;
+  },
 
   build(d) {
     const ins = [];
@@ -2251,7 +2267,8 @@ const DailyRecap = {
       const r = wt.rate, prot = this._protein(wt.peso);
       if (/cut|defin|tagl/i.test(fase)) {
         if (r > -0.15) {
-          const longCut = this._phaseStreak(d.checkins, /cut|defin|tagl/i) >= 8;
+          const cutRe = /cut|defin|tagl/i;
+          const longCut = this._phaseStreak(d.checkins, cutRe) >= 8 && this._phaseStreakDays(d.checkins, cutRe) >= 40;
           const dietBreak = longCut ? " Sei in questa fase da un po': oltre a tagliare le calorie, una pausa di 1-2 settimane a mantenimento può aiutare aderenza e fame senza rovinare i progressi." : "";
           add("warn", "ti-flame", "Definizione ferma", `In definizione ma il peso non scende (${this._fmtRate(r)}). Se resta fermo 1–2 settimane, taglia un po' le calorie.${dietBreak}`);
         }
@@ -2273,7 +2290,7 @@ const DailyRecap = {
     return {
       insights: ins,
       headline: ins[0] || null,
-      stats: { done, target, avgSleep, rate: wt ? wt.rate : null, fase, strTrend, deloadFired: deloadDue },
+      stats: { done, target, avgSleep, rate: wt ? wt.rate : null, fase, strTrend, deloadFired: deloadDue, strDown },
     };
   },
 
@@ -2292,7 +2309,10 @@ const DailyRecap = {
     try { lastDeloadTs = parseInt(localStorage.getItem("gymos_last_deload_nudge_ts") || "0", 10) || 0; } catch (e) {}
     const r = this.build({ ...data, volume, strengthSig, lastDeloadTs });
     try {
-      if (!lastDeloadTs || r.stats.deloadFired || strengthSig?.down) localStorage.setItem("gymos_last_deload_nudge_ts", String(Date.now()));
+      // Usa `r.stats.strDown` (calcolato in build(), già verificato per
+      // freschezza entro 21gg) invece del `strengthSig.down` grezzo — un
+      // segnale vecchio di settimane non deve resettare il timer all'infinito.
+      if (!lastDeloadTs || r.stats.deloadFired || r.stats.strDown) localStorage.setItem("gymos_last_deload_nudge_ts", String(Date.now()));
     } catch (e) {}
     if (!r.insights.length) { wrap.innerHTML = ""; return; }
     const esc = s => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -2434,7 +2454,12 @@ const Coach = {
   RECENT_KEEP: 3,       // ultimi scambi SEMPRE inclusi per continuità conversazionale
   CONTEXT_CAP: 14,      // tetto totale mandato a Gemini (rilevanti + recenti, deduplicati)
 
-  _esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); },
+  // Include l'escape delle virgolette: le fonti (`s.uri`/`s.title`, da Google
+  // Search grounding — contenuto web esterno, non fidato) finiscono anche
+  // dentro un attributo `href="..."` in _renderList, non solo come testo. Un
+  // URI con una `"` romperebbe l'attributo e permetterebbe di iniettare altri
+  // attributi (XSS) senza questo escape.
+  _esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); },
 
   // ── Memoria persistente on-device (come diario/note-esercizio: niente
   // nuovo schema Notion). Condivisa tra la zona in Home e il modale in

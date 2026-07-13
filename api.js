@@ -226,14 +226,21 @@ const API = {
       .filter(e => norm(e.name) === target);
   },
 
-  // Body metrics (check-in corporei)
+  // Body metrics (check-in corporei). BUG preesistente corretto: con `sorts
+  // ascending` + `page_size`, Notion restituisce i PRIMI n risultati in quel
+  // verso, cioè i check-in più VECCHI (non gli ultimi n) appena il totale
+  // supera n — esattamente l'opposto di quanto assunto a valle (_weightTrend,
+  // fase attuale, _phaseStreak usano tutti `checkins[length-1]` come "più
+  // recente"). Fix: query discendente (prende gli ultimi n) poi reverse lato
+  // client per mantenere l'ordine ascendente che il resto del codice si aspetta.
   async getBodyMetrics(n = 30) {
     const pages = await this.query(
       CONFIG.DB.BODY_METRICS,
       null,
-      [{ property: CONFIG.PROPS.BM_DATE, direction: "ascending" }],
+      [{ property: CONFIG.PROPS.BM_DATE, direction: "descending" }],
       n
     );
+    pages.reverse();
     return pages.map(p => ({
       id:      p.id,
       date:    this.read.date(p, CONFIG.PROPS.BM_DATE),

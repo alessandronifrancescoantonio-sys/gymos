@@ -220,6 +220,21 @@ const Session = {
   // Timeout breve per non far percepire l'app come lenta.
   async loadAIAdvice(exNames) {
     const token = (this._aiToken = (this._aiToken || 0) + 1);
+    // Letto UNA volta prima del loop (non ad ogni esercizio): stessa chiamata
+    // batch, coerente per tutti gli esercizi che riceve invece di poter
+    // cambiare a metà se l'utente scrive al coach mentre il loop è in corso.
+    // Filtro anti-banalità: lunghezza minima, MA lascia passare comunque le
+    // menzioni di dolore anche se brevi ("spalla", "male al ginocchio") —
+    // proprio i segnali brevi più clinicamente rilevanti da non perdere.
+    let coachNotes;
+    try {
+      if (typeof Coach !== "undefined") {
+        const painRe = /dolor|\bmale\b|fastidi|infortun|strapp/i;
+        coachNotes = Coach._loadHistory()
+          .filter(e => { const q = (e.question || "").trim(); return q.length >= 12 || painRe.test(q); })
+          .slice(-3).map(e => ({ question: e.question, answer: e.answer }));
+      }
+    } catch (e) {}
     for (const exName of (exNames || [])) {
       if (!exName) continue;
       try {
@@ -241,17 +256,6 @@ const Session = {
         // ogni serie completata prima alimenta il consiglio degli esercizi
         // successivi — ricalcolato fresco ad ogni chiamata, non cache-ato.
         const todaySession = this._todaySessionSummary(exName);
-        // Estratti recenti dalla chat col coach: solo domande non banali
-        // (lunghezza minima, filtro grezzo per scartare "ciao"/"grazie" ecc.),
-        // Gemini stesso giudica se sono pertinenti a QUESTO esercizio — niente
-        // classificatore di rilevanza separato da costruire/mantenere.
-        let coachNotes;
-        try {
-          if (typeof Coach !== "undefined") {
-            coachNotes = Coach._loadHistory().filter(e => (e.question || "").trim().length >= 12).slice(-3)
-              .map(e => ({ question: e.question, answer: e.answer }));
-          }
-        } catch (e) {}
         const payload = { exercise: exName, rrMin, rrMax, rir, history, sleep: this._sleepInfo || null, systemicDown: !!this._systemicDown, diary: diary || undefined, phase: phase || undefined, todaySession: todaySession.length ? todaySession : undefined, coachNotes: (coachNotes && coachNotes.length) ? coachNotes : undefined };
 
         const ctrl = new AbortController();
