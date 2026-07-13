@@ -308,10 +308,16 @@ const Session = {
   _exNoteKey() { return `gymos_exnote_${this.activeId || "none"}`; },
   _exNoteMap() { try { return JSON.parse(localStorage.getItem(this._exNoteKey()) || "{}"); } catch (e) { return {}; } },
   getExNote(exName) { return this._exNoteMap()[U.exBase(exName)] || ""; },
+  // Un timer di debounce PER ESERCIZIO (non uno condiviso): col timer unico,
+  // scrivere la nota di un esercizio e passare entro 400ms alla textarea di
+  // un altro cancellava il salvataggio pendente del primo — nota persa.
+  _exNoteTimers: {},
   setExNote(exName, text) {
-    clearTimeout(this._exNoteTimer);
-    this._exNoteTimer = setTimeout(() => {
-      const map = this._exNoteMap(), k = U.exBase(exName), t = (text || "").trim();
+    const k = U.exBase(exName);
+    clearTimeout(this._exNoteTimers[k]);
+    this._exNoteTimers[k] = setTimeout(() => {
+      delete this._exNoteTimers[k];
+      const map = this._exNoteMap(), t = (text || "").trim();
       if (t) map[k] = t; else delete map[k];
       try { localStorage.setItem(this._exNoteKey(), JSON.stringify(map)); } catch (e) {}
     }, 400);
@@ -1811,7 +1817,18 @@ const Session = {
       });
     }
     this.updateSetCount(exName);
-    this.syncSedutaMeta(exName);   // aggiorna serie/recupero/rir/tecnica sulla scheda
+    // Ultima serie rimossa → l'esercizio non esiste più: va tolto anche da
+    // exOrder (come fa deleteExercise), altrimenti resta un blocco fantasma
+    // con 0 serie al prossimo render, con obiettivo calcolato sui default.
+    const remaining = this.groupByExercise(this.exercises)[U.exBase(exName)] || [];
+    if (!remaining.length) {
+      this.exOrder = this.exOrder.filter(n => n !== exName);
+      this.saveOrder();
+      this.renderExercises();
+      this.syncSedutaExercise(exName, 0, "remove");
+    } else {
+      this.syncSedutaMeta(exName);   // aggiorna serie/recupero/rir/tecnica sulla scheda
+    }
     this.checkAutoSave();          // togliendo una serie potrebbe risultare tutto fatto
   },
 
@@ -2615,6 +2632,14 @@ const Session = {
   // salvando una sessione non finita. Mostra quante serie mancano.
   async confirmAndSave() {
     if (this.viewMode) { U.toast("Sei in sola visualizzazione — sblocca per salvare", "info"); return; }
+    // Guardia anti doppio-tap: senza, due tap rapidi su Salva aprivano due
+    // dialog di conferma e, confermando entrambi, saveSession girava due volte
+    // in parallelo (doppia scrittura Notion, durata azzerata al secondo giro).
+    if (this._saving) return;
+    this._saving = true;
+    try { await this._confirmAndSaveInner(); } finally { this._saving = false; }
+  },
+  async _confirmAndSaveInner() {
     const grouped = this.groupByExercise(this.exercises);
     const exNames = Object.keys(grouped);
     const totalEx  = exNames.length;
@@ -2632,7 +2657,7 @@ const Session = {
       msg = `Tutto completato: ${doneEx}/${totalEx} esercizi, ${doneSets} serie. Concludere e salvare l'allenamento?`;
     }
     const ok = await U.confirm(msg, { title: "Concludere l'allenamento?", okText: "Sì, salva", danger: !allDone });
-    if (ok) this.saveSession();
+    if (ok) await this.saveSession();   // await: tiene attiva la guardia _saving fino a fine salvataggio
   },
 
   async saveSession() {
@@ -2808,7 +2833,7 @@ Session._doCreateSession = async function(name) {
   btn.textContent = "Creazione...";
 
   try {
-    const today = new Date().toISOString().split("T")[0];
+    const today = U.today();   // data locale, non UTC (sessione creata dopo mezzanotte = giorno giusto)
     const sessProps = {};
     sessProps[CONFIG.PROPS.WL_NAME]  = API.prop.title(name);
     sessProps[CONFIG.PROPS.WL_DATE]  = API.prop.date(today);

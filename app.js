@@ -45,15 +45,18 @@ const App = {
     if (main) main.scrollTop = 0;
     window.scrollTo(0, 0);
 
-    // Carica dati pagina
+    // Carica dati pagina. I loader sono async: senza catch un errore (es.
+    // rete caduta) diventava unhandled rejection e pagina mezza vuota senza
+    // alcun feedback — ora almeno un toast, come già fa boot().
+    const fail = e => { console.error(`load ${page}:`, e); if (typeof U !== "undefined" && U.toast) U.toast("Errore nel caricamento — riprova", "err"); };
     switch(page) {
-      case "dashboard":   Dashboard.load(); break;
-      case "session":     Session.load();   break;
-      case "cardio":      Cardio.load();    break;
-      case "progression": Progression.load(); break;
-      case "body":        Body.load();      break;
-      case "diary":       Diary.load();     break;
-      case "schede":      Schede.load();    break;
+      case "dashboard":   Dashboard.load().catch(fail); break;
+      case "session":     Session.load().catch(fail);   break;
+      case "cardio":      Cardio.load().catch(fail);    break;
+      case "progression": Progression.load().catch(fail); break;
+      case "body":        Body.load().catch(fail);      break;
+      case "diary":       Diary.load().catch(fail);     break;
+      case "schede":      Schede.load().catch(fail);    break;
     }
   },
 
@@ -152,7 +155,10 @@ const U = {
     const icon = kind === "err" ? "alert-triangle" : kind === "info" ? "info-circle" : "check";
     const el = document.createElement("div");
     el.className = `toast ${kind}`;
-    el.innerHTML = `<i class="ti ti-${icon}"></i><span>${msg}</span>`;
+    // textContent per il messaggio: può contenere nomi esercizio da Notion —
+    // innerHTML li interpreterebbe come markup.
+    el.innerHTML = `<i class="ti ti-${icon}"></i><span></span>`;
+    el.querySelector("span").textContent = String(msg == null ? "" : msg);
     wrap.appendChild(el);
     setTimeout(() => {
       el.classList.add("out");
@@ -228,8 +234,12 @@ const U = {
     return `${d.getDate()} ${months[d.getMonth()]}`;
   },
 
+  // Data LOCALE, non UTC: toISOString() tra mezzanotte e le 01:00/02:00
+  // italiane restituiva ancora IERI — diario/habits/sessioni finivano sul
+  // giorno sbagliato (stesso fix già presente in ProgressPhotos._localDate).
   today() {
-    return new Date().toISOString().split("T")[0];
+    const d = new Date(), p = n => String(n).padStart(2, "0");
+    return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
   },
 
   weekNum(isoDate) {

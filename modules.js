@@ -387,6 +387,9 @@ const Body = {
     const data   = this.checkins.map(c => c[m.key]);
     const labels = this.checkins.map(c => U.fmtDate(c.date));
     const valid  = data.filter(Boolean);
+    // Misura mai compilata in nessun check-in: Math.min(...[]) darebbe
+    // Infinity → assi y NaN e grafico rotto. Distruggi e esci puliti.
+    if (!valid.length) { if (this.misuraChart) { this.misuraChart.destroy(); this.misuraChart = null; } return; }
     const minD   = Math.min(...valid), maxD = Math.max(...valid);
     const pad    = (maxD - minD) * 0.4 || 0.5;
     const ttEl   = document.getElementById("misura-tt");
@@ -860,7 +863,11 @@ const ProgressPhotos = {
         .then(({ openDB }) => openDB(this.DBN, 1, {
           upgrade: db => { if (!db.objectStoreNames.contains(this.STORE)) db.createObjectStore(this.STORE, { keyPath: "id" }); },
         }))
-        .then(db => { this._db = db; return db; });
+        .then(db => { this._db = db; return db; })
+        // Fallimento (es. CDN irraggiungibile offline al primo uso): NON
+        // cache-are la promise rigettata, altrimenti ogni operazione foto
+        // resterebbe rotta fino al reload anche una volta tornati online.
+        .catch(e => { this._openPromise = null; throw e; });
     }
     return this._openPromise;
   },
@@ -1113,8 +1120,11 @@ const Dashboard = {
       if (!s.date) return false;
       const d = new Date(s.date);
       const now = new Date();
-      const startOfWeek = new Date(now);
-      startOfWeek.setDate(now.getDate() - now.getDay());
+      const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      // Settimana da LUNEDÌ, allineata a Volume._weekStart: prima l'anello
+      // sedute contava da domenica e il volume "fatto" da lunedì — una
+      // sessione della domenica compariva in uno e non nell'altro.
+      startOfWeek.setDate(startOfWeek.getDate() - ((now.getDay() + 6) % 7));
       return d >= startOfWeek;
     });
 
@@ -1276,7 +1286,10 @@ const Dashboard = {
     for (let i = 1; i <= 7; i++) {
       const day  = new Date(startW);
       day.setDate(startW.getDate() + i);
-      const iso  = day.toISOString().split("T")[0];
+      // Data LOCALE: toISOString() è UTC e tra mezzanotte e le 01:00/02:00
+      // italiane spostava il pallino "oggi" sul giorno sbagliato.
+      const p    = n => String(n).padStart(2, "0");
+      const iso  = day.getFullYear() + "-" + p(day.getMonth() + 1) + "-" + p(day.getDate());
       const isT  = iso === U.today();
       // Se in un giorno ci sono più sessioni (es. una lasciata a metà + quella
       // vera completata), dà priorità a quella completata → il giorno diventa
@@ -1439,7 +1452,7 @@ const Cardio = {
       vel:  get("ca-vel"),
       fatto: true,
       note,
-      date: new Date().toISOString().split("T")[0],
+      date: U.today(),   // data locale, non UTC
     };
     try {
       await API.saveCardio(data);
@@ -2166,7 +2179,9 @@ const DailyRecap = {
   SEV: { alert: 0, warn: 1, info: 2, good: 3 },
 
   _weekDone(sessions) {
-    const now = new Date(), sow = new Date(now); sow.setDate(now.getDate() - now.getDay());
+    // Settimana da LUNEDÌ (allineata a Volume._weekStart e a buildStats)
+    const now = new Date(), sow = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    sow.setDate(sow.getDate() - ((now.getDay() + 6) % 7));
     return (sessions || []).filter(s => s.done && s.date && new Date(s.date) >= sow).length;
   },
 
@@ -2401,7 +2416,10 @@ const ExerciseGuide = {
     overlay.innerHTML = this._shell(`<div class="eg-loading"><i class="ti ti-loader-2"></i> Carico la guida…</div>`);
     overlay.style.display = "flex";
     try {
-      const res = await fetch(`${this.BASE}/exercises/${cand.id}.json`);
+      // Timeout 10s: su rete lenta lo spinner restava appeso per minuti
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 10000);
+      const res = await fetch(`${this.BASE}/exercises/${cand.id}.json`, { signal: ctrl.signal }).finally(() => clearTimeout(timer));
       if (!res.ok) throw new Error("fetch fallita");
       const d = await res.json();
       const img = (d.images && d.images[0]) ? `${this.BASE}/exercises/${d.images[0]}` : null;

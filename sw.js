@@ -2,7 +2,7 @@
 // Online: prende SEMPRE la versione più fresca dei file (rivalida col server,
 // bypassando la cache HTTP del browser). La cache serve solo da fallback offline.
 // Le chiamate al Worker Notion (altra origine) NON passano da qui.
-const CACHE = "gymos-v72";
+const CACHE = "gymos-v73";
 
 self.addEventListener("install", () => self.skipWaiting());
 
@@ -23,8 +23,13 @@ self.addEventListener("fetch", (e) => {
     // versioni vecchie servite dalla cache HTTP del browser quando sei online.
     fetch(e.request, { cache: "no-cache" })
       .then((res) => {
-        const copy = res.clone();
-        caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
+        // Cache-a SOLO risposte buone: un 404/500 transitorio (es. deploy a
+        // metà su GitHub Pages) non deve sostituire la copia sana precedente,
+        // altrimenti offline l'app servirebbe l'errore al posto del file.
+        if (res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
+        }
         return res;
       })
       .catch(() => caches.match(e.request))

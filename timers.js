@@ -15,10 +15,12 @@ const DurationTimer = {
   init(sessionId) {
     this.sessionId = sessionId;
     this.stopTicking();
-    const saved = localStorage.getItem(`gymos_start_${sessionId}`);
-    if (saved) {
+    const saved = parseInt(localStorage.getItem(`gymos_start_${sessionId}`), 10);
+    // isFinite scarta un valore corrotto/non numerico: senza, startTime=NaN
+    // → display "NaN:NaN" per sempre e minuti NaN salvati su Notion.
+    if (Number.isFinite(saved) && saved > 0) {
       // Timer già avviato in precedenza → riprende
-      this.startTime = parseInt(saved);
+      this.startTime = saved;
       this.startTicking();
       this.setBtnState("running");
     } else {

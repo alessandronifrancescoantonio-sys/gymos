@@ -5,19 +5,35 @@
 
 const API = {
 
+  // Data LOCALE (YYYY-MM-DD), non UTC: allineata a U.today() — dopo
+  // mezzanotte locale i salvataggi devono andare sul giorno nuovo, non su
+  // ieri (bug di toISOString() nei fusi avanti rispetto a UTC).
+  _today() {
+    const d = new Date(), p = n => String(n).padStart(2, "0");
+    return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
+  },
+
   // ─── BASE CALL ───
   async call(path, method = "GET", body = null) {
+    // Timeout globale: senza AbortController una fetch appesa (rete che cade
+    // a metà, worker che non risponde) bloccava per sempre i flussi a monte —
+    // pagina sessione bloccata, bottone Salva su "Salvataggio…" senza uscita.
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 20000);
     const opts = {
       method,
       headers: { "Content-Type": "application/json" },
+      signal: ctrl.signal,
     };
     if (body) opts.body = JSON.stringify(body);
     let res;
     try {
       res = await fetch(`${CONFIG.WORKER_URL}${path}`, opts);
     } catch (e) {
-      this._netToast("Nessuna connessione — riprova");
+      this._netToast(e && e.name === "AbortError" ? "Il server non risponde — riprova" : "Nessuna connessione — riprova");
       throw e;
+    } finally {
+      clearTimeout(timer);
     }
     if (!res.ok) {
       this._netToast(`Errore server (${res.status})`);
@@ -259,7 +275,7 @@ const API = {
   // Salva nuovo check-in corporeo
   async saveBodyCheckin(data) {
     const props = {};
-    const d = new Date().toISOString().split("T")[0];
+    const d = API._today();
     props[CONFIG.PROPS.BM_DATE]    = API.prop.date(d);
     props[CONFIG.PROPS.BM_FASE]    = API.prop.select(data.fase);
     if (data.peso    != null) props[CONFIG.PROPS.BM_PESO]    = API.prop.number(data.peso);
@@ -277,7 +293,7 @@ const API = {
 
   // Weekly planner — task di oggi
   async getTodayTasks() {
-    const today = new Date().toISOString().split("T")[0];
+    const today = API._today();
     const pages = await this.query(
       CONFIG.DB.WEEKLY_PLANNER,
       {
@@ -365,7 +381,7 @@ const API = {
 
   async saveCardio(data) {
     const props = {};
-    const d = data.date || new Date().toISOString().split("T")[0];
+    const d = data.date || API._today();
     props[CONFIG.PROPS.CA_NAME] = API.prop.title((data.tipo || "Cardio") + " " + d);
     props[CONFIG.PROPS.CA_DATE] = API.prop.date(d);
     if (data.tipo)            props[CONFIG.PROPS.CA_TIPO]   = API.prop.rich_text(data.tipo);
@@ -386,7 +402,7 @@ const API = {
   // ─── SONNO ───
   async saveSleep(data) {
     const props = {};
-    const d = data.date || new Date().toISOString().split("T")[0];
+    const d = data.date || API._today();
     props[CONFIG.PROPS.SL_NAME] = API.prop.title("Notte " + d);
     props[CONFIG.PROPS.SL_DATE] = API.prop.date(d);
     if (data.ore != null)     props[CONFIG.PROPS.SL_ORE]     = API.prop.number(data.ore);
@@ -399,7 +415,7 @@ const API = {
 
   // ─── HABITS ───
   async getTodayHabit() {
-    const today = new Date().toISOString().split("T")[0];
+    const today = API._today();
     const pages = await this.query(
       CONFIG.DB.DAILY_HABITS,
       { property: CONFIG.PROPS.DH_DATE, date: { equals: today } },
@@ -423,7 +439,7 @@ const API = {
   },
 
   async saveHabit(data, existingId) {
-    const today = new Date().toISOString().split("T")[0];
+    const today = API._today();
     const props = {};
     props[CONFIG.PROPS.DH_NAME]  = API.prop.title("Giorno " + today);
     props[CONFIG.PROPS.DH_DATE]  = API.prop.date(today);
