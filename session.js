@@ -475,7 +475,7 @@ const Session = {
           <i class="ti ti-chevron-down ex-chevron"></i>
         </div>
         <div class="ex-body">
-          ${(!this.viewMode && !this.sessionDone) ? this.progressionGoalHTML(exName, prevSets, rrMin, rrMax, rir, this._orderShift(exName), this._sameMuscleDirect(exName)) : ""}
+          ${(!this.viewMode && !this.sessionDone) ? this.progressionGoalHTML(exName, prevSets, rrMin, rrMax, rir, this._orderShift(exName), this._sameMuscleDirect(exName), rest) : ""}
           ${(!this.viewMode && !this.sessionDone) ? this.warmupRampHTML(exName, prevMax) : ""}
           ${(!this.viewMode && !this.sessionDone) ? `<div class="ai-advice" id="ai-${sid}"></div>` : ""}
           ${this.prevNotesHTML(prevSets)}
@@ -1080,7 +1080,7 @@ const Session = {
     } catch (e) { return ""; }
   },
 
-  progressionGoalHTML(exName, prevSets, rrMin, rrMax, rir, orderShift, sameMuscle) {
+  progressionGoalHTML(exName, prevSets, rrMin, rrMax, rir, orderShift, sameMuscle, rest) {
     // #5 — se oggi l'obiettivo è scarico o dolore, la rampa di riscaldamento
     // (che punta all'ultimo peso di lavoro) va nascosta: contraddirebbe il "vai
     // leggero". Il flag lo legge warmupRampHTML, chiamata subito dopo nel render.
@@ -1286,10 +1286,30 @@ const Session = {
         ? " Con più di 30 rip il corpo libero non basta più come stimolo: aggiungi un sovraccarico o una variante più difficile."
         : " Con più di 30 rip il carico è quasi certamente troppo leggero per uno stimolo reale: aumenta parecchio il peso, non le rep.")
       : "";
+    // Recupero configurato vs soglie evidence-based per zona: forza >120s
+    // (Grgic et al. 2018, systematic review 23 studi/491 soggetti — sotto i
+    // 2min i guadagni di forza non sono ottimali negli allenati), ipertrofia
+    // >60s (Schoenfeld et al. 2024, meta-analisi Bayesiana — piccolo ma reale
+    // vantaggio oltre 60s, la vecchia soglia NSCA 30-90s era permissiva),
+    // resistenza >30s (de Salles et al. 2009, review). +30s extra sui
+    // multiarticolari pesanti (drop-off di rep più marcato con recupero
+    // corto: Willardson & Burkett 2006, Ratamess et al. 2007). Solo un
+    // promemoria trasparente nella riga dati, non blocca né sostituisce nulla.
+    let restCfgNote = "";
+    try {
+      const restSec = (rest === "" || rest == null) ? 90 : Number(rest);
+      const pat = (typeof Volume !== "undefined") ? Volume.pattern(exName) : "";
+      const isCompound = ["squat", "hinge", "push", "pull"].includes(pat);
+      const restMin = (zone === "forza" ? 120 : zone === "resist" ? 30 : 60) + (isCompound ? 30 : 0);
+      if (Number.isFinite(restSec) && restSec > 0 && restSec < restMin) {
+        const mins = restMin >= 60 ? `${Math.round(restMin / 6) / 10}min` : `${restMin}s`;
+        restCfgNote = ` · recupero ${restSec}s forse corto per ${zone === "forza" ? "la forza" : zone === "resist" ? "la resistenza" : "l'ipertrofia"} (~${mins} indicati)`;
+      }
+    } catch (e) {}
     // Riga dati oggettiva mostrata nel banner (trasparenza dell'analisi)
     const trendStr = m >= 3 ? `Forza ${slopePct > 0 ? "+" : ""}${String(slopePct).replace(".", ",")}% a seduta` : "Servono più sedute";
     const bestStr  = sinceBest === 0 ? "ultima = la migliore" : `migliore ${sinceBest} ${sinceBest === 1 ? "seduta" : "sedute"} fa`;
-    const dataLine = `${trendStr} · ${bestStr}${dropoff >= 3 ? ` · −${dropoff} rep a fine esercizio` : ""}`;
+    const dataLine = `${trendStr} · ${bestStr}${dropoff >= 3 ? ` · −${dropoff} rep a fine esercizio` : ""}${restCfgNote}`;
 
     // 1) Dolore → semaforo (priorità massima). Il movimento ha un effetto
     // analgesico (EIH): per dolore lieve/moderato NON si elimina l'esercizio, si
@@ -1603,8 +1623,8 @@ const Session = {
       const tg = b.querySelector(".today-goal");
       if (!ex || !tg) return;  // in sola-visualizzazione il banner non c'è
       const sets = grouped[ex] || [];
-      const rrMin = sets[0]?.rrMin || 8, rrMax = sets[0]?.rrMax || 12, rir = sets[0]?.rir ?? "";
-      tg.outerHTML = this.progressionGoalHTML(ex, prevG[ex] || [], rrMin, rrMax, rir, this._orderShift(ex), this._sameMuscleDirect(ex));
+      const rrMin = sets[0]?.rrMin || 8, rrMax = sets[0]?.rrMax || 12, rir = sets[0]?.rir ?? "", rest = sets[0]?.recupero ?? "";
+      tg.outerHTML = this.progressionGoalHTML(ex, prevG[ex] || [], rrMin, rrMax, rir, this._orderShift(ex), this._sameMuscleDirect(ex), rest);
     });
   },
 
