@@ -284,8 +284,22 @@ const Session = {
         // Esercizi già fatti OGGI in QUESTA sessione (esclude quello corrente):
         // ogni serie completata prima alimenta il consiglio degli esercizi
         // successivi — ricalcolato fresco ad ogni chiamata, non cache-ato.
+        // Ogni entry porta anche il PATTERN muscolare (Volume.musclesFor) così
+        // il worker può giudicare se una nota (es. dolore) è DAVVERO rilevante
+        // per l'esercizio attuale — prima un dolore al ginocchio su una gamba
+        // finiva citato pure sul consiglio della panca, muscoli scollegati.
         const todaySession = this._todaySessionSummary(exName);
-        const payload = { exercise: exName, rrMin, rrMax, rir, history, sleep: this._sleepInfo || null, systemicDown: !!this._systemicDown, diary: diary || undefined, standingLimitations: standingLimitations || undefined, phase: phase || undefined, todaySession: todaySession.length ? todaySession : undefined, coachNotes: (coachNotes && coachNotes.length) ? coachNotes : undefined };
+        let muscleGroup = "";
+        try { if (typeof Volume !== "undefined") muscleGroup = Object.keys(Volume.musclesFor(exName) || {}).join("/"); } catch (e) {}
+        // Serie GIÀ FATTE OGGI di QUESTO STESSO esercizio (con RIR e nota per
+        // serie): prima l'IA non sapeva nulla della serie appena completata
+        // finché non si cambiava esercizio — il consiglio restava congelato
+        // a inizio esercizio, non si aggiornava serie dopo serie né in base
+        // alle note ("dura", "leggera", dolore).
+        const setsToday = grouped[exName]
+          ? grouped[exName].filter(s => (s.reps || 0) > 0).map(s => ({ kg: s.kg || 0, reps: s.reps, rir: s.rir ?? null, note: s.note || undefined }))
+          : [];
+        const payload = { exercise: exName, rrMin, rrMax, rir, history, sleep: this._sleepInfo || null, systemicDown: !!this._systemicDown, diary: diary || undefined, standingLimitations: standingLimitations || undefined, phase: phase || undefined, muscleGroup: muscleGroup || undefined, todaySession: todaySession.length ? todaySession : undefined, setsToday: setsToday.length ? setsToday : undefined, coachNotes: (coachNotes && coachNotes.length) ? coachNotes : undefined };
 
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), 8000);
@@ -312,7 +326,12 @@ const Session = {
       if (name === excludeExName) continue;
       const sets = (grouped[name] || []).filter(s => (s.reps || 0) > 0);
       if (!sets.length) continue;
-      out.push({ name, sets: sets.map(s => ({ kg: s.kg || 0, reps: s.reps })), notes: sets.map(s => s.note).filter(Boolean) });
+      // Muscolo/i coinvolti: così il worker può giudicare se le note di QUESTO
+      // esercizio (fatto prima oggi) sono rilevanti per quello attuale — un
+      // dolore al ginocchio non c'entra con un esercizio di petto.
+      let muscle = "";
+      try { if (typeof Volume !== "undefined") muscle = Object.keys(Volume.musclesFor(name) || {}).join("/"); } catch (e) {}
+      out.push({ name, muscle: muscle || undefined, sets: sets.map(s => ({ kg: s.kg || 0, reps: s.reps })), notes: sets.map(s => s.note).filter(Boolean) });
     }
     return out;
   },
@@ -2278,6 +2297,10 @@ const Session = {
       : '<i class="ti ti-check"></i> Serie fatta';
     this.refreshExDone(exName);
     this.refreshSetHints(exName);   // aggiorna i consigli delle serie successive
+    // Ri-triggera anche il consiglio IA per QUESTO esercizio: prima restava
+    // congelato dall'inizio esercizio fino al cambio esercizio, non vedeva
+    // mai la serie appena fatta né le sue note entro lo stesso esercizio.
+    this.loadAIAdvice([exName]);
 
     // #batch2 — ultima serie di questo esercizio completata → avanza alla tendina successiva
     const setsOfEx = this.groupByExercise(this.exercises)[exName] || [];
