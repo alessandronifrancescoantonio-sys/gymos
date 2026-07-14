@@ -68,9 +68,12 @@ const Progression = {
   // Raggruppa le righe (una per serie) in SESSIONI, con tutte le serie ordinate,
   // scartando quelle vuote (rep 0). Calcola top set, volume e record (PR).
   groupSessions() {
-    // Epley — stessa formula usata ovunque nell'app (session.js e1rm/capE1,
-    // buildRecords qui sotto): un unico modo di stimare la forza da kg+rep
-    // insieme, non i due massimi presi separatamente.
+    // Epley — tenuta solo per topKg/topReps (mostrati nella tooltip come "top
+    // set" e usati da "I tuoi record"), NON per la linea del grafico: la
+    // progressione della SEDUTA è il lavoro totale fatto (tutte le serie),
+    // non una stima del massimale su un singolo set (l'utente ha chiarito:
+    // più peso e più rep nella totalità delle 3 serie = progresso, anche a
+    // parità di set di punta — l'1RM stimato da solo lo nascondeva).
     const e1 = (kg, reps) => (kg > 0 && reps > 0) ? kg * (1 + reps / 30) : reps;
     const groups = {};
     (this.history || []).forEach(r => {
@@ -85,12 +88,6 @@ const Progression = {
     });
     let out = Object.values(groups).map(g => {
       g.series = g.series.filter(s => s.reps > 0).sort((a, b) => a.n - b.n);
-      // BUG corretto: prima topKg e topReps erano i massimi presi
-      // INDIPENDENTEMENTE (potevano venire da serie diverse, mai successe
-      // insieme) e il grafico plottava SOLO topKg — un peso invariato con
-      // più ripetizioni (progresso reale) restava una linea piatta. Ora si
-      // sceglie il MIGLIOR SET REALE per 1RM stimato (kg e rep della STESSA
-      // serie), così un aumento di rep a parità di peso conta come progresso.
       let top = g.series[0] || { kg: 0, reps: 0 };
       g.series.forEach(s => { if (e1(s.kg, s.reps) > e1(top.kg, top.reps)) top = s; });
       g.topKg   = top.kg || 0;
@@ -101,11 +98,17 @@ const Progression = {
       return g;
     }).filter(g => g.series.length)
       .sort((a, b) => new Date(a.date) - new Date(b.date));   // dal più vecchio al più recente
-    // Record: il TOP SET per 1RM stimato supera il massimo di TUTTE le
-    // sessioni precedenti — "stesso peso, più ripetizioni" ora conta
-    // correttamente come record (prima serviva alzare il peso per contare).
+    // Record: il VOLUME TOTALE della seduta (peso libero: rep totali) supera
+    // il massimo di tutte le sessioni precedenti — "stesso set di punta ma
+    // tutte le serie più solide" ora conta come progresso, non solo "peso
+    // massimo alzato".
+    const isBW = out.every(g => g.topKg === 0);
     let running = 0;
-    out.forEach((g, i) => { g.isPR = i > 0 && g.topE1 > running && g.topE1 > 0; running = Math.max(running, g.topE1); });
+    out.forEach((g, i) => {
+      const val = isBW ? g.repsTot : g.volume;
+      g.isPR = i > 0 && val > running && val > 0;
+      running = Math.max(running, val);
+    });
     return out;
   },
 
@@ -118,11 +121,12 @@ const Progression = {
     const color = CONFIG.SCHEDE[this.activeScheda].color;
     const isBW  = s.every(g => g.topKg === 0);
     const labels = s.map(g => U.fmtDate(g.date));
-    // Linea = 1RM stimato del miglior set reale (kg+rep insieme), non solo il
-    // kg massimo: così un aumento di ripetizioni a parità di peso si vede
-    // come progresso, non come una linea piatta.
-    const data   = s.map(g => isBW ? g.topReps : g.topE1);
-    if (caption) caption.textContent = isBW ? "" : "Linea = 1RM stimato del miglior set (formula di Epley, peso+ripetizioni insieme) — non solo il peso usato.";
+    // Linea = VOLUME TOTALE della seduta (peso × ripetizioni, sommato su
+    // tutte le serie) — la progressione reale dell'esercizio quella seduta,
+    // non una stima del massimale su un solo set: più peso e più rep nella
+    // totalità delle serie conta, anche se il set di punta resta invariato.
+    const data = s.map(g => isBW ? g.repsTot : g.volume);
+    if (caption) caption.textContent = isBW ? "Linea = ripetizioni totali della seduta (tutte le serie sommate)." : "Linea = volume totale della seduta (peso × ripetizioni, sommato su tutte le serie) — non solo il set migliore.";
     const minD = Math.min(...data), maxD = Math.max(...data);
     const pad  = (maxD - minD) * 0.3 || 3;
     const ptColors = s.map(g => g.isPR ? "#F59E0B" : color);
@@ -134,13 +138,13 @@ const Progression = {
       const setsStr = g.series.map(x => isBW ? x.reps + "r" : U.fmt(x.kg) + "×" + x.reps).join("  ");
       return `
         <div class="tt-date">Sett. ${U.weekNum(g.date)} — ${U.fmtDate(g.date)}</div>
-        <div class="tt-main" style="color:${color}">${isBW ? g.topReps + " rep" : U.fmt(g.topE1) + " kg (1RM stimato)"}${prTag}</div>
+        <div class="tt-main" style="color:${color}">${isBW ? g.repsTot + " rep totali" : U.fmtV(g.volume)}${prTag}</div>
         <div class="tt-sub">${isBW ? "" : `Top set: ${U.fmt(g.topKg)}kg × ${g.topReps} · `}${g.series.length} serie · ${setsStr}</div>
       `;
     }, ".card");
     opts.scales.y.min = Math.max(0, minD - pad);
     opts.scales.y.max = maxD + pad;
-    opts.scales.y.ticks.callback = v => U.fmt(v) + (isBW ? " r" : " kg");
+    opts.scales.y.ticks.callback = v => isBW ? U.fmt(v) + " r" : U.fmtV(v);
     this.chart = new Chart(canvas.getContext("2d"), {
       type: "line",
       data: { labels, datasets: [{ data, borderColor: color, backgroundColor: "transparent",
