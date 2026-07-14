@@ -2139,21 +2139,26 @@ const ExportPDF = {
       try { ex = await API.getSessionExercises(s.id); } catch (e) {}
       withEx.push({ ...s, exercises: ex });
     }
-    // Progressione PER ESERCIZIO — come la zona "Progressione" dell'app: per
-    // ogni esercizio il TOP SET (kg, o rep a corpo libero) seduta per seduta,
-    // sull'arco delle N scelte, con i record (PR) evidenziati.
+    // Progressione PER ESERCIZIO — come la zona "Progressione" dell'app: il
+    // VOLUME TOTALE della seduta (peso×rep sommato su tutte le serie), non
+    // il solo set migliore — stesso fix e stesso motivo (un set di punta
+    // invariato ma le altre serie migliorate è comunque progresso reale).
     const perEx = {};
     withEx.forEach(s => {
       const g = {};
       s.exercises.forEach(r => { if ((r.reps || 0) <= 0) return; const k = U.exBase(r.name); (g[k] = g[k] || []).push(r); });
       Object.keys(g).forEach(k => {
-        const topKg = Math.max(0, ...g[k].map(r => r.kg || 0));
-        const topReps = Math.max(0, ...g[k].map(r => r.reps || 0));
-        (perEx[k] = perEx[k] || []).push({ date: s.date, topKg, topReps });
+        const volume = g[k].reduce((t, r) => t + (r.reps || 0) * (r.kg || 0), 0);
+        const repsTot = g[k].reduce((t, r) => t + (r.reps || 0), 0);
+        (perEx[k] = perEx[k] || []).push({ date: s.date, volume, repsTot });
       });
     });
-    // record: il top kg supera tutti i precedenti (come Progression.groupSessions)
-    Object.values(perEx).forEach(pts => { let run = 0; pts.forEach((p, i) => { p.isPR = i > 0 && p.topKg > run && p.topKg > 0; run = Math.max(run, p.topKg); }); });
+    // record: il volume totale (rep totali a corpo libero) supera tutti i precedenti
+    Object.values(perEx).forEach(pts => {
+      const isBW = pts.every(p => p.volume === 0);
+      let run = 0;
+      pts.forEach((p, i) => { const val = isBW ? p.repsTot : p.volume; p.isPR = i > 0 && val > run && val > 0; run = Math.max(run, val); });
+    });
     const charts = {};
     for (const [name, pts] of Object.entries(perEx)) {
       if (pts.length >= 2) { try { charts[name] = this._chartURL(name, pts); } catch (e) {} }
@@ -2164,8 +2169,8 @@ const ExportPDF = {
   _chartURL(name, pts) {
     const c = document.createElement("canvas");
     c.width = 680; c.height = 240;
-    const isBW = pts.every(p => p.topKg === 0);
-    const data = pts.map(p => isBW ? p.topReps : p.topKg);
+    const isBW = pts.every(p => p.volume === 0);
+    const data = pts.map(p => isBW ? p.repsTot : p.volume);
     const ptColors = pts.map(p => p.isPR ? "#F59E0B" : "#FF3B2F");   // record in ambra
     const ptRadius = pts.map(p => p.isPR ? 6 : 3);
     const chart = new Chart(c.getContext("2d"), {
@@ -2177,7 +2182,7 @@ const ExportPDF = {
       },
       options: { responsive: false, animation: false, plugins: { legend: { display: false } },
         scales: { x: { ticks: { color: "#666", font: { size: 10 } }, grid: { color: "#eee" } },
-                  y: { ticks: { color: "#666", font: { size: 10 }, callback: v => U.fmt(v) + (isBW ? " r" : " kg") }, grid: { color: "#eee" } } } },
+                  y: { ticks: { color: "#666", font: { size: 10 }, callback: v => isBW ? U.fmt(v) + " r" : U.fmtV(v) }, grid: { color: "#eee" } } } },
     });
     const url = c.toDataURL("image/png");
     chart.destroy();
@@ -2192,7 +2197,7 @@ const ExportPDF = {
     const chartCards = Object.keys(charts).sort().map(n =>
       `<div class="rp-chart"><div class="rp-chart-t">${esc(n)}</div><img src="${charts[n]}" alt=""></div>`).join("");
     const chartSec = chartCards
-      ? `<h2 class="rp-h2">Progressione per esercizio <span class="rp-h2s">(top set · <span class="rp-pr">●</span> record)</span></h2>` +
+      ? `<h2 class="rp-h2">Progressione per esercizio <span class="rp-h2s">(volume totale per seduta · <span class="rp-pr">●</span> record)</span></h2>` +
         `<div class="rp-charts">${chartCards}</div>`
       : "";
     const sessBlocks = [...sessions].reverse().map(s => {

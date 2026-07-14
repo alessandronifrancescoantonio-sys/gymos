@@ -15,7 +15,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-<link rel="stylesheet" href="style.css?v=82">
+<link rel="stylesheet" href="style.css?v=83">
 </head>
 <body>
 
@@ -282,6 +282,7 @@
         <div class="eyebrow">Tracker</div>
         <h1 class="page-title">Le tue progressioni</h1>
       </div>
+      <button class="btn-secondary" onclick="ExportPDF.open()"><i class="ti ti-file-download"></i> Esporta PDF</button>
     </div>
 
     <div class="scheda-row">
@@ -689,7 +690,6 @@
   <div class="archive-box">
     <div class="archive-head">
       <div class="archive-title"><i class="ti ti-history"></i> Tutte le sessioni</div>
-      <button class="archive-export" onclick="ExportPDF.open()"><i class="ti ti-file-download"></i> Esporta PDF</button>
       <button class="archive-close" onclick="Dashboard.closeArchive()" aria-label="Chiudi"><i class="ti ti-x"></i></button>
     </div>
     <div class="archive-search">
@@ -701,13 +701,13 @@
   </div>
 </div>
 
-<script src="exercise-guide-index.js?v=82"></script>
-<script src="config.js?v=82"></script>
-<script src="api.js?v=82"></script>
-<script src="session.js?v=82"></script>
-<script src="modules.js?v=82"></script>
-<script src="timers.js?v=82"></script>
-<script src="app.js?v=82"></script>
+<script src="exercise-guide-index.js?v=83"></script>
+<script src="config.js?v=83"></script>
+<script src="api.js?v=83"></script>
+<script src="session.js?v=83"></script>
+<script src="modules.js?v=83"></script>
+<script src="timers.js?v=83"></script>
+<script src="app.js?v=83"></script>
 <script>
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(function(){});
