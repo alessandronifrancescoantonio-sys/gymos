@@ -490,11 +490,46 @@ const Body = {
     });
   },
 
+  // Peso poco credibile rispetto all'ultimo check-in: quasi sempre un errore di
+  // battitura (78 invece di 87). Un dato così sporco avvelena TUTTO a valle —
+  // trend, fase, avviso RED-S.
+  //
+  // La soglia NON è fissa: il margine cresce col tempo passato. 3 kg in tre
+  // giorni sono un refuso; gli stessi 3 kg in due mesi sono un bulk normale.
+  // Massimo fisiologico ~1,5%/settimana + 2% di rumore (acqua, cibo, bilancia).
+  _implausibleWeight(peso) {
+    const done = (this.checkins || []).filter(c => c.peso > 0);
+    if (!done.length) return null;                       // primo check-in: niente con cui confrontare
+    const last = done[done.length - 1];
+    const days  = Math.max(1, Math.round((Date.now() - new Date(last.date).getTime()) / 86400000));
+    const maxPct = 2 + 1.5 * (days / 7);
+    const pct = Math.abs(peso - last.peso) / last.peso * 100;
+    if (pct <= maxPct) return null;
+    return { last: last.peso, days, pct: Math.round(pct * 10) / 10 };
+  },
+
   async addCheckin() {
     const get = id => { const v = document.getElementById(id)?.value; return v ? parseFloat(v) : null; };
     const note = document.getElementById("inp-note-body")?.value || "";
     const peso = get("inp-peso");
     if (!peso) return;
+    // Fuori scala umana: è un errore, non un dato.
+    if (!(peso > 25 && peso < 350)) {
+      U.alert(`${U.fmt(peso)} kg non è un peso plausibile. Ricontrolla il numero.`);
+      return;
+    }
+    // Sospetto ma possibile → CHIEDIAMO, non scartiamo in silenzio: un salto
+    // grosso può essere vero (malattia, rientro da uno stop), e buttare via un
+    // dato reale dell'utente senza dirglielo sarebbe peggio del refuso.
+    const susp = this._implausibleWeight(peso);
+    if (susp) {
+      const quando = susp.days === 1 ? "ieri" : `${susp.days} giorni fa`;
+      const okGo = await U.confirm(
+        `Hai scritto <b>${U.fmt(peso)} kg</b>, ma l'ultimo check-in (${quando}) era <b>${U.fmt(susp.last)} kg</b>: ${U.fmt(susp.pct)}% di differenza in poco tempo.<br><br>Se è un errore di battitura, correggilo. Se è davvero così, procedi pure.`,
+        { okText: "Sì, è giusto", cancelText: "Correggo" }
+      );
+      if (!okGo) { document.getElementById("inp-peso")?.focus(); return; }
+    }
     const data = {
       fase: this.activeFase, peso,
       vita:    get("inp-vita"),
@@ -1295,6 +1330,50 @@ const Recovery = {
     return { tone: "up", lbl: "Recuperato", dir, mrv, doms: fb.state };
   },
 
+  // ═══ ANALISI INTER-CICLO: la fatica si sta accumulando? ═══════════════════
+  // Israetel: il segnale di fatica ACCUMULATA non è una brutta giornata, è il
+  // recupero che si ALLUNGA nel tempo a parità di lavoro. Qui confrontiamo la
+  // quota di "ancora indolenzito" nelle ultime 4 settimane contro le 4 prima.
+  //
+  // Serve tempo per dire qualcosa di vero: sotto le 6 risposte su ≥28 giorni
+  // NON ci pronunciamo. Meglio "servono più dati" che una tendenza inventata
+  // su tre risposte — che è esattamente il modo di sembrare scientifici senza
+  // esserlo.
+  MIN_FEEDBACK: 6,
+  MIN_SPAN_DAYS: 28,
+  systemicTrend() {
+    const o = this._load();
+    const pts = [];
+    Object.keys(o).forEach(d => {
+      Object.keys(o[d] || {}).forEach(m => pts.push({ date: d, state: o[d][m] }));
+    });
+    if (pts.length < this.MIN_FEEDBACK) return { enough: false, have: pts.length, need: this.MIN_FEEDBACK };
+    pts.sort((a, b) => a.date.localeCompare(b.date));
+    const spanDays = Math.round((new Date(pts[pts.length - 1].date) - new Date(pts[0].date)) / 86400000);
+    if (spanDays < this.MIN_SPAN_DAYS) return { enough: false, have: pts.length, need: this.MIN_FEEDBACK, spanDays };
+
+    const cut = Date.now() - 28 * 86400000;
+    const recent = pts.filter(p => new Date(p.date).getTime() >= cut);
+    const older  = pts.filter(p => new Date(p.date).getTime() <  cut);
+    if (!recent.length || older.length < 3) return { enough: false, have: pts.length, need: this.MIN_FEEDBACK, spanDays };
+
+    const frac = arr => arr.filter(p => p.state === "still").length / arr.length;
+    const fRec = frac(recent), fOld = frac(older);
+    const delta = fRec - fOld;
+    // +20 punti percentuali di "ancora indolenzito" = il recupero si sta
+    // allungando davvero, non è rumore.
+    if (delta >= 0.20) {
+      return { enough: true, worsening: true, recentPct: Math.round(fRec * 100), olderPct: Math.round(fOld * 100),
+        msg: `Il recupero si sta allungando: nell'ultimo mese arrivi ancora indolenzito il ${Math.round(fRec * 100)}% delle volte, contro il ${Math.round(fOld * 100)}% di prima. È fatica che si accumula: valuta uno scarico più lungo (una settimana intera leggera), non solo una seduta più morbida.` };
+    }
+    if (delta <= -0.20) {
+      return { enough: true, worsening: false, recentPct: Math.round(fRec * 100), olderPct: Math.round(fOld * 100),
+        msg: `Stai recuperando meglio di un mese fa (${Math.round(fRec * 100)}% di sedute con indolenzimento residuo, contro il ${Math.round(fOld * 100)}%): il carico attuale è sostenibile, c'è margine.` };
+    }
+    return { enough: true, worsening: false, stable: true, recentPct: Math.round(fRec * 100), olderPct: Math.round(fOld * 100),
+      msg: `Il tuo recupero è stabile rispetto al mese scorso: il carico che porti è sostenibile.` };
+  },
+
   renderCard() {
     const wrap = document.getElementById("dash-recovery");
     if (!wrap || typeof Volume === "undefined") return;
@@ -1325,9 +1404,103 @@ const Recovery = {
           ${advTxt}
         </div>`;
     }).join("");
+    // Andamento della fatica nel tempo (mese su mese): la parte che nessun
+    // semaforo istantaneo può dire.
+    const tr = this.systemicTrend();
+    const trend = tr.enough
+      ? `<div class="rtrend ${tr.worsening ? "rt-bad" : "rt-ok"}">
+           <i class="ti ${tr.worsening ? "ti-trending-down" : "ti-trending-up"}"></i>
+           <span>${this._esc(tr.msg)}</span>
+         </div>`
+      : `<div class="rtrend rt-none">
+           <i class="ti ti-hourglass"></i>
+           <span>Per dirti se la fatica si sta accumulando mi servono ancora un po' di risposte (${tr.have || 0}/${tr.need}, su almeno 4 settimane). Finché non ne ho abbastanza preferisco tacere che inventarmi una tendenza.</span>
+         </div>`;
+
     wrap.innerHTML = `${title}
+      ${trend}
       <div class="rmap-list">${items}</div>
       <div class="rmap-foot">Serie dirette fatte questa settimana / tetto stimato che recupereresti (MRV). Il semaforo viene dal tuo feedback a inizio seduta, non dal calendario.</div>`;
+  },
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  LOG DELLE INCOMPATIBILITÀ BIOMECCANICHE
+//
+//  L'avviso in sessione è DERIVATO dallo storico (si azzera da solo quando il
+//  dolore smette). Ma quel calcolo vive solo dentro una sessione aperta: in
+//  dashboard non c'è nulla da cui derivarlo. Quindi qui registriamo gli EVENTI
+//  — "rilevato il giorno X", "sostituito", "tenuto comunque" — che sono fatti
+//  accaduti, non uno stato da tenere sincronizzato.
+//
+//  Onestà: questo è un DIARIO, non una diagnosi. Se un esercizio non ti dà più
+//  fastidio, "Dimentica" lo toglie e ricomincia da zero.
+// ═══════════════════════════════════════════════════════════════════════════
+const JointLog = {
+  KEY: "gymos_joint_log",
+  KEEP: "gymos_joint_keep",
+  _load() { try { return JSON.parse(localStorage.getItem(this.KEY) || "{}"); } catch (e) { return {}; } },
+  _save(m) { try { localStorage.setItem(this.KEY, JSON.stringify(m)); } catch (e) {} },
+  _keep() { try { return JSON.parse(localStorage.getItem(this.KEEP) || "{}"); } catch (e) { return {}; } },
+  _esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); },
+
+  // Chiamato dalla sessione quando l'avviso scatta / l'utente decide.
+  touch(exName, subName, date, action) {
+    if (!exName) return;
+    const m = this._load();
+    const e = m[exName] || { first: date || null, action: null };
+    e.last = date || e.last || null;
+    if (subName) e.sub = subName;
+    if (action) e.action = action;         // "sub" = sostituito · "keep" = tenuto
+    m[exName] = e;
+    this._save(m);
+  },
+  forget(exName) {
+    const m = this._load(); delete m[exName]; this._save(m);
+    const k = this._keep(); delete k[exName];
+    try { localStorage.setItem(this.KEEP, JSON.stringify(k)); } catch (e) {}
+    this.renderCard();
+    try { U.toast(`"${exName}" dimenticato: se torna il fastidio, te lo ridico.`, "ok"); } catch (e) {}
+  },
+  entries() {
+    const m = this._load();
+    return Object.keys(m).map(k => ({ name: k, ...m[k] }))
+      .sort((a, b) => String(b.last || "").localeCompare(String(a.last || "")));
+  },
+
+  renderCard() {
+    const wrap = document.getElementById("dash-jointlog");
+    if (!wrap) return;
+    const list = this.entries();
+    if (!list.length) { wrap.style.display = "none"; wrap.innerHTML = ""; return; }
+    wrap.style.display = "";
+    const fmtD = d => { try { return new Date(d).toLocaleDateString("it-IT", { day: "numeric", month: "short" }); } catch (e) { return d || "—"; } };
+    const rows = list.map(e => {
+      const arg = String(e.name).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+      const stato = e.action === "sub"
+        ? `<span class="jl-tag jl-sub"><i class="ti ti-refresh"></i>Sostituito con ${this._esc(e.sub || "—")}</span>`
+        : e.action === "keep"
+        ? `<span class="jl-tag jl-keep"><i class="ti ti-hand-stop"></i>Lo tieni comunque</span>`
+        : `<span class="jl-tag jl-open"><i class="ti ti-alert-circle"></i>Nessuna scelta ancora</span>`;
+      const alt = (e.sub && e.action !== "sub")
+        ? `<div class="jl-alt">Alternativa proposta: <b>${this._esc(e.sub)}</b></div>` : "";
+      return `
+        <div class="jl-row">
+          <div class="jl-head">
+            <span class="jl-name">${this._esc(e.name)}</span>
+            <button class="jl-forget" onclick="JointLog.forget('${arg}')" title="Non mi dà più fastidio">
+              <i class="ti ti-x"></i>
+            </button>
+          </div>
+          <div class="jl-meta">Dolore ricorrente · rilevato ${fmtD(e.first)}${e.last && e.last !== e.first ? ` · ultimo ${fmtD(e.last)}` : ""}</div>
+          ${stato}
+          ${alt}
+        </div>`;
+    }).join("");
+    wrap.innerHTML = `
+      <div class="card-title"><i class="ti ti-alert-hexagon"></i>Esercizi che ti danno fastidio</div>
+      <div class="jl-list">${rows}</div>
+      <div class="jl-foot">Rilevati dalle tue note: dolore da almeno 3 sedute di fila sullo stesso esercizio. Non è una diagnosi — se un dolore persiste, sentine un professionista.</div>`;
   },
 };
 
@@ -1353,6 +1526,7 @@ const Dashboard = {
       Volume.renderCard();
       Volume.loadActual(sessions);   // serie fatte davvero questa settimana (bg)
       if (typeof Recovery !== "undefined") Recovery.renderCard();
+      if (typeof JointLog !== "undefined") JointLog.renderCard();
       this.buildRecentSessions(sessions);
       this.buildSemaforo(sleepData);
       try { DailyRecap.render({ sessions, checkins, sleep: sleepData, habits, todayHabit }); } catch (e) { console.error("DailyRecap:", e); }

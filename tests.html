@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GymOS — Test</title>
+<style>
+  body { margin:0; padding:20px; background:#0D0D0F; color:#E8E8EA;
+         font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+  h1 { font-size:19px; margin:0 0 4px; }
+  .sub { color:#7A7A8A; font-size:12.5px; margin-bottom:18px; }
+  #summary { padding:13px 15px; border-radius:10px; font-weight:700; margin-bottom:18px; }
+  .allgood { background:rgba(39,209,127,.12); border:1px solid rgba(39,209,127,.4); color:#27D17F; }
+  .broken  { background:rgba(239,68,68,.12);  border:1px solid rgba(239,68,68,.45); color:#EF4444; }
+  .grp { margin-bottom:16px; }
+  .grp-t { font-size:11px; text-transform:uppercase; letter-spacing:.07em; color:#7A7A8A;
+           font-weight:700; padding-bottom:6px; border-bottom:1px solid #26262C; margin-bottom:7px; }
+  .t { display:flex; gap:9px; padding:3px 0; font-size:13px; align-items:baseline; }
+  .ok   { color:#27D17F; }
+  .ko   { color:#EF4444; }
+  .name { color:#E8E8EA; }
+  .why  { color:#7A7A8A; font-size:12px; margin-left:auto; text-align:right; }
+  .ko .name { color:#EF4444; }
+</style>
+</head>
+<body>
+
+<h1>GymOS — Test del motore</h1>
+<div class="sub">Logica pura: nessuna chiamata a Notion, nessuna chiamata all'IA. Apri questa pagina dopo ogni modifica al motore.</div>
+<div id="summary">esecuzione…</div>
+<div id="out"></div>
+
+<script src="config.js?v=86"></script>
+<script src="api.js?v=86"></script>
+<script src="session.js?v=86"></script>
+<script src="modules.js?v=86"></script>
+<script src="timers.js?v=86"></script>
+<script src="app.js?v=86"></script>
+<script>
+// app.js registra App.init() su DOMContentLoaded: qui lo neutralizziamo PRIMA
+// che scatti, altrimenti i test partirebbero chiamando Notion sul serio.
+App.init = async function () {};
+</script>
+
+<script>
+// ─── mini framework ───────────────────────────────────────────────────────
+let passed = 0, failed = 0, group = "";
+const out = document.getElementById("out");
+function G(name) {
+  group = document.createElement("div"); group.className = "grp";
+  group.innerHTML = `<div class="grp-t">${name}</div>`;
+  out.appendChild(group);
+}
+function eq(name, got, want) {
+  const ok = JSON.stringify(got) === JSON.stringify(want);
+  ok ? passed++ : failed++;
+  const row = document.createElement("div");
+  row.className = "t " + (ok ? "ok" : "ko");
+  row.innerHTML = `<span>${ok ? "✓" : "✕"}</span><span class="name">${name}</span>` +
+    (ok ? "" : `<span class="why">atteso ${JSON.stringify(want)} · ottenuto ${JSON.stringify(got)}</span>`);
+  group.appendChild(row);
+}
+const ok = (name, got) => eq(name, !!got, true);
+
+// Lo stato on-device dell'utente NON va sporcato dai test: lo mettiamo da parte
+// e lo rimettiamo a posto alla fine, qualunque cosa succeda.
+const TOUCHED = ["gymos_recovery", "gymos_joint_keep", "gymos_pr_seeded", "gymos_joint_log"];
+const backup = {};
+TOUCHED.forEach(k => { backup[k] = localStorage.getItem(k); });
+try { runAll(); } finally {
+  TOUCHED.forEach(k => { backup[k] == null ? localStorage.removeItem(k) : localStorage.setItem(k, backup[k]); });
+}
+
+const s = document.getElementById("summary");
+s.className = failed ? "broken" : "allgood";
+s.textContent = failed
+  ? `${failed} TEST FALLITI · ${passed} passati`
+  : `Tutti i ${passed} test passati`;
+
+// ═══════════════════════════════════════════════════════════════════════════
+function runAll() {
+
+  // ─── SCALA DEL DOLORE ───────────────────────────────────────────────────
+  // Le negazioni sono la trappola: "nessun fastidio" contiene la parola-spia
+  // ma significa l'opposto. Prima veniva letto come dolore moderato (bug reale).
+  G("Scala del dolore (0-3) e negazioni");
+  const P = t => Session.painLevel(t);
+  eq("serie pulita → nessun dolore",            P("serie pulita, buona"), 0);
+  eq("«un po' di fastidio» → lieve",            P("un po' di fastidio al gomito"), 1);
+  eq("«dolore al gomito» → moderato",           P("dolore al gomito"), 2);
+  eq("«male al ginocchio» → moderato",          P("male al ginocchio"), 2);
+  eq("«dolore forte, non riesco» → severo",     P("dolore forte, non riesco"), 3);
+  eq("«tendinite» → severo",                    P("sento la tendinite"), 3);
+  eq("NEGAZIONE «nessun fastidio» → 0",         P("nessun fastidio, pulita"), 0);
+  eq("NEGAZIONE «niente dolore» → 0",           P("niente dolore oggi"), 0);
+  eq("NEGAZIONE «non fa male» → 0",             P("non fa male, tutto bene"), 0);
+  eq("NEGAZIONE «senza dolore» → 0",            P("serie senza dolore"), 0);
+  eq("«dura» non è dolore",                     P("serie dura ma pulita"), 0);
+  eq("«normale» non è dolore (non «male»)",     P("carico normale, tutto ok"), 0);
+
+  // ─── SOSTITUTO ARTICOLAZIONE-FRIENDLY ───────────────────────────────────
+  // Criterio OPPOSTO a bestSubstitute: quello cerca il più SIMILE (stesso
+  // pattern), che per un dolore articolare è la scelta peggiore.
+  G("Sostituto articolazione-friendly");
+  const POOL = ["Skull Crash", "Push down con triangolo", "Overhead Ext",
+                "Belt Squat", "Pendulum Squat", "Leg Ext",
+                "RDL Bilanciere", "Leg Curl Seduto", "Panca Piana"];
+  const J = ex => Volume.jointFriendlySubstitute(ex, POOL.filter(c => c !== ex));
+  ok("Skull Crash (bilanciere, gomito) → propone un sostituto", J("Skull Crash"));
+  eq("…e sceglie il cavo, non un altro bilanciere", J("Skull Crash").name, "Push down con triangolo");
+  eq("RDL (schiena) → macchina per femorali", (J("RDL Bilanciere")||{}).name, "Leg Curl Seduto");
+  ok("Belt Squat → propone pattern diverso", J("Belt Squat"));
+  // CONTROPROVA: un esercizio già gentile non deve avere un sostituto "migliore"
+  eq("CONTROPROVA: Leg Curl (già guidato) → nessun sostituto", J("Leg Curl Seduto"), null);
+  eq("CONTROPROVA: nessun candidato dello stesso muscolo → null",
+     Volume.jointFriendlySubstitute("Panca Piana", ["Leg Ext", "Leg Curl Seduto"]), null);
+  // il pool può contenere OGGETTI (schede da Notion), non solo stringhe
+  ok("regge un pool di oggetti {nome} e non solo stringhe",
+     Volume.jointFriendlySubstitute("Skull Crash", [{ nome: "Push down con triangolo" }]));
+
+  // ─── MEMORIA DI STRESS ARTICOLARE ───────────────────────────────────────
+  G("Memoria di stress articolare (3 sedute)");
+  const sed = n => ({ date: "2026-07-01", sets: [{ kg: 30, reps: 10 }], notes: [n], sessNote: "" });
+  const setHist = a => { Session._exStats = { "Skull Crash": a }; };
+  const fires = () => !!Session.jointBlock("Skull Crash");
+  localStorage.removeItem("gymos_joint_keep");
+
+  setHist([sed("dolore al gomito"), sed("dolore al gomito"), sed("gomito mi fa male")]);
+  ok("3 sedute con dolore moderato → scatta", fires());
+  // Il sostituto viene pescato dalle TUE schede reali, quindi il nome esatto
+  // cambia da utente a utente: asseriamo la proprietà che conta davvero, cioè
+  // che sia un attrezzo GUIDATO (cavo/macchina) e non un altro bilanciere.
+  ok("…e il sostituto è un attrezzo guidato, non un altro bilanciere",
+     Volume.GUIDED_RE.test(Session.jointBlock("Skull Crash").sub.name));
+  eq("…e non è un movimento duro per l'articolazione",
+     Volume.HARSH_RE.test(Session.jointBlock("Skull Crash").sub.name), false);
+
+  setHist([sed("tutto ok"), sed("dolore al gomito"), sed("dolore al gomito")]);
+  eq("solo 2 sedute di dolore → NON scatta", fires(), false);
+
+  setHist([sed("dolore al gomito"), sed("dolore al gomito"), sed("nessun fastidio, pulita")]);
+  eq("dolore SMESSO nell'ultima → si azzera da solo", fires(), false);
+
+  setHist([sed("un po' di fastidio"), sed("un po' di fastidio"), sed("un po' di fastidio")]);
+  eq("solo dolore LIEVE ×3 → NON scatta (soglia = moderato)", fires(), false);
+
+  setHist([sed("dolore al gomito"), sed("dolore al gomito")]);
+  eq("storico troppo corto → NON scatta", fires(), false);
+
+  setHist([sed("dolore al gomito"), sed("dolore al gomito"), sed("dolore al gomito")]);
+  localStorage.setItem("gymos_joint_keep", JSON.stringify({ "Skull Crash": true }));
+  eq("«tieni comunque» → non insiste più", fires(), false);
+  localStorage.removeItem("gymos_joint_keep");
+  Session._exStats = {};
+
+  // ─── VOLUME DINAMICO ────────────────────────────────────────────────────
+  G("Volume dinamico (regole RP + guardrail MEV/MRV)");
+  const nv = (m, cur, doms, perf) => {
+    const r = Volume.nextVolume(m, cur, doms, perf);
+    return r ? { delta: r.delta, target: r.target, deload: !!r.deload } : null;
+  };
+  eq("MRV spalle (piccolo, recupera bene) = 26", Volume.mrvFor("Spalle"), 26);
+  eq("MRV glutei (grande, sistemico) = 16",      Volume.mrvFor("Glutei"), 16);
+  eq("recuperato presto + forza ok → +1 serie",  nv("Petto", 12, "early", false), { delta:  1, target: 13, deload: false });
+  eq("passato appena in tempo → invariato",      nv("Petto", 12, "just",  false), { delta:  0, target: 12, deload: false });
+  eq("ancora indolenzito → −1 serie",            nv("Petto", 12, "still", false), { delta: -1, target: 11, deload: false });
+  eq("forza calata → −1 serie",                  nv("Petto", 12, "early", true),  { delta: -1, target: 11, deload: false });
+  eq("indolenzito E forza calata → SCARICO",     nv("Petto", 20, "still", true),  { delta: -8, target: 12, deload: true });
+  eq("GUARDRAIL: non si sale sopra MRV",         nv("Glutei", 16, "early", false), { delta: 0, target: 16, deload: false });
+  eq("GUARDRAIL: non si scende sotto MEV",       nv("Petto", 10, "still", false),  { delta: 0, target: 10, deload: false });
+  eq("GUARDRAIL: lo scarico non sfonda il MEV",  nv("Petto", 12, "still", true),   { delta: -2, target: 10, deload: true });
+  eq("nessun feedback → nessun consiglio inventato", nv("Petto", 12, null, false), null);
+  // il delta deve DERIVARE dal target: se un guardrail blocca, non può dire "−1"
+  // mentre il volume resta identico (bug reale trovato dai test).
+  ok("COERENZA: a MEV il messaggio cambia (non è il volume il problema)",
+     /non è il volume il problema/.test(Volume.nextVolume("Petto", 10, "still", false).why));
+
+  // ─── SEMAFORO DI RECUPERO ───────────────────────────────────────────────
+  G("Semaforo di recupero");
+  localStorage.removeItem("gymos_recovery");
+  Volume._actualDir = { Petto: 12, Glutei: 16, Dorso: 8 };
+  const oggi = new Date().toISOString().slice(0, 10);
+  eq("nessun feedback → GRIGIO (non lo inventiamo)", Recovery.status("Petto").tone, "none");
+  Recovery.set(oggi, "Petto", "still"); eq("ancora indolenzito → rosso",  Recovery.status("Petto").tone, "bad");
+  Recovery.set(oggi, "Petto", "just");  eq("passato in tempo → giallo",   Recovery.status("Petto").tone, "ok");
+  Recovery.set(oggi, "Petto", "early"); eq("recuperato → verde",          Recovery.status("Petto").tone, "up");
+  Recovery.set(oggi, "Glutei", "early");
+  eq("al tetto MRV → rosso anche se recuperi bene", Recovery.status("Glutei").tone, "bad");
+  Recovery.set("2026-01-01", "Dorso", "early");
+  eq("feedback vecchio (>10gg) → torna grigio", Recovery.status("Dorso").tone, "none");
+  localStorage.removeItem("gymos_recovery");
+  Volume._actualDir = null;
+
+  // ─── CONSIGLIO A REGOLE PER LA SERIE ────────────────────────────────────
+  // È la base SEMPRE presente: quando l'IA è offline o a quota esaurita, è
+  // l'unica cosa che l'utente vede. Non può mai mancare né sbagliare direzione.
+  G("Consiglio a regole (base sempre presente)");
+  const mkSet = (i, kg, reps, note, rir) =>
+    ({ id: "s" + i, name: "Panca Piana – X – S" + i, kg, reps, note: note || "", rir: rir ?? null, rrMin: 8, rrMax: 12 });
+  const adv = (sets, si) => {
+    Session.exercises = sets;
+    const a = Session._setAdvice("Panca Piana", si, 8, 12);
+    return a ? a.cls : null;
+  };
+  eq("prima serie → nessun consiglio (non c'è un «prima»)",
+     adv([mkSet(1, 0, 0)], 0), null);
+  eq("serie precedente non fatta → nessun consiglio",
+     adv([mkSet(1, 0, 0), mkSet(2, 0, 0)], 1), null);
+  eq("troppe rep (15 > 12) → sali di peso",
+     adv([mkSet(1, 50, 15), mkSet(2, 0, 0)], 1), "sh-up");
+  eq("troppo poche rep (5 < 8) → cala il peso",
+     adv([mkSet(1, 50, 5), mkSet(2, 0, 0)], 1), "sh-dn");
+  eq("in range e regolare → mantieni",
+     adv([mkSet(1, 50, 10, "", 2), mkSet(2, 0, 0)], 1), "sh-ok");
+  eq("nota di DOLORE → vince su qualunque calcolo",
+     adv([mkSet(1, 50, 15, "male alla spalla"), mkSet(2, 0, 0)], 1), "sh-dn");
+  eq("era «facile» → spingi un po'",
+     adv([mkSet(1, 50, 10, "facile", 3), mkSet(2, 0, 0)], 1), "sh-up");
+  eq("vicino al cedimento (RIR 1) → tieni, calo di rep normale",
+     adv([mkSet(1, 50, 10, "", 1), mkSet(2, 0, 0)], 1), "sh-ok");
+  Session.exercises = [];
+
+  // ─── ANALISI INTER-CICLO: la fatica si accumula? ────────────────────────
+  // Regola d'oro: con pochi dati NON ci si pronuncia. Una tendenza dedotta da
+  // tre risposte sembra scientifica e non lo è.
+  G("Analisi inter-ciclo (fatica nel tempo)");
+  const dAgo = n => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+  const feed = (map) => { localStorage.setItem("gymos_recovery", JSON.stringify(map)); return Recovery.systemicTrend(); };
+  localStorage.removeItem("gymos_recovery");
+
+  eq("nessun dato → non si pronuncia", Recovery.systemicTrend().enough, false);
+  eq("pochi dati (3 risposte) → non si pronuncia",
+     feed({ [dAgo(1)]:{Petto:"still"}, [dAgo(2)]:{Dorso:"still"}, [dAgo(3)]:{Spalle:"early"} }).enough, false);
+  eq("abbastanza risposte ma su pochi giorni → non si pronuncia",
+     feed({ [dAgo(1)]:{Petto:"still",Dorso:"still",Spalle:"still"},
+            [dAgo(2)]:{Petto:"still",Dorso:"still",Spalle:"still"} }).enough, false);
+
+  // recupero che PEGGIORA: prima quasi mai indolenzito, ora quasi sempre
+  const peggio = feed({
+    [dAgo(70)]:{Petto:"early",Dorso:"early"}, [dAgo(63)]:{Petto:"early",Dorso:"just"},
+    [dAgo(56)]:{Petto:"just", Dorso:"early"}, [dAgo(50)]:{Petto:"early",Dorso:"early"},
+    [dAgo(20)]:{Petto:"still",Dorso:"still"}, [dAgo(10)]:{Petto:"still",Dorso:"still"},
+    [dAgo(3)] :{Petto:"still",Dorso:"just"},
+  });
+  eq("recupero che si allunga → rilevato", peggio.worsening, true);
+  ok("…e consiglia uno scarico più lungo", /scarico più lungo/.test(peggio.msg));
+
+  // recupero che MIGLIORA
+  const meglio = feed({
+    [dAgo(70)]:{Petto:"still",Dorso:"still"}, [dAgo(63)]:{Petto:"still",Dorso:"still"},
+    [dAgo(56)]:{Petto:"still",Dorso:"just"},  [dAgo(50)]:{Petto:"still",Dorso:"still"},
+    [dAgo(20)]:{Petto:"early",Dorso:"early"}, [dAgo(10)]:{Petto:"early",Dorso:"just"},
+    [dAgo(3)] :{Petto:"early",Dorso:"early"},
+  });
+  eq("recupero che migliora → NON allarma", meglio.worsening, false);
+  ok("…e dice che c'è margine", /margine/.test(meglio.msg));
+
+  // stabile
+  const stabile = feed({
+    [dAgo(70)]:{Petto:"just",Dorso:"just"}, [dAgo(63)]:{Petto:"just",Dorso:"early"},
+    [dAgo(56)]:{Petto:"early",Dorso:"just"},[dAgo(50)]:{Petto:"just",Dorso:"just"},
+    [dAgo(20)]:{Petto:"just",Dorso:"early"},[dAgo(10)]:{Petto:"early",Dorso:"just"},
+    [dAgo(3)] :{Petto:"just",Dorso:"just"},
+  });
+  eq("recupero stabile → nessun allarme", stabile.worsening, false);
+  ok("…e lo dice esplicitamente", /stabile|sostenibile/.test(stabile.msg));
+  localStorage.removeItem("gymos_recovery");
+
+  // ─── GUARDIA SUL PESO (errori di battitura) ─────────────────────────────
+  // Un peso sbagliato avvelena tutto a valle: trend, fase, avviso RED-S.
+  // La soglia cresce col tempo: 3 kg in 3 giorni sono un refuso, in 2 mesi no.
+  G("Guardia sul peso (refusi)");
+  const W = (peso, ultimoPeso, giorniFa) => {
+    const d = new Date(Date.now() - giorniFa * 86400000).toISOString().slice(0, 10);
+    Body.checkins = [{ date: d, peso: ultimoPeso }];
+    return Body._implausibleWeight(peso);
+  };
+  eq("87 → 78 in 3 giorni (refuso classico) → sospetto", !!W(78, 87, 3), true);
+  eq("87 → 87,4 in 3 giorni (normale) → ok",             W(87.4, 87, 3), null);
+  eq("87 → 86 in 7 giorni (cut normale) → ok",           W(86, 87, 7), null);
+  eq("80 → 84 in 60 giorni (bulk lento) → ok",           W(84, 80, 60), null);
+  eq("80 → 84 in 2 giorni (impossibile) → sospetto",     !!W(84, 80, 2), true);
+  eq("primo check-in (niente storico) → nessun sospetto",
+     (() => { Body.checkins = []; return Body._implausibleWeight(80); })(), null);
+  Body.checkins = [];
+
+  // ─── LOG DELLE INCOMPATIBILITÀ ──────────────────────────────────────────
+  G("Log incompatibilità biomeccaniche");
+  const bkLog = localStorage.getItem("gymos_joint_log");
+  localStorage.removeItem("gymos_joint_log");
+  eq("registro vuoto all'inizio", JointLog.entries().length, 0);
+  JointLog.touch("Skull Crash", "Push Down", "2026-07-01", null);
+  eq("rilevamento registrato", JointLog.entries().length, 1);
+  eq("…senza scelta ancora presa", JointLog.entries()[0].action, null);
+  JointLog.touch("Skull Crash", "Push Down", "2026-07-08", "sub");
+  eq("sostituzione registrata", JointLog.entries()[0].action, "sub");
+  eq("…e non duplica la riga", JointLog.entries().length, 1);
+  eq("…tenendo la data del PRIMO rilevamento", JointLog.entries()[0].first, "2026-07-01");
+  JointLog.touch("RDL Bilanciere", "Leg Curl", "2026-07-10", "keep");
+  eq("secondo esercizio → 2 righe", JointLog.entries().length, 2);
+  eq("il più recente sta in cima", JointLog.entries()[0].name, "RDL Bilanciere");
+  JointLog.forget("Skull Crash");
+  eq("«Dimentica» toglie la riga", JointLog.entries().length, 1);
+  bkLog == null ? localStorage.removeItem("gymos_joint_log") : localStorage.setItem("gymos_joint_log", bkLog);
+
+  // ─── BUDGET DELLE CHIAMATE IA ───────────────────────────────────────────
+  // La quota Gemini è ~20/giorno: sprecarla è la ragione per cui i consigli
+  // sparivano a metà allenamento.
+  G("Budget chiamate IA");
+  Session._aiQuotaOut = false; Session._aiLastCall = {};
+  ok("primo giro: si può chiamare", Session._aiCanCall("Panca Piana", false));
+  Session._aiLastCall["Panca Piana"] = Date.now();
+  eq("subito dopo: cooldown attivo, non richiama", Session._aiCanCall("Panca Piana", false), false);
+  ok("…ma un evento importante (force) passa comunque", Session._aiCanCall("Panca Piana", true));
+  Session._aiQuotaOut = true;
+  eq("quota esaurita → non chiama, nemmeno con force", Session._aiCanCall("Panca Piana", true), false);
+  Session._aiQuotaOut = false; Session._aiLastCall = {};
+}
+</script>
+</body>
+</html>

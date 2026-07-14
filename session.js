@@ -1608,6 +1608,21 @@ const Session = {
 
     // 3) Plateau OGGETTIVO: nessun nuovo best e1RM da ≥3 sedute e trend piatto
     if (plateauTrig) {
+      // ANALISI INTER-CICLO: un plateau CORTO si sblocca con un micro-aggiustamento
+      // (più recupero, +1 rep, -5%). Ma se dura da ≥5 sedute, quei trucchi li hai
+      // già provati e non hanno funzionato: insistere con lo stesso schema è la
+      // definizione del problema, non la soluzione. Lì serve cambiare STRATEGIA,
+      // cioè lo stimolo: un rep-range diverso allena la stessa cosa per una via
+      // diversa (carico alto → tensione meccanica; rep alte → stress metabolico),
+      // e spesso sblocca proprio perché il corpo non è più adattato a quello.
+      // Non è una legge: è la mossa che ha più senso provare prima delle altre.
+      const stuckLong = sinceBest >= 5;
+      const strategia = (() => {
+        if (!stuckLong) return null;
+        if (rrMax <= 6)  return `passa a <b>8–12 rep</b> per 3-4 settimane e poi torna qui: sei fermo da ${sinceBest} sedute in zona forza, cambiare stimolo sblocca più del riprovare lo stesso schema.`;
+        if (rrMin >= 12) return `passa a <b>6–8 rep</b> con più carico per 3-4 settimane: sei fermo da ${sinceBest} sedute sulle rep alte, un blocco più pesante ti dà uno stimolo nuovo.`;
+        return `prova un blocco di <b>5–6 rep</b> più pesanti per 3-4 settimane, poi rientra in ${rrMin}–${rrMax}: sei fermo da ${sinceBest} sedute, e alternare il rep-range sblocca più che insistere.`;
+      })();
       const trick = dropoff >= 4
         ? `perdi ${dropoff} rep tra la prima e l'ultima serie: riposa di più tra le serie (2–3 min).`
         : easy
@@ -1615,7 +1630,10 @@ const Session = {
           : "prova +1 rep con una mini-pausa, oppure togli un 5% e risali.";
       return goal(
         isBW ? `Fermo da ${sinceBest} sedute — punta <b>${target}</b> rep` : `Fermo a <b>${U.fmt(last.topKg)} kg</b> da ${sinceBest} sedute`,
-        `Per sbloccarti: ${trick}${rirCaution}${junkVolumeNote}`, "hold", dataLine);
+        strategia
+          ? `<b>Cambia stimolo</b>: ${strategia}${rirCaution}${junkVolumeNote}`
+          : `Per sbloccarti: ${trick}${rirCaution}${junkVolumeNote}`,
+        "hold", dataLine);
     }
 
     // 4) TUTTE le serie al top del range → si sale di peso (doppia progressione,
@@ -1776,6 +1794,7 @@ const Session = {
     const m = this._jointKeepMap();
     m[U.exBase(exName)] = true;
     try { localStorage.setItem(this._jointKeepKey, JSON.stringify(m)); } catch (e) {}
+    try { if (typeof JointLog !== "undefined") JointLog.touch(U.exBase(exName), null, this._sessionDate(), "keep"); } catch (e) {}
     const el = document.getElementById(`joint-${this.sanitize(exName)}`);
     if (el) el.innerHTML = "";
     U.toast("Ok, lo teniamo. Occhio alla tecnica e non forzare.", "info");
@@ -1784,6 +1803,13 @@ const Session = {
   jointWarnHTML(exName) {
     const b = this.jointBlock(exName);
     if (!b) return "";
+    // Registra il rilevamento: l'avviso in sessione è derivato (e sparisce da
+    // solo), ma la dashboard non ha lo storico da cui derivarlo — le serve
+    // l'evento, che è un fatto accaduto e non uno stato da sincronizzare.
+    try {
+      if (typeof JointLog !== "undefined")
+        JointLog.touch(U.exBase(exName), b.sub && b.sub.name, this._sessionDate(), null);
+    } catch (e) {}
     const esc = s => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const arg = String(exName).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
     const sub = b.sub;
@@ -1838,6 +1864,7 @@ const Session = {
       this.setSyncState("saved");
       this.syncSedutaExercise(exName, 0, "remove");
       this.syncSedutaExercise(subName, nSets, "add");
+      try { if (typeof JointLog !== "undefined") JointLog.touch(U.exBase(exName), subName, this._sessionDate(), "sub"); } catch (e) {}
       U.toast(`Sostituito con ${subName}, in base al tuo storico di dolore.`, "ok");
       this.loadExerciseIntel([subName]).then(() => this.loadAIAdvice([subName]));
     } catch (e) {
