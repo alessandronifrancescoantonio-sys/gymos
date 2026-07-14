@@ -1638,6 +1638,13 @@ body::before, body::after { will-change:transform, opacity; }
 .ai-advice-box.ai-warn > i, .ai-advice-box.ai-warn .ai-lbl { color:var(--red); }
 .ai-advice-box.ai-hold { border-color:rgba(245,166,35,.25); background:rgba(245,166,35,.06); }
 .ai-advice-box.ai-hold > i, .ai-advice-box.ai-hold .ai-lbl { color:var(--amber); }
+/* Base motore a regole (stesso blocco dell'IA, tono neutro finché l'IA non arriva) */
+.ai-advice-box.ai-rule { border-color:var(--line-soft); background:rgba(148,163,184,.05); }
+.ai-advice-box.ai-rule .ai-lbl { color:var(--text2); }
+.ai-advice-box.ai-rule b { color:var(--text); font-weight:700; }
+.ai-advice-box.ai-rule > i.sh-up { color:var(--green); }
+.ai-advice-box.ai-rule > i.sh-dn { color:var(--amber); }
+.ai-advice-box.ai-rule > i.sh-ok { color:var(--blue); }
 
 /* "Come si esegue?" — overlay guida esercizio (free-exercise-db) */
 .eg-overlay { position:fixed; inset:0; z-index:10000; display:none; align-items:flex-end;

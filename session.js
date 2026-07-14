@@ -362,6 +362,8 @@ const Session = {
     const tone = ["go", "hold", "warn"].includes(data.tone) ? data.tone : "go";
     const ic = tone === "warn" ? "ti-sparkles" : tone === "hold" ? "ti-sparkles" : "ti-sparkles";
     const confLbl = data.confidence === "bassa" ? " · poca certezza" : "";
+    el.dataset.ai = "1";                                   // IA ha scritto: la base a regole non la sovrascrive
+    el.dataset.si = String(this._currentSetIndex(exName)); // …finché resto su questa stessa serie
     el.innerHTML = `
       <div class="ai-advice-box ai-${tone}">
         <i class="ti ${ic}"></i>
@@ -1713,11 +1715,11 @@ const Session = {
   // sessione (già fatta): aumenta / cala / mantieni per restare nel rep range —
   // MA prima guarda la NOTA che hai scritto su quella serie: dolore vince
   // sempre su qualunque calcolo di peso/rep (stesse analisi del motore ricco).
-  _setHintHTML(exName, si, rrMin, rrMax) {
-    if (si <= 0) return "";
+  _setAdvice(exName, si, rrMin, rrMax) {
+    if (si <= 0) return null;
     const sets = this.groupByExercise(this.exercises)[exName] || [];
     const prev = sets[si - 1];
-    if (!prev || (prev.reps || 0) <= 0) return "";   // serie precedente non ancora fatta
+    if (!prev || (prev.reps || 0) <= 0) return null;   // serie precedente non ancora fatta
     const note = (prev.note || "").toLowerCase();
     // Stessi pattern del motore principale, per coerenza dell'analisi
     const pain = /(dolor|fastidi|infortun|pizzic|contrattur|strapp|tendinit|acciacc|infiamm)\w*|\bfitt[ae]\b|\bmale\b|\bmal\s+di\b|\btirone\b/.test(note);
@@ -1725,7 +1727,7 @@ const Session = {
     const easy = /(facil|comod)\w*|\blegger[oa]\b|\bscaric\w*|troppo poco/.test(note);
     if (pain) {
       const snip = prev.note.trim().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      return `<i class="ti ti-alert-triangle sh-dn"></i><span>Nella serie prima hai scritto «${snip}»: <b>vai piano</b>, non forzare</span>`;
+      return { ic: "ti-alert-triangle", cls: "sh-dn", txt: `Nella serie prima hai scritto «${snip}»: <b>vai piano</b>, non forzare` };
     }
 
     const r = prev.reps, kg = prev.kg || 0, bw = kg === 0;
@@ -1774,14 +1776,43 @@ const Session = {
       cls = "sh-ok"; ic = "ti-equal";
       txt = bw ? `Bene: <b>mantieni</b>, punta ${r} rep` : `Bene: <b>mantieni</b> ${U.fmt(kg)}kg, punta ${r} rep`;
     }
-    return `<i class="ti ${ic} ${cls}"></i><span>${txt}</span>`;
+    return { ic, cls, txt };
   },
-  // Riaggiorna gli hint delle serie di un esercizio (dopo aver fatto una serie)
-  refreshSetHints(exName) {
+
+  // Indice della serie CORRENTE = prima non ancora fatta (reps<=0). Se sono
+  // tutte fatte, l'ultima. È la serie su cui il consiglio deve concentrarsi.
+  _currentSetIndex(exName) {
+    const sets = this.groupByExercise(this.exercises)[exName] || [];
+    if (!sets.length) return 0;
+    const i = sets.findIndex(s => (s.reps || 0) <= 0);
+    return i === -1 ? sets.length - 1 : i;
+  },
+
+  // UN SOLO blocco consiglio per esercizio (in cima). Base SEMPRE presente dal
+  // motore a regole (sincrono → istantaneo, aggiornato ad ogni serie/peso/nota);
+  // l'IA, quando risponde, RIMPIAZZA il testo nello STESSO blocco (una voce
+  // sola, mai due box che si contraddicono).
+  //   force=true  → torna sempre alla base a regole (serie completata, nota, RR)
+  //   force=false → se l'IA ha già scritto per QUESTA stessa serie, non toccarla
+  //                 (una semplice modifica di peso non deve cancellare l'IA)
+  refreshSetHints(exName, force) {
     if (this.viewMode || this.sessionDone) return;
+    const sid = this.sanitize(exName);
+    const el = document.getElementById(`ai-${sid}`);
+    if (!el) return;
+    const si = this._currentSetIndex(exName);
+    if (!force && el.dataset.ai === "1" && el.dataset.si === String(si)) return;
     const sets = this.groupByExercise(this.exercises)[exName] || [];
     const rrMin = sets[0]?.rrMin || 8, rrMax = sets[0]?.rrMax || 12;
-    sets.forEach((s, i) => { const el = document.getElementById(`hint-${s.id}`); if (el) el.innerHTML = this._setHintHTML(exName, i, rrMin, rrMax); });
+    const a = this._setAdvice(exName, si, rrMin, rrMax);
+    el.dataset.ai = "";        // base a regole: l'IA può rimpiazzarla quando arriva
+    el.dataset.si = String(si);
+    el.innerHTML = a
+      ? `<div class="ai-advice-box ai-rule">
+          <i class="ti ${a.ic} ${a.cls}"></i>
+          <div class="ai-txt"><span class="ai-lbl">Consiglio</span><span class="ai-main">${a.txt}</span></div>
+        </div>`
+      : "";
   },
 
   buildSetRow(set, si, prevSet, exName, rrMin, rrMax, prevMax, total, expanded) {
@@ -1832,7 +1863,6 @@ const Session = {
           </button>
         </div>
         ${prevRow}
-        <div class="set-hint" id="hint-${set.id}">${(!this.viewMode && !this.sessionDone) ? this._setHintHTML(exName, si, rrMin, rrMax) : ""}</div>
         <div class="stepper-row">
           <span class="stepper-lbl">Kg</span>
           <button class="adj" data-id="${set.id}" data-f="k" data-d="-2.5" data-ex="${exName}">−</button>
@@ -2403,7 +2433,7 @@ const Session = {
       ? '<i class="ti ti-rotate-2"></i> Annulla'
       : '<i class="ti ti-check"></i> Serie fatta';
     this.refreshExDone(exName);
-    this.refreshSetHints(exName);   // aggiorna i consigli delle serie successive
+    this.refreshSetHints(exName, true);   // serie cambiata: consiglio base subito, poi l'IA lo arricchisce
     // Ri-triggera anche il consiglio IA per QUESTO esercizio: prima restava
     // congelato dall'inizio esercizio fino al cambio esercizio, non vedeva
     // mai la serie appena fatta né le sue note entro lo stesso esercizio.
@@ -2625,7 +2655,7 @@ const Session = {
     // Il range appena cambiato è il nuovo bersaglio: aggiorna SUBITO il banner
     // e gli hint delle serie, non solo dopo il salvataggio su Notion.
     this.refreshGoals();
-    this.refreshSetHints(exName);
+    this.refreshSetHints(exName, true);
     // Salva il range su tutte le serie dell'esercizio
     if (sets[0]) {
       clearTimeout(this._saveTimers["rr_" + exName]);
@@ -2718,9 +2748,14 @@ const Session = {
     const set = this.exercises.find(e => e.id === id);
     if (set) {
       set.note = note;
-      // Una nota (dolore/facile/duro) è una situazione reale: l'hint della
-      // serie successiva deve saperlo SUBITO, non solo dopo aver toccato kg/rep.
-      this.refreshSetHints(U.exBase(set.name));
+      // Una nota (dolore/facile/duro) è una situazione reale: il consiglio deve
+      // saperlo SUBITO. Base a regole aggiornata all'istante (force), poi anche
+      // l'IA ri-analizza (debounce, così non parte a ogni tasto).
+      const exBase = U.exBase(set.name);
+      this.refreshSetHints(exBase, true);
+      clearTimeout(this._aiNoteTimers && this._aiNoteTimers[exBase]);
+      this._aiNoteTimers = this._aiNoteTimers || {};
+      this._aiNoteTimers[exBase] = setTimeout(() => this.loadAIAdvice([exBase]), 900);
     }
     this.setSyncState("saving");
     try {
