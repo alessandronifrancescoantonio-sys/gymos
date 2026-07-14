@@ -1356,7 +1356,7 @@ const Session = {
       const restMin = (zone === "forza" ? 120 : zone === "resist" ? 30 : 60) + (isCompound ? 30 : 0);
       if (Number.isFinite(restSec) && restSec > 0 && restSec < restMin) {
         const mins = restMin >= 60 ? `${Math.round(restMin / 6) / 10}min` : `${restMin}s`;
-        restCfgNote = ` · recupero ${restSec}s forse corto per ${zone === "forza" ? "la forza" : zone === "resist" ? "la resistenza" : "l'ipertrofia"} (~${mins} indicati)`;
+        restCfgNote = ` · recupero ${restSec}s forse corto per ${zone === "forza" ? "la forza" : zone === "resist" ? "la resistenza" : "l'ipertrofia"}: meglio ~${mins}`;
       }
     } catch (e) {}
 
@@ -1387,12 +1387,22 @@ const Session = {
     else if (sustainedDecline || gapDays >= 14 || this._systemicDown) targetRIR = isCompound ? 3 : 2;
     else if (plateauTrig) targetRIR = isIsolation ? 0 : (isCompound ? 2 : 1);   // plateau vero: spingi un po' di più
     else targetRIR = isCompound ? 2 : (isIsolation ? 1 : (zone === "forza" ? 2 : 1));
-    const targetRIRNote = ` · Sforzo di riferimento: RIR ~${targetRIR}`;
+    // In parole, non in sigla: "RIR 2" diventa "fermati ~2 rip prima del
+    // cedimento" — stesso concetto, leggibile senza conoscere il gergo.
+    const targetRIRNote = targetRIR <= 0
+      ? " · oggi puoi spingere quasi a cedimento"
+      : ` · fermati ~${targetRIR} ${targetRIR === 1 ? "rip" : "rip"} prima del cedimento`;
 
-    // Riga dati oggettiva mostrata nel banner (trasparenza dell'analisi)
-    const trendStr = m >= 3 ? `Forza ${slopePct > 0 ? "+" : ""}${String(slopePct).replace(".", ",")}% a seduta` : "Servono più sedute";
-    const bestStr  = sinceBest === 0 ? "ultima = la migliore" : `migliore ${sinceBest} ${sinceBest === 1 ? "seduta" : "sedute"} fa`;
-    const dataLine = `${trendStr} · ${bestStr}${dropoff >= 3 ? ` · −${dropoff} rep a fine esercizio` : ""}${restCfgNote}${targetRIRNote}`;
+    // Riga sintesi mostrata nel banner: linguaggio umano, niente formule/sigle
+    // (percentuali di trend, "e1RM", "RIR") — trasparenza sì, ma leggibile.
+    const trendStr = m < 3 ? "Ancora poche sedute per un trend affidabile"
+      : slopePct >= 2 ? "Stai crescendo bene"
+      : slopePct >= 0.5 ? "In lenta crescita"
+      : slopePct > -0.5 ? "Sei stabile"
+      : slopePct > -2 ? "In leggero calo"
+      : "In calo da qualche seduta";
+    const bestStr  = sinceBest === 0 ? "l'ultima è stata la tua migliore" : `record di ${sinceBest} ${sinceBest === 1 ? "seduta" : "sedute"} fa`;
+    const dataLine = `${trendStr} · ${bestStr}${dropoff >= 3 ? ` · cali un po' di rip verso le ultime serie` : ""}${restCfgNote}${targetRIRNote}`;
 
     // 1) Dolore → semaforo (priorità massima). Il movimento ha un effetto
     // analgesico (EIH): per dolore lieve/moderato NON si elimina l'esercizio, si
