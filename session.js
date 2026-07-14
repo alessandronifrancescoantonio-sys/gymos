@@ -496,6 +496,7 @@ const Session = {
           <i class="ti ti-chevron-down ex-chevron"></i>
         </div>
         <div class="ex-body">
+          ${(!this.viewMode && !this.sessionDone) ? `<div class="joint-warn-wrap" id="joint-${sid}">${this.jointWarnHTML(exName)}</div>` : ""}
           ${(!this.viewMode && !this.sessionDone) ? this.progressionGoalHTML(exName, prevSets, rrMin, rrMax, rir, this._orderShift(exName), this._sameMuscleDirect(exName), rest) : ""}
           ${(!this.viewMode && !this.sessionDone) ? this.warmupRampHTML(exName, prevMax) : ""}
           ${(!this.viewMode && !this.sessionDone) ? `<div class="ai-advice" id="ai-${sid}"></div>` : ""}
@@ -1204,18 +1205,10 @@ const Session = {
     //   0 nessuno · 1 lieve/🟢 (fastidio, indolenzimento) · 2 moderato/🟡
     //   (dolore, contrattura) · 3 severo/🔴 (infortunio, dolore forte/acuto).
     // Confini di parola: "male" non matcha "normale", "dura" non "durata".
-    const painLevel = (txt) => {
-      if (!txt) return 0;
-      const any = /(dolor|fastidi|infortun|pizzic|contrattur|strapp|stiram|tendinit|acciacc|infiamm|indolenz|lesion)\w*|\bfitt[ae]\b|\bmale\b|\bmal\s+di\b|\btirone\b/.test(txt);
-      if (!any) return 0;
-      if (/(infortun|strapp|stiram|tendinit|infiamm|lesion)\w*|dolore (fort|acut|inten|parecc|tant)|fort[ei] dolor|\bacut[oi]\b|non riesc|bloccat|gonfi/.test(txt)) return 3;
-      const mild = /un po'?\s+(di\s+)?(fastidi|dolor|tir)|legger[oa]\s+(fastidi|dolor|tension)|solo\s+(un\s+)?fastidi|\blieve\b|leggermente|indolenz|inizial/.test(txt);
-      if (mild && !/fort|acut|intens/.test(txt)) return 1;
-      return 2;
-    };
+    const painLevel = (txt) => this.painLevel(txt);
     // Serie storica del dolore per QUESTO esercizio (dalle note già in _exStats):
     // dolore che CALA nel tempo = buon adattamento; che SALE = sovraccarico.
-    const painSeries = stats.map(g => painLevel(((g.notes || []).join(" ") + " " + (g.sessNote || "")).toLowerCase()));
+    const painSeries = stats.map(g => painLevel(this._painTextOf(g)));
     const curPain  = painSeries[painSeries.length - 1] || 0;
     const prevPain = painSeries[painSeries.length - 2] || 0;
     const pain       = curPain > 0;
@@ -1584,6 +1577,148 @@ const Session = {
   // conosce (schede + storico), il miglior sostituto di `exName` (stesso muscolo
   // primario + stesso pattern = Livello A; solo muscolo = Livello B). Usato
   // quando la scorsa seduta segnalava un macchinario occupato.
+  // Livello di dolore dedotto dalle parole (0 nessuno · 1 lieve · 2 moderato ·
+  // 3 severo). Cook & Purdam: la patologia tendinea è un continuum, il carico è
+  // lo strumento clinico — serve una scala, non un booleano. Metodo riusabile:
+  // lo usano sia l'obiettivo del giorno sia la memoria di stress articolare.
+  painLevel(txt) {
+    if (!txt) return 0;
+    // NEGAZIONI, prima di tutto: "nessun fastidio" / "niente dolore" / "non fa
+    // male" sono l'OPPOSTO del dolore, ma contengono la parola-spia. Senza
+    // questo passaggio venivano contati come dolore moderato — cioè scrivere
+    // "nessun fastidio" faceva scattare un avviso di dolore.
+    txt = String(txt).replace(
+      /\b(nessun\w*|niente|senza|zero|mai|no|non\s+(ho|c'?è|fa|sento|avverto))\s+(più\s+)?(dolor\w*|fastidi\w*|male|fitt\w*|pizzic\w*|indolenz\w*|infiamm\w*)/g,
+      " ");
+    const any = /(dolor|fastidi|infortun|pizzic|contrattur|strapp|stiram|tendinit|acciacc|infiamm|indolenz|lesion)\w*|\bfitt[ae]\b|\bmale\b|\bmal\s+di\b|\btirone\b/.test(txt);
+    if (!any) return 0;
+    if (/(infortun|strapp|stiram|tendinit|infiamm|lesion)\w*|dolore (fort|acut|inten|parecc|tant)|fort[ei] dolor|\bacut[oi]\b|non riesc|bloccat|gonfi/.test(txt)) return 3;
+    const mild = /un po'?\s+(di\s+)?(fastidi|dolor|tir)|legger[oa]\s+(fastidi|dolor|tension)|solo\s+(un\s+)?fastidi|\blieve\b|leggermente|indolenz|inizial/.test(txt);
+    if (mild && !/fort|acut|intens/.test(txt)) return 1;
+    return 2;
+  },
+  // Testo su cui valutare il dolore di una seduta: note delle serie + nota della
+  // sessione di quel giorno (entrambe possono contenere il segnale).
+  _painTextOf(g) {
+    return ((g.notes || []).join(" ") + " " + (g.sessNote || "")).toLowerCase();
+  },
+
+  // ═══ MEMORIA DI STRESS ARTICOLARE (incompatibilità biomeccanica) ═══════════
+  // Se le ultime N sedute di QUESTO esercizio riportano dolore MODERATO/ALTO
+  // (livello ≥2), l'esercizio non va d'accordo con la tua articolazione: non è
+  // più un brutto giorno, è un pattern. Proponi una variante che allena lo
+  // STESSO muscolo con movimento/attrezzo DIVERSI.
+  //
+  // La memoria è DERIVATA dallo storico, non uno stato salvato: se il dolore
+  // smette, il flag si azzera da solo alla seduta successiva — nessun blocco
+  // fantasma da ripulire a mano. L'unica cosa persistita è la scelta esplicita
+  // dell'utente di tenere comunque l'esercizio.
+  JOINT_PAIN_SESSIONS: 3,
+  jointBlock(exName) {
+    try {
+      if (this._jointDismissed(exName)) return null;
+      const stats = (this._exStats && this._exStats[exName]) || [];
+      const need = this.JOINT_PAIN_SESSIONS;
+      if (stats.length < need) return null;                 // troppo poco storico per un pattern
+      const lastN = stats.slice(-need);
+      const allPain = lastN.every(g => this.painLevel(this._painTextOf(g)) >= 2);
+      if (!allPain) return null;
+      return { sessions: need, sub: this._jointSubFor(exName) };
+    } catch (e) { return null; }
+  },
+  // Pool di candidati = esercizi che l'utente GIÀ conosce (schede + storico):
+  // non proponiamo mai un movimento mai provato per rimediare a un dolore.
+  _jointSubFor(exName) {
+    try {
+      if (typeof Volume === "undefined" || !Volume.jointFriendlySubstitute) return null;
+      const pool = new Set();
+      Object.values((typeof CONFIG !== "undefined" && CONFIG.SCHEDE) || {}).forEach(sc =>
+        (sc.exercises || []).forEach(it => { const n = U.exName(it); if (n) pool.add(n); }));
+      Object.keys(this._exStats || {}).forEach(n => pool.add(n));
+      pool.delete(exName);
+      return Volume.jointFriendlySubstitute(exName, [...pool]);
+    } catch (e) { return null; }
+  },
+  _jointKeepKey: "gymos_joint_keep",
+  _jointKeepMap() { try { return JSON.parse(localStorage.getItem(this._jointKeepKey) || "{}"); } catch (e) { return {}; } },
+  _jointDismissed(exName) { return !!this._jointKeepMap()[U.exBase(exName)]; },
+  // "Tieni comunque": scelta esplicita dell'utente, va rispettata e ricordata —
+  // non ha senso riproporgli lo stesso avviso ad ogni seduta.
+  keepDespitePain(exName) {
+    const m = this._jointKeepMap();
+    m[U.exBase(exName)] = true;
+    try { localStorage.setItem(this._jointKeepKey, JSON.stringify(m)); } catch (e) {}
+    const el = document.getElementById(`joint-${this.sanitize(exName)}`);
+    if (el) el.innerHTML = "";
+    U.toast("Ok, lo teniamo. Occhio alla tecnica e non forzare.", "info");
+  },
+
+  jointWarnHTML(exName) {
+    const b = this.jointBlock(exName);
+    if (!b) return "";
+    const esc = s => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const arg = String(exName).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+    const sub = b.sub;
+    const body = sub
+      ? `<span class="jw-sub">Ti propongo <b>${esc(sub.name)}</b>: stesso muscolo, ma movimento e attrezzo diversi — meno stress su quell'articolazione.</span>
+         <div class="jw-actions">
+           <button class="jw-btn jw-ok" onclick="Session.applyJointSub('${arg}')"><i class="ti ti-refresh"></i> Sostituisci con ${esc(sub.name)}</button>
+           <button class="jw-btn jw-no" onclick="Session.keepDespitePain('${arg}')">Tieni comunque</button>
+         </div>`
+      : `<span class="jw-sub">Tra gli esercizi che conosci non trovo un sostituto davvero più gentile: valuta di cambiarlo. Se il dolore continua, sentine un professionista.</span>
+         <div class="jw-actions"><button class="jw-btn jw-no" onclick="Session.keepDespitePain('${arg}')">Ho capito</button></div>`;
+    return `
+      <div class="joint-warn">
+        <i class="ti ti-alert-hexagon"></i>
+        <div class="jw-txt">
+          <span class="jw-lbl">Stress articolare ricorrente</span>
+          <span class="jw-main">Hai segnalato dolore su <b>${esc(exName)}</b> nelle ultime ${b.sessions} sedute di fila: non sembra un brutto giorno, sembra questo esercizio.</span>
+          ${body}
+        </div>
+      </div>`;
+  },
+
+  // Sostituzione one-tap: mantiene POSIZIONE, numero di serie e rep-range
+  // dell'esercizio rimpiazzato — la seduta resta quella che avevi progettato,
+  // cambia solo il movimento che ti faceva male.
+  async applyJointSub(exName) {
+    if (this.viewMode) return;
+    const b = this.jointBlock(exName);
+    if (!b || !b.sub) return;
+    const subName = b.sub.name;
+    if (this.groupByExercise(this.exercises)[subName]) {
+      U.alert(`"${subName}" è già presente nella sessione di oggi.`);
+      return;
+    }
+    if (!await U.confirm(`Sostituire "${exName}" con "${subName}" in questa sessione e nella scheda?`, { okText: "Sostituisci" })) return;
+    const old = this.groupByExercise(this.exercises)[exName] || [];
+    const nSets = old.length || 3;
+    const base = { rrMin: old[0]?.rrMin || 8, rrMax: old[0]?.rrMax || 12 };
+    const pos = this.exOrder.indexOf(exName);
+    this.setSyncState("saving");
+    try {
+      const made = await this._createExerciseSets(subName, nSets, base);
+      await Promise.all(old.map(s => API.archivePage(s.id).catch(console.error)));
+      this.exercises = this.exercises.filter(e => U.exBase(e.name) !== U.exBase(exName));
+      this.exercises.push(...made);
+      // stessa posizione dell'esercizio sostituito, non in fondo alla lista
+      this.exOrder = this.exOrder.filter(n => n !== exName);
+      if (pos >= 0) this.exOrder.splice(pos, 0, subName); else this.exOrder.push(subName);
+      this.saveOrder();
+      this.renderExercises();
+      this.updateStats();
+      this.setSyncState("saved");
+      this.syncSedutaExercise(exName, 0, "remove");
+      this.syncSedutaExercise(subName, nSets, "add");
+      U.toast(`Sostituito con ${subName}, in base al tuo storico di dolore.`, "ok");
+      this.loadExerciseIntel([subName]).then(() => this.loadAIAdvice([subName]));
+    } catch (e) {
+      console.error("applyJointSub:", e);
+      this.setSyncState("error");
+      U.alert("Errore nella sostituzione.");
+    }
+  },
+
   _subFor(exName) {
     try {
       if (typeof Volume === "undefined" || !Volume.bestSubstitute) return null;

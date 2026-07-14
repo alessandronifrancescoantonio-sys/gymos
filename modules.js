@@ -613,6 +613,59 @@ const Volume = {
     return a ? { name: a, level: "A" } : (b ? { name: b, level: "B" } : null);
   },
 
+  // Sostituto ARTICOLAZIONE-FRIENDLY — criterio OPPOSTO a bestSubstitute.
+  // bestSubstitute cerca il più SIMILE (Livello A = stesso muscolo E stesso
+  // pattern): giusto quando la macchina è occupata, ma SBAGLIATO per un dolore
+  // articolare — stesso pattern = stesso stress sulla stessa articolazione.
+  // Qui invece: stesso muscolo primario (l'allenamento non si perde) ma pattern
+  // DIVERSO, e a parità preferiamo l'attrezzo guidato (macchina/cavo:
+  // traiettoria vincolata, meno lavoro di stabilizzazione sull'articolazione
+  // dolente) rispetto a bilanciere/manubri liberi.
+  // Traiettoria guidata (macchina/cavo): il carico è vincolato, l'articolazione
+  // lavora meno in stabilizzazione. Include i push-down/pulley: sugli ISOLAMENTI
+  // l'attrezzo è la variabile che conta (due isolamenti hanno sempre lo stesso
+  // "pattern", quindi il pattern da solo non distinguerebbe nulla).
+  GUIDED_RE: /macchinar|machine|cavo|cable|pulley|push.?down|smith|pressa|chest press|pec deck|leg ext|leg curl|lat machine|selettor/i,
+  FREE_RE: /bilancier|barbell|manubri|dumbbell|corpo libero|bodyweight/i,
+  // Movimenti notoriamente esigenti per un'articolazione specifica: skull
+  // crusher/french press (gomito), dietro-nuca e tirate al mento (spalla),
+  // stacco/good morning (zona lombare). Non sono "cattivi" in assoluto — ma se
+  // proprio quell'esercizio ti fa male da 3 sedute, non è lui il rimedio.
+  HARSH_RE: /skull|french press|dietro la nuca|behind neck|upright row|tirate al mento|stacco|deadlift|good morning/i,
+
+  // Quanto un esercizio "chiede" all'articolazione (più alto = più esigente).
+  _jointStress(name) {
+    let s = 0;
+    if (this.GUIDED_RE.test(name)) s -= 2;
+    if (this.FREE_RE.test(name))   s += 1;
+    if (this.HARSH_RE.test(name))  s += 2;
+    return s;
+  },
+
+  jointFriendlySubstitute(name, candidates) {
+    // I candidati possono arrivare come stringa (legacy) O come oggetto
+    // {nome,...} (schede da Notion): normalizza sempre, come fa _subFor.
+    const asName = it => (typeof it === "string") ? it : (it && (it.nome || it.name)) || "";
+    name = asName(name);
+    const pa = this._primary(name);
+    if (!pa) return null;
+    const patA = this.pattern(name);
+    const stressA = this._jointStress(name);
+    let best = null, bestScore = 0;   // 0 = soglia: deve essere STRETTAMENTE più gentile
+    (candidates || []).map(asName).forEach(c => {
+      if (!c || c === name) return;
+      if (this._primary(c) !== pa) return;              // deve allenare lo stesso muscolo
+      const patC = this.pattern(c);
+      let score = 0;
+      if (patC && patA && patC !== patA) score += 3;    // movimento diverso = stress diverso
+      score += (stressA - this._jointStress(c));        // quanto è più gentile del corrente
+      if (score > bestScore) { bestScore = score; best = c; }
+    });
+    // Nessun candidato strettamente più gentile → null, e lo diciamo onestamente
+    // all'utente invece di proporgli lo stesso problema con un altro nome.
+    return best ? { name: best, score: bestScore } : null;
+  },
+
   _overrides: null,
   // Chiave normalizzata: gli override del muscolo erano agganciati al nome
   // ESATTO, quindi uno spazio finale, una rinomina o uno spelling diverso tra
