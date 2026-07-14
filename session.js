@@ -169,6 +169,17 @@ const Session = {
     this._done = new Set(JSON.parse(localStorage.getItem(`gymos_done_${id}`) || "[]"));
     // Serie che hanno segnato un record in questa sessione (per tenere il badge PR)
     this._prSets = new Set(JSON.parse(localStorage.getItem(`gymos_pr_${id}`) || "[]"));
+    // Snapshot pre-merge per il rollback PR (vedi completeSet) — PERSISTITI,
+    // non solo in memoria: _prSets sopravvive a un reload della stessa
+    // sessione (righe sopra), ma se lo snapshot restava solo in RAM, dopo un
+    // reload annullare una serie con badge PR non trovava più lo snapshot e
+    // il record fantasma restava per sempre — proprio il caso che doveva evitare.
+    try { this._prSnapshots = JSON.parse(localStorage.getItem(`gymos_prsnap_${id}`) || "{}"); } catch (e) { this._prSnapshots = {}; }
+    // Per esercizio, l'ID dell'ULTIMA serie che ha davvero modificato il
+    // record: se due serie diverse segnano PR nella stessa sessione e se ne
+    // annulla una PIÙ VECCHIA, non si deve toccare il valore nello store
+    // (altrimenti si cancellerebbe anche il PR più recente e legittimo).
+    try { this._prLastSetId = JSON.parse(localStorage.getItem(`gymos_prlast_${id}`) || "{}"); } catch (e) { this._prLastSetId = {}; }
 
     // Riallinea la sessione IN CORSO alla sua seduta (aggiunge esercizi nuovi
     // della scheda; toglie quelli rimossi dalla scheda solo se senza dati).
@@ -301,12 +312,20 @@ const Session = {
           : [];
         const payload = { exercise: exName, rrMin, rrMax, rir, history, sleep: this._sleepInfo || null, systemicDown: !!this._systemicDown, diary: diary || undefined, standingLimitations: standingLimitations || undefined, phase: phase || undefined, muscleGroup: muscleGroup || undefined, todaySession: todaySession.length ? todaySession : undefined, setsToday: setsToday.length ? setsToday : undefined, coachNotes: (coachNotes && coachNotes.length) ? coachNotes : undefined };
 
+        // Aborta un'eventuale chiamata precedente ANCORA IN VOLO per lo
+        // STESSO esercizio: ora che loadAIAdvice riparte dopo OGNI serie,
+        // completare più serie in rapida successione lasciava fetch ormai
+        // superate a girare fino al timeout invece di essere interrotte
+        // subito — chiamate Gemini sprecate silenziosamente.
+        this._aiCtrls = this._aiCtrls || {};
+        if (this._aiCtrls[exName]) { try { this._aiCtrls[exName].abort(); } catch (e) {} }
         const ctrl = new AbortController();
+        this._aiCtrls[exName] = ctrl;
         const timer = setTimeout(() => ctrl.abort(), 8000);
         const res = await fetch(`${CONFIG.AI_WORKER_URL}/advice`, {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload), signal: ctrl.signal,
-        }).finally(() => clearTimeout(timer));
+        }).finally(() => { clearTimeout(timer); if (this._aiCtrls[exName] === ctrl) delete this._aiCtrls[exName]; });
         if (token !== this._aiToken) return;   // sessione cambiata: abbandona
         if (!res.ok) continue;
         const data = await res.json();
@@ -1349,12 +1368,22 @@ const Session = {
     // target non scende mai sotto RIR 2 — mai cedimento vero lì. Sull'isolamento
     // arrivare vicino/al cedimento è più sicuro (meno sistemico) e la ricerca
     // sul vantaggio 0 vs 1 RIR è meno conclusiva, quindi meno grave sbagliare.
+    // Stessa condizione ESATTA del ramo di scarico reale (riga ~1417 più
+    // sotto) — riusata qui, non ricalcolata: prima erano due copie identiche
+    // ma indipendenti, a rischio di disallinearsi silenziosamente se una
+    // delle due venisse toccata in futuro senza l'altra.
     const deloadTrig = m >= 4 && spanDays >= deloadSpanDays && slopePct <= -2 && this._systemicDown && !acuteFatigue && sinceBest >= 2;
+    // Stessa condizione ESATTA del ramo testuale "3) Plateau OGGETTIVO" (riga
+    // ~1448): prima qui mancava `Math.abs(slopePct)<1.5`, quindi un caso con
+    // sinceBest>=3 ma trend ancora in salita (non un vero plateau) faceva
+    // mostrare "RIR ~0" (spingi al cedimento) insieme al testo "stai
+    // migliorando, aggiungi 1 rep" — incoerenza visibile nella stessa card.
+    const plateauTrig = sinceBest >= 3 && !atTop && Math.abs(slopePct) < 1.5;
     let targetRIR;
     if (pain) targetRIR = curPain >= 3 ? 5 : curPain >= 2 ? 4 : 3;
     else if (deloadTrig) targetRIR = isCompound ? 4 : 3;
     else if (sustainedDecline || gapDays >= 14 || this._systemicDown) targetRIR = isCompound ? 3 : 2;
-    else if (sinceBest >= 3 && !atTop) targetRIR = isIsolation ? 0 : (isCompound ? 2 : 1);   // plateau: spingi un po' di più
+    else if (plateauTrig) targetRIR = isIsolation ? 0 : (isCompound ? 2 : 1);   // plateau vero: spingi un po' di più
     else targetRIR = isCompound ? 2 : (isIsolation ? 1 : (zone === "forza" ? 2 : 1));
     const targetRIRNote = ` · Sforzo di riferimento: RIR ~${targetRIR}`;
 
@@ -1414,7 +1443,7 @@ const Session = {
     // IT): il vero trigger di scarico è l'assenza prolungata di un nuovo best,
     // non solo il calendario. Richiediamo ENTRAMBI i segnali insieme, per
     // restare coerenti con la filosofia "mai scaricare troppo presto".
-    if (m >= 4 && spanDays >= deloadSpanDays && slopePct <= -2 && this._systemicDown && !acuteFatigue && sinceBest >= 2) {
+    if (deloadTrig) {
       this._suppressWarmup = true;   // #5 — niente rampa in giornata di scarico
       return goal(
         `Oggi vai più leggero: togli <b>~10%</b> di peso${rirStr}`,
@@ -1445,7 +1474,7 @@ const Session = {
     }
 
     // 3) Plateau OGGETTIVO: nessun nuovo best e1RM da ≥3 sedute e trend piatto
-    if (sinceBest >= 3 && !atTop && Math.abs(slopePct) < 1.5) {
+    if (plateauTrig) {
       const trick = dropoff >= 4
         ? `perdi ${dropoff} rep tra la prima e l'ultima serie: riposa di più tra le serie (2–3 min).`
         : easy
@@ -2272,6 +2301,12 @@ const Session = {
   savePrSets() {
     if (this.activeId) try { localStorage.setItem(`gymos_pr_${this.activeId}`, JSON.stringify([...this._prSets])); } catch(e){}
   },
+  savePrSnapshots() {
+    if (this.activeId) try { localStorage.setItem(`gymos_prsnap_${this.activeId}`, JSON.stringify(this._prSnapshots || {})); } catch(e){}
+  },
+  savePrLastSetId() {
+    if (this.activeId) try { localStorage.setItem(`gymos_prlast_${this.activeId}`, JSON.stringify(this._prLastSetId || {})); } catch(e){}
+  },
 
   // Riaggiorna solo i badge di stato/PR di tutte le serie (senza re-render completo)
   refreshBadges() {
@@ -2394,18 +2429,25 @@ const Session = {
       if (set && (set.reps || 0) > 0 && !this.sessionDone) {
         const rec0 = this.prRec(exName);
         const hadRecord = !!rec0 && ((rec0.w || 0) > 0 || (rec0.e1rm || 0) > 0);
-        // Snapshot PRE-merge: se l'utente digita un peso sbagliato per errore
-        // e poi annulla la serie, senza questo il record fantasma resterebbe
-        // per sempre (Math.max non è invertibile da solo) e sopprimerebbe
-        // tutti i PR reali futuri su quell'esercizio. Solo in memoria (basta
-        // per il "mi sono accorto subito e ho annullato" — non persiste al
-        // reload, come _done/_prSets sono comunque scope-di-sessione).
+        // Snapshot PRE-merge, PERSISTITO (sopravvive a un reload, come
+        // _prSets): se l'utente digita un peso sbagliato per errore e poi
+        // annulla la serie, senza questo il record fantasma resterebbe per
+        // sempre (Math.max non è invertibile da solo) e sopprimerebbe tutti
+        // i PR reali futuri su quell'esercizio.
         this._prSnapshots = this._prSnapshots || {};
         this._prSnapshots[id] = rec0 ? JSON.parse(JSON.stringify(rec0)) : { w: 0, e1rm: 0, repsAt: {} };
+        this.savePrSnapshots();
         const beat = this.prMerge(exName, set.kg || 0, set.reps);
         if (hadRecord && (beat.weight || beat.e1rm || beat.reps)) {
           this._prSets.add(id);
           this.savePrSets();
+          // Questa è ora l'ULTIMA serie a modificare il record per questo
+          // esercizio: se in seguito si annulla una serie PIÙ VECCHIA che
+          // aveva segnato un PR, il rollback dello store va negato (altrimenti
+          // cancellerebbe anche QUESTO PR più recente e legittimo).
+          this._prLastSetId = this._prLastSetId || {};
+          this._prLastSetId[exName] = id;
+          this.savePrLastSetId();
           card.classList.add("set-pr");
           const el = document.getElementById(`prog-${id}`);
           if (el && !el.querySelector(".pr-tag")) el.insertAdjacentHTML("beforeend", '<span class="pr-tag">PR</span>');
@@ -2419,12 +2461,19 @@ const Session = {
       }
     } else if (this._prSets.has(id)) {
       // Annullamento di una serie che aveva segnato un PR: ripristina il
-      // record al valore pre-merge invece di lasciare un record fantasma.
-      const snap = this._prSnapshots && this._prSnapshots[id];
-      if (snap) {
-        const store = this.prLoadStore();
-        store[exName] = snap;
-        this.prSaveStore();
+      // record al valore pre-merge — MA solo se questa era davvero l'ULTIMA
+      // serie a toccare il record per l'esercizio. Se nel frattempo un'altra
+      // serie più recente ha segnato un PR successivo, ripristinare
+      // cancellerebbe anche quello: si toglie solo il badge di QUESTA serie,
+      // lo store resta al valore (più recente e legittimo) dell'altra.
+      const isLastWriter = !this._prLastSetId || this._prLastSetId[exName] === id;
+      if (isLastWriter) {
+        const snap = this._prSnapshots && this._prSnapshots[id];
+        if (snap) {
+          const store = this.prLoadStore();
+          store[exName] = snap;
+          this.prSaveStore();
+        }
       }
       this._prSets.delete(id);
       this.savePrSets();
@@ -2821,12 +2870,18 @@ const Session = {
       let savedMins = 0;
       if (this.activeId) {
         const props = { [CONFIG.PROPS.WL_DONE]: API.prop.checkbox(true) };
-        // Ferma il timer durata e salva i minuti
+        // Legge i minuti SENZA azzerare il timer (getMinutes, non distruttivo):
+        // prima si chiamava finishAndReset() qui, azzerando subito — se
+        // l'API.update sotto falliva (rete), il retry ripartiva da un timer
+        // già a zero e la vera durata dell'allenamento andava persa in
+        // silenzio al salvataggio riuscito successivo.
         if (typeof DurationTimer !== "undefined") {
-          savedMins = DurationTimer.finishAndReset();
+          savedMins = DurationTimer.getMinutes();
           if (savedMins > 0) props["Durata (min)"] = API.prop.number(savedMins);
         }
         await API.update(this.activeId, props);
+        // Solo ORA, a salvataggio riuscito, ferma e azzera il timer.
+        if (typeof DurationTimer !== "undefined") DurationTimer.finishAndReset();
       }
       // Raccogli i numeri del riepilogo ORA (prima della pulizia dello stato)
       const summary = this._collectSummary(savedMins);
@@ -2839,6 +2894,8 @@ const Session = {
         localStorage.removeItem(`gymos_done_${this.activeId}`);
         localStorage.removeItem(`gymos_order_${this.activeId}`);
         localStorage.removeItem(`gymos_pr_${this.activeId}`);
+        localStorage.removeItem(`gymos_prsnap_${this.activeId}`);
+        localStorage.removeItem(`gymos_prlast_${this.activeId}`);
         localStorage.removeItem(`gymos_exnote_${this.activeId}`);
         localStorage.removeItem(`gymos_created_${this.activeId}`);
         localStorage.removeItem(`gymos_autosave_${this.activeId}`);

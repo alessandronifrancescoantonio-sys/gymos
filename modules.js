@@ -102,12 +102,19 @@ const Progression = {
     // il massimo di tutte le sessioni precedenti — "stesso set di punta ma
     // tutte le serie più solide" ora conta come progresso, non solo "peso
     // massimo alzato".
+    // isBW è una decisione GLOBALE (quale metro usa l'intero grafico: kg di
+    // volume o conteggio rep) — ma se l'esercizio passa nel tempo da corpo
+    // libero a pesato (es. trazioni → trazioni zavorrate), le vecchie sedute
+    // a corpo libero avrebbero kg=0 e quindi volume=0: un falso crollo a
+    // zero, non un vero calo. `progVal` è null in quel caso — un buco onesto
+    // nella linea, non un valore fasullo comparabile.
     const isBW = out.every(g => g.topKg === 0);
+    out.forEach(g => { g.progVal = isBW ? g.repsTot : (g.topKg === 0 ? null : g.volume); });
     let running = 0;
     out.forEach((g, i) => {
-      const val = isBW ? g.repsTot : g.volume;
-      g.isPR = i > 0 && val > running && val > 0;
-      running = Math.max(running, val);
+      if (g.progVal == null) { g.isPR = false; return; }
+      g.isPR = i > 0 && g.progVal > running && g.progVal > 0;
+      running = Math.max(running, g.progVal);
     });
     return out;
   },
@@ -125,9 +132,13 @@ const Progression = {
     // tutte le serie) — la progressione reale dell'esercizio quella seduta,
     // non una stima del massimale su un solo set: più peso e più rep nella
     // totalità delle serie conta, anche se il set di punta resta invariato.
-    const data = s.map(g => isBW ? g.repsTot : g.volume);
+    // g.progVal è null per una seduta a corpo libero dentro uno storico
+    // altrimenti pesato (non confrontabile in kg) — Chart.js lascia un buco
+    // onesto nella linea invece di un falso crollo a zero.
+    const data = s.map(g => g.progVal);
     if (caption) caption.textContent = isBW ? "Linea = ripetizioni totali della seduta (tutte le serie sommate)." : "Linea = volume totale della seduta (peso × ripetizioni, sommato su tutte le serie) — non solo il set migliore.";
-    const minD = Math.min(...data), maxD = Math.max(...data);
+    const validData = data.filter(v => v != null);
+    const minD = validData.length ? Math.min(...validData) : 0, maxD = validData.length ? Math.max(...validData) : 1;
     const pad  = (maxD - minD) * 0.3 || 3;
     const ptColors = s.map(g => g.isPR ? "#F59E0B" : color);
     const ptRadius = s.map(g => g.isPR ? 8 : 5);
@@ -136,10 +147,11 @@ const Progression = {
       const g = s[idx];
       const prTag = g.isPR ? '<span class="tt-pr">Record</span>' : "";
       const setsStr = g.series.map(x => isBW ? x.reps + "r" : U.fmt(x.kg) + "×" + x.reps).join("  ");
+      const mainVal = g.progVal == null ? `${g.repsTot} rep (corpo libero, non confrontabile a volume)` : (isBW ? `${g.progVal} rep totali` : U.fmtV(g.progVal));
       return `
         <div class="tt-date">Sett. ${U.weekNum(g.date)} — ${U.fmtDate(g.date)}</div>
-        <div class="tt-main" style="color:${color}">${isBW ? g.repsTot + " rep totali" : U.fmtV(g.volume)}${prTag}</div>
-        <div class="tt-sub">${isBW ? "" : `Top set: ${U.fmt(g.topKg)}kg × ${g.topReps} · `}${g.series.length} serie · ${setsStr}</div>
+        <div class="tt-main" style="color:${color}">${mainVal}${prTag}</div>
+        <div class="tt-sub">${isBW || g.progVal == null ? "" : `Top set: ${U.fmt(g.topKg)}kg × ${g.topReps} · `}${g.series.length} serie · ${setsStr}</div>
       `;
     }, ".card");
     opts.scales.y.min = Math.max(0, minD - pad);
@@ -147,7 +159,7 @@ const Progression = {
     opts.scales.y.ticks.callback = v => isBW ? U.fmt(v) + " r" : U.fmtV(v);
     this.chart = new Chart(canvas.getContext("2d"), {
       type: "line",
-      data: { labels, datasets: [{ data, borderColor: color, backgroundColor: "transparent",
+      data: { labels, datasets: [{ data, borderColor: color, backgroundColor: "transparent", spanGaps: false,
         borderWidth: 2.5, pointRadius: ptRadius, pointBackgroundColor: ptColors,
         pointBorderColor: "#0D0D0F", pointBorderWidth: 2, pointHoverRadius: 9, tension: .35 }] },
       options: opts,
@@ -1694,15 +1706,20 @@ const Diary = {
     this.renderLimitations();
   },
   // Riassunto compatto per l'IA: "Ginocchio: operato 2023, evita affondi profondi · Spalla: fastidio overhead"
+  // Mandato ad OGNI chiamata /advice (ora una per serie) e /ask: senza un
+  // cap, accumulare limitazioni nel tempo farebbe crescere il prompt senza
+  // limite. 800 caratteri bastano ampiamente per l'uso reale (poche righe
+  // per zona) e tengono il payload sotto controllo.
   standingLimitationsText() {
     const arr = this.getLimitations();
     if (!arr.length) return "";
     const byTag = {};
     arr.forEach(l => { (byTag[l.tag] = byTag[l.tag] || []).push(l.text); });
-    return Object.keys(byTag).map(tag => {
+    const full = Object.keys(byTag).map(tag => {
       const lbl = (this.LIMIT_TAGS.find(t => t.key === tag) || {}).label || tag;
       return `${lbl}: ${byTag[tag].join("; ")}`;
     }).join(" · ");
+    return full.length > 800 ? full.slice(0, 800) + "…" : full;
   },
   renderLimitations() {
     const wrap = document.getElementById("limitations-list");
@@ -2088,7 +2105,6 @@ const Schede = {
 // ═══════════════════════════════════════════════
 const ExportPDF = {
   _esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); },
-  _e1(kg, reps) { return kg > 0 ? kg * (1 + Math.min(reps || 0, 30) / 30) : (reps || 0); },
   _setNum(name) { const m = (name || "").split(" – ").pop().match(/S(\d+)/); return m ? +m[1] : 99; },
 
   async open() {
@@ -2153,11 +2169,20 @@ const ExportPDF = {
         (perEx[k] = perEx[k] || []).push({ date: s.date, volume, repsTot });
       });
     });
-    // record: il volume totale (rep totali a corpo libero) supera tutti i precedenti
+    // record: il volume totale (rep totali a corpo libero) supera tutti i
+    // precedenti. isBW è una decisione GLOBALE per esercizio (stesso motivo
+    // di Progression.groupSessions): se una singola seduta a corpo libero
+    // finisce dentro uno storico altrimenti pesato, il suo volume=0 non è un
+    // vero crollo — progVal resta null (buco onesto nel grafico PDF).
     Object.values(perEx).forEach(pts => {
       const isBW = pts.every(p => p.volume === 0);
+      pts.forEach(p => { p.progVal = isBW ? p.repsTot : (p.volume === 0 ? null : p.volume); });
       let run = 0;
-      pts.forEach((p, i) => { const val = isBW ? p.repsTot : p.volume; p.isPR = i > 0 && val > run && val > 0; run = Math.max(run, val); });
+      pts.forEach((p, i) => {
+        if (p.progVal == null) { p.isPR = false; return; }
+        p.isPR = i > 0 && p.progVal > run && p.progVal > 0;
+        run = Math.max(run, p.progVal);
+      });
     });
     const charts = {};
     for (const [name, pts] of Object.entries(perEx)) {
@@ -2170,14 +2195,14 @@ const ExportPDF = {
     const c = document.createElement("canvas");
     c.width = 680; c.height = 240;
     const isBW = pts.every(p => p.volume === 0);
-    const data = pts.map(p => isBW ? p.repsTot : p.volume);
+    const data = pts.map(p => p.progVal);
     const ptColors = pts.map(p => p.isPR ? "#F59E0B" : "#FF3B2F");   // record in ambra
     const ptRadius = pts.map(p => p.isPR ? 6 : 3);
     const chart = new Chart(c.getContext("2d"), {
       type: "line",
       data: {
         labels: pts.map(p => U.fmtDate(p.date)),
-        datasets: [{ data, borderColor: "#FF3B2F", backgroundColor: "rgba(255,59,47,.10)",
+        datasets: [{ data, borderColor: "#FF3B2F", backgroundColor: "rgba(255,59,47,.10)", spanGaps: false,
           fill: true, tension: .3, pointRadius: ptRadius, pointBackgroundColor: ptColors, borderWidth: 2 }],
       },
       options: { responsive: false, animation: false, plugins: { legend: { display: false } },
