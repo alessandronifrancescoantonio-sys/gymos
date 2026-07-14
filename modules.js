@@ -731,6 +731,65 @@ const Volume = {
 
   zone(v) { return v === 0 ? "none" : v < this.MEV ? "low" : v <= this.MAV_HI ? "ok" : "high"; },
 
+  // ═══ MRV — MASSIMO VOLUME RECUPERABILE (serie DIRETTE/settimana) ═══════════
+  // Stime dalla letteratura RP (Israetel): variano molto per muscolo — i
+  // piccoli/recuperanti (spalle, bicipiti) tollerano più serie dei grandi e
+  // sistemici (quadricipiti, glutei). Sono STIME di popolazione, non verità
+  // sul singolo: servono da tetto di sicurezza, non da obiettivo da inseguire.
+  // Il feedback reale di recupero (Recovery) vale più di questa tabella.
+  MRV: { Petto:22, Dorso:25, Spalle:26, Bicipiti:26, Tricipiti:24, Quadricipiti:20,
+         Femorali:20, Glutei:16, Polpacci:25, Adduttori:16, Addome:25, Avambracci:20 },
+  mrvFor(m) { return this.MRV[m] || 22; },
+
+  // ═══ VOLUME DINAMICO (FASE 2.1) ═══════════════════════════════════════════
+  // Retroazione sul volume della PROSSIMA settimana, dal recupero reale +
+  // andamento della forza. Regole (RP/Israetel), con i limiti MEV..MRV come
+  // guardrail: sotto MEV non si scende (perderesti stimolo), sopra MRV non si
+  // sale (non lo recupereresti).
+  //   indolenzimento sparito PRESTO  + forza ok   -> +1 serie
+  //   sparito APPENA IN TEMPO                     -> invariato
+  //   ANCORA indolenzito  OPPURE forza in calo    -> -1 serie (scarico se grave)
+  // Restituisce SEMPRE un consiglio motivato: non tocca la scheda da solo.
+  nextVolume(muscle, currentDirect, domsState, perfDropped) {
+    const mev = this.MEV, mrv = this.mrvFor(muscle);
+    const cur = Math.max(0, Number(currentDirect) || 0);
+    const clamp = v => Math.max(mev, Math.min(mrv, v));
+    if (!domsState) return null;                    // nessun feedback: nessun consiglio inventato
+    // Il delta è SEMPRE derivato dal target, mai dichiarato a parte: se un
+    // guardrail (MEV/MRV) blocca il movimento, il consiglio non deve continuare
+    // a dire "-1 serie" mentre il volume resta identico.
+    const out = (target, tone, why, deload) => {
+      const t = Math.round(target);
+      return { delta: t - cur, target: t, tone, why, deload: !!deload };
+    };
+    if (domsState === "still" && perfDropped) {
+      // Due segnali negativi convergenti: non è volume da limare, è scarico.
+      return out(Math.max(mev, cur * 0.6), "bad",
+        "sei ancora indolenzito E la forza è calata: due segnali insieme. Meglio una settimana di scarico che insistere.", true);
+    }
+    if (domsState === "still") {
+      return out(clamp(cur - 1), "bad",
+        cur <= mev
+          ? "arrivi ancora indolenzito, ma sei già al minimo utile: non è il volume il problema — guarda sonno, cibo e stress."
+          : "arrivi ancora indolenzito: stai accumulando più di quanto recuperi.");
+    }
+    if (perfDropped) {
+      return out(clamp(cur - 1), "bad",
+        "il recupero c'è ma la forza è calata: alleggerisci un po' il volume.");
+    }
+    if (domsState === "just") {
+      return out(clamp(cur), "ok",
+        "l'indolenzimento è passato giusto in tempo: sei nel punto giusto, tieni questo volume.");
+    }
+    // "early": recuperato con margine e forza ok -> c'è spazio per crescere
+    if (cur >= mrv) {
+      return out(mrv, "ok",
+        `recuperi bene, ma sei già al tetto stimato per questo muscolo (~${mrv} serie): meglio non salire ancora.`);
+    }
+    return out(clamp(cur + 1), "up",
+      "recuperi con margine e la forza tiene: c'è spazio per una serie in più.");
+  },
+
   // #batch2 raffinamento 4 — tetto di serie DIRETTE per SINGOLA seduta (non
   // solo il totale settimanale già coperto da MEV/MAV_HI): oltre questa soglia
   // il beneficio marginale in UNA sessione crolla (Nippard/Krieger meta-review,
@@ -793,6 +852,9 @@ const Volume = {
     this._actualDir = aDir; this._actualInd = aInd;
     this._actualCount = contributed;   // solo sessioni con almeno una serie fatta
     this.renderCard();
+    // La mappa di recupero legge il volume DIRETTO reale: si aggiorna qui,
+    // appena il "fatto" della settimana è disponibile.
+    try { if (typeof Recovery !== "undefined") Recovery.renderCard(); } catch (e) {}
     const modal = document.getElementById("vol-modal");
     if (modal && modal.style.display === "flex") this.renderEditor();
   },
@@ -1165,6 +1227,110 @@ const ProgressPhotos = {
   },
 };
 
+// ═══════════════════════════════════════════════════════════════════════════
+//  RECUPERO — feedback di indolenzimento (DOMS) e stato per muscolo
+//
+//  QUANDO si chiede, e perché: a INIZIO seduta, non a fine. I DOMS crescono
+//  24-48h DOPO l'allenamento: chiederli mentre esci dalla palestra non
+//  misurerebbe niente. La domanda giusta è "come stavi arrivando qui oggi?",
+//  ed è esattamente il segnale che serve per decidere il volume (Israetel:
+//  l'indolenzimento residuo all'inizio della sessione t+1 è il marcatore
+//  pratico di volume oltre la capacità di recupero).
+//
+//  Tre stati, non una scala 1-10: una scala fine darebbe falsa precisione su
+//  una sensazione grossolana, e nessuno la compila davvero ogni volta.
+//  Salvato ON-DEVICE (come foto e note esercizio): nessun cambio di schema Notion.
+// ═══════════════════════════════════════════════════════════════════════════
+const Recovery = {
+  KEY: "gymos_recovery",
+  STATES: [
+    { id: "early", lbl: "Era già passato",     ic: "ti-battery-4", tone: "up" },
+    { id: "just",  lbl: "Passato in tempo",    ic: "ti-battery-2", tone: "ok" },
+    { id: "still", lbl: "Ancora indolenzito",  ic: "ti-battery-1", tone: "bad" },
+  ],
+  _load() { try { return JSON.parse(localStorage.getItem(this.KEY) || "{}"); } catch (e) { return {}; } },
+  _save(o) { try { localStorage.setItem(this.KEY, JSON.stringify(o)); } catch (e) {} },
+  set(date, muscle, state) {
+    const o = this._load();
+    (o[date] = o[date] || {})[muscle] = state;
+    this._save(o);
+  },
+  get(date, muscle) { const o = this._load(); return (o[date] || {})[muscle] || null; },
+  // Ultimo feedback registrato per un muscolo, a qualunque data.
+  latest(muscle) {
+    const o = this._load();
+    const dates = Object.keys(o).filter(d => o[d] && o[d][muscle]).sort();
+    if (!dates.length) return null;
+    const d = dates[dates.length - 1];
+    return { date: d, state: o[d][muscle] };
+  },
+  // Quanto è "fresco" il feedback: oltre ~10 giorni non descrive più l'oggi.
+  STALE_DAYS: 10,
+  latestFresh(muscle) {
+    const l = this.latest(muscle);
+    if (!l) return null;
+    const days = Math.round((Date.now() - new Date(l.date).getTime()) / 86400000);
+    return days <= this.STALE_DAYS ? { ...l, days } : null;
+  },
+  stateOf(id) { return this.STATES.find(s => s.id === id) || null; },
+  _esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); },
+
+  // ═══ MAPPA DI RECUPERO (semaforo per muscolo) ═════════════════════════════
+  // Rosso  = arrivi ancora indolenzito, OPPURE sei già al tetto MRV stimato
+  // Giallo = indolenzimento passato giusto in tempo (sei al punto giusto)
+  // Verde  = recuperato con margine: c'è spazio per crescere
+  // Grigio = nessun feedback recente: NON inventiamo uno stato, lo chiediamo
+  //
+  // Onestà: senza il tuo feedback questa mappa non ha niente da dire. Preferiamo
+  // un "non lo so" a un semaforo dedotto dal calendario, che sembrerebbe una
+  // misura e sarebbe un'ipotesi.
+  status(muscle) {
+    const dir = (Volume._actualDir && Volume._actualDir[muscle]) || 0;
+    const mrv = Volume.mrvFor(muscle);
+    const fb = this.latestFresh(muscle);
+    if (!fb) return { tone: "none", lbl: "Nessun dato", dir, mrv, doms: null };
+    if (dir >= mrv) return { tone: "bad", lbl: "Al tetto di volume", dir, mrv, doms: fb.state };
+    if (fb.state === "still") return { tone: "bad", lbl: "Non recuperato", dir, mrv, doms: fb.state };
+    if (fb.state === "just")  return { tone: "ok",  lbl: "Recupero al limite", dir, mrv, doms: fb.state };
+    return { tone: "up", lbl: "Recuperato", dir, mrv, doms: fb.state };
+  },
+
+  renderCard() {
+    const wrap = document.getElementById("dash-recovery");
+    if (!wrap || typeof Volume === "undefined") return;
+    const title = `<div class="card-title"><i class="ti ti-heartbeat"></i>Recupero muscolare</div>`;
+    // Muscoli con volume reale questa settimana (o pianificato se il "fatto"
+    // non è ancora stato caricato): non ha senso un semaforo su ciò che non alleni.
+    const dirMap = Volume._actualDir || Volume.compute().dir || {};
+    const rows = Volume.MUSCLES.filter(m => (dirMap[m] || 0) > 0)
+      .sort((a, b) => (dirMap[b] || 0) - (dirMap[a] || 0));
+    if (!rows.length) {
+      wrap.innerHTML = `${title}<div class="empty-state">Nessun muscolo allenato questa settimana.</div>`;
+      return;
+    }
+    const items = rows.map(m => {
+      const st = this.status(m);
+      const adv = Volume.nextVolume(m, st.dir, st.doms, false);
+      const advTxt = adv
+        ? `<div class="rmap-adv rm-${adv.tone}">${adv.deload ? "Scarico consigliato" : (adv.delta > 0 ? "+1 serie" : adv.delta < 0 ? "−1 serie" : "Tieni così")} — ${this._esc(adv.why)}</div>`
+        : `<div class="rmap-adv rm-none">Dimmi come ci arrivi alla prossima seduta e ti dico se salire o scendere di volume.</div>`;
+      return `
+        <div class="rmap-row">
+          <div class="rmap-head">
+            <span class="rmap-dot rm-${st.tone}"></span>
+            <span class="rmap-mus">${this._esc(m)}</span>
+            <span class="rmap-state rm-${st.tone}">${this._esc(st.lbl)}</span>
+            <span class="rmap-vol">${Volume.fmt(st.dir)}<small>/${st.mrv}</small></span>
+          </div>
+          ${advTxt}
+        </div>`;
+    }).join("");
+    wrap.innerHTML = `${title}
+      <div class="rmap-list">${items}</div>
+      <div class="rmap-foot">Serie dirette fatte questa settimana / tetto stimato che recupereresti (MRV). Il semaforo viene dal tuo feedback a inizio seduta, non dal calendario.</div>`;
+  },
+};
+
 const Dashboard = {
   async load() {
     const hour = new Date().getHours();
@@ -1186,6 +1352,7 @@ const Dashboard = {
       this.buildWeekSplit(sessions);
       Volume.renderCard();
       Volume.loadActual(sessions);   // serie fatte davvero questa settimana (bg)
+      if (typeof Recovery !== "undefined") Recovery.renderCard();
       this.buildRecentSessions(sessions);
       this.buildSemaforo(sleepData);
       try { DailyRecap.render({ sessions, checkins, sleep: sleepData, habits, todayHabit }); } catch (e) { console.error("DailyRecap:", e); }

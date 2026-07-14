@@ -216,6 +216,7 @@ const Session = {
 
     this.renderExercises();
     this.renderDiaryBanner();   // nota/limitazioni mostrate UNA VOLTA qui, non ripetute ad ogni esercizio dall'IA
+    this.renderRecoveryBanner();   // DOMS della scorsa seduta: si chiede ORA, a inizio sessione
     this.updateStats();
     this.applyViewMode();
     this.armSessionTimers();   // auto-avvio durata + eventuale auto-salvataggio
@@ -224,6 +225,77 @@ const Session = {
     this.loadExerciseIntel(Object.keys(grouped)).then(() => this.loadAIAdvice(Object.keys(grouped)));
     // Sonno di stanotte (background): dà contesto ai consigli per-esercizio.
     this.loadSleepContext();
+  },
+
+  // ═══ RECUPERO — "come arrivi oggi" (DOMS della seduta precedente) ═════════
+  // Chiesto a INIZIO sessione, mai a fine: i DOMS crescono 24-48h DOPO, quindi
+  // a fine allenamento non c'è nulla da misurare. È il segnale che regola il
+  // volume della prossima settimana (vedi Volume.nextVolume).
+  //
+  // Attrito basso e onesto: solo i muscoli DAVVERO caricati oggi (top 4 per
+  // serie dirette), un tap ciascuno, saltabile. Una scala 1-10 sarebbe falsa
+  // precisione su una sensazione grossolana — e non la compilerebbe nessuno.
+  _sessionDate() {
+    const sess = this.sessions.find(s => s.id === this.activeId);
+    return (sess && sess.date) || U.today();
+  },
+  // Muscoli primari allenati oggi, ordinati per serie DIRETTE (le indirette a
+  // metà carico non giustificano una domanda sull'indolenzimento).
+  _todayMuscles(limit = 4) {
+    try {
+      if (typeof Volume === "undefined") return [];
+      const direct = {};
+      const grouped = this.groupByExercise(this.exercises);
+      Object.keys(grouped).forEach(name => {
+        const nSets = (grouped[name] || []).length;
+        const mus = Volume.musclesFor(name) || {};
+        Object.keys(mus).forEach(m => { if (mus[m] >= 1) direct[m] = (direct[m] || 0) + nSets; });
+      });
+      return Object.keys(direct).sort((a, b) => direct[b] - direct[a]).slice(0, limit);
+    } catch (e) { return []; }
+  },
+  _recSkipKey() { return `gymos_recskip_${this.activeId || "none"}`; },
+  skipRecovery() {
+    try { localStorage.setItem(this._recSkipKey(), "1"); } catch (e) {}
+    const w = document.getElementById("recovery-banner");
+    if (w) { w.innerHTML = ""; w.style.display = "none"; }
+  },
+  setRecovery(muscle, state) {
+    if (typeof Recovery === "undefined") return;
+    Recovery.set(this._sessionDate(), muscle, state);
+    const st = Recovery.stateOf(state);
+    U.toast(`${muscle}: ${st ? st.lbl.toLowerCase() : state}`, "ok");
+    this.renderRecoveryBanner();   // il muscolo appena risposto sparisce dalla lista
+  },
+  renderRecoveryBanner() {
+    const wrap = document.getElementById("recovery-banner");
+    if (!wrap) return;
+    const hide = () => { wrap.innerHTML = ""; wrap.style.display = "none"; };
+    if (this.viewMode || this.sessionDone || typeof Recovery === "undefined") return hide();
+    let skipped = false;
+    try { skipped = localStorage.getItem(this._recSkipKey()) === "1"; } catch (e) {}
+    if (skipped) return hide();
+    const date = this._sessionDate();
+    const pending = this._todayMuscles().filter(m => !Recovery.get(date, m));
+    if (!pending.length) return hide();
+    const esc = s => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const rows = pending.map(m => {
+      const arg = String(m).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+      const chips = Recovery.STATES.map(s =>
+        `<button class="rec-chip rc-${s.tone}" onclick="Session.setRecovery('${arg}','${s.id}')">
+           <i class="ti ${s.ic}"></i>${esc(s.lbl)}
+         </button>`).join("");
+      return `<div class="rec-row"><span class="rec-mus">${esc(m)}</span><div class="rec-chips">${chips}</div></div>`;
+    }).join("");
+    wrap.style.display = "flex";
+    wrap.innerHTML = `
+      <i class="ti ti-battery-3 rec-ic"></i>
+      <div class="rec-txt">
+        <span class="rec-lbl">Come ci arrivi oggi</span>
+        <span class="rec-sub">L'indolenzimento della scorsa seduta, non quello di adesso: è ciò che dice se il volume è giusto.</span>
+        ${rows}
+      </div>
+      <button class="rec-skip" onclick="Session.skipRecovery()" aria-label="Salta"><i class="ti ti-x"></i></button>`;
   },
 
   // Banner UNA TANTUM (diario di oggi + limitazioni standing) in cima alla
