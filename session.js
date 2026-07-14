@@ -222,7 +222,15 @@ const Session = {
     this.armSessionTimers();   // auto-avvio durata + eventuale auto-salvataggio
     // Carica lo storico di ogni esercizio (background): alimenta gli obiettivi
     // intelligenti e semina i record personali. Non blocca l'UI.
-    this.loadExerciseIntel(Object.keys(grouped)).then(() => this.loadAIAdvice(Object.keys(grouped)));
+    // Storico esercizi: sempre, per TUTTI (è Notion, non costa quota IA e
+    // alimenta obiettivi/record). Il consiglio IA invece NON si pre-carica più
+    // per tutti gli esercizi: costava 8 richieste su una quota da 20/giorno, per
+    // esercizi che magari non apri nemmeno. Ora parte pigro, all'apertura del
+    // singolo esercizio (toggleEx / autoAdvanceExercise).
+    this.loadExerciseIntel(Object.keys(grouped)).then(() => {
+      const open = this.exOrder && this.exOrder[0];
+      if (open) this.loadAIAdvice([open]);   // solo il primo, quello che stai per fare
+    });
     // Sonno di stanotte (background): dà contesto ai consigli per-esercizio.
     this.loadSleepContext();
   },
@@ -321,11 +329,38 @@ const Session = {
       <button class="db-close" onclick="this.parentElement.style.display='none'" aria-label="Chiudi"><i class="ti ti-x"></i></button>`;
   },
 
+  // ═══ BUDGET DELLE CHIAMATE IA ═════════════════════════════════════════════
+  // Il piano gratuito Gemini dà ~20 richieste al GIORNO. Prima l'app ne faceva
+  // 8 al caricamento (una per esercizio) + 1 ad OGNI serie completata: oltre 30
+  // per un solo allenamento. La quota finiva a metà sessione, il worker
+  // rispondeva 429, l'errore veniva ingoiato in silenzio → "su alcune serie il
+  // consiglio IA non compare". Non era un bug di logica: era il rubinetto chiuso.
+  //
+  // Divisione dei ruoli, ora:
+  //   motore a regole → istantaneo, ad OGNI serie/peso/nota (gratis, locale)
+  //   IA              → UNA volta per esercizio, quando lo apri davvero
+  // Così un allenamento costa ~8-10 chiamate invece di 30+.
+  AI_COOLDOWN_MS: 45000,
+  _aiCanCall(exName, force) {
+    if (this._aiQuotaOut) return false;                 // quota finita: inutile insistere
+    if (force) return true;
+    const t = (this._aiLastCall && this._aiLastCall[exName]) || 0;
+    return (Date.now() - t) > this.AI_COOLDOWN_MS;
+  },
+  _aiMarkQuotaOut() {
+    if (this._aiQuotaOut) return;
+    this._aiQuotaOut = true;
+    // Detto una volta sola, senza allarmismo: il consiglio continua ad arrivare,
+    // solo dal motore a regole invece che dall'IA.
+    try { U.toast("Consigli IA esauriti per oggi (quota Gemini). I consigli continuano, dal motore a regole.", "info"); } catch (e) {}
+  },
+
   // Cervello IA (Gemini via Worker Cloudflare separato) — ADDITIVO, mai
   // sostituisce il motore a regole. Silenzioso su qualunque errore/offline:
   // se fallisce, l'utente vede solo il consiglio del motore a regole, punto.
   // Timeout breve per non far percepire l'app come lenta.
-  async loadAIAdvice(exNames) {
+  async loadAIAdvice(exNames, force) {
+    if (this._aiQuotaOut) return;
     const token = (this._aiToken = (this._aiToken || 0) + 1);
     // Letto UNA volta prima del loop (non ad ogni esercizio): stessa chiamata
     // batch, coerente per tutti gli esercizi che riceve invece di poter
@@ -349,6 +384,9 @@ const Session = {
     try { if (typeof Diary !== "undefined") standingLimitations = Diary.standingLimitationsText(); } catch (e) {}
     for (const exName of (exNames || [])) {
       if (!exName) continue;
+      if (!this._aiCanCall(exName, force)) continue;   // quota/cooldown: non sprecare una richiesta
+      this._aiLastCall = this._aiLastCall || {};
+      this._aiLastCall[exName] = Date.now();
       try {
         const grouped = this.groupByExercise(this.exercises);
         const sets = grouped[exName] || [];
@@ -399,7 +437,20 @@ const Session = {
           body: JSON.stringify(payload), signal: ctrl.signal,
         }).finally(() => { clearTimeout(timer); if (this._aiCtrls[exName] === ctrl) delete this._aiCtrls[exName]; });
         if (token !== this._aiToken) return;   // sessione cambiata: abbandona
-        if (!res.ok) continue;
+        if (!res.ok) {
+          // Quota Gemini esaurita: il worker incarta l'errore di Gemini in un
+          // proprio 502, quindi il 429 non si vede dallo status — va riconosciuto
+          // dal corpo. Senza questo, l'app continuava a bruciare richieste (e
+          // secondi di attesa) su una quota già finita, in silenzio.
+          try {
+            const body = await res.text();
+            if (/RESOURCE_EXHAUSTED|exceeded your current quota|"code":\s*429/i.test(body)) {
+              this._aiMarkQuotaOut();
+              return;
+            }
+          } catch (e) {}
+          continue;
+        }
         const data = await res.json();
         if (!data || !data.advice) continue;
         this._renderAIAdvice(exName, data);
@@ -809,6 +860,11 @@ const Session = {
       });
       block.classList.remove("collapsed");
       this.scrollToBlock(block);
+      // Consiglio IA PIGRO: lo chiediamo per l'esercizio che stai davvero
+      // aprendo, non per tutti e otto in anticipo (la quota è ~20/giorno).
+      // Il cooldown dentro loadAIAdvice evita raffiche se apri/chiudi.
+      const exName = block.dataset.ex;
+      if (exName && !this.viewMode && !this.sessionDone) this.loadAIAdvice([exName]);
     } else {
       // chiudo l'esercizio aperto → niente più focus, tutti tornano normali
       document.querySelectorAll("#exercises-container .ex-block").forEach(b => {
@@ -2650,11 +2706,14 @@ const Session = {
       ? '<i class="ti ti-rotate-2"></i> Annulla'
       : '<i class="ti ti-check"></i> Serie fatta';
     this.refreshExDone(exName);
-    this.refreshSetHints(exName, true);   // serie cambiata: consiglio base subito, poi l'IA lo arricchisce
-    // Ri-triggera anche il consiglio IA per QUESTO esercizio: prima restava
-    // congelato dall'inizio esercizio fino al cambio esercizio, non vedeva
-    // mai la serie appena fatta né le sue note entro lo stesso esercizio.
-    this.loadAIAdvice([exName]);
+    this.refreshSetHints(exName, true);   // consiglio base aggiornato SUBITO, ad ogni serie (locale, gratis)
+    // L'IA NON riparte ad ogni serie: costava 1 richiesta per serie su una quota
+    // da ~20/giorno, e finiva a metà allenamento. La chiamiamo solo quando c'è
+    // davvero informazione nuova che il motore a regole non sa leggere: una NOTA
+    // scritta su questa serie ("dura", "gomito", "leggera"). Il resto — peso,
+    // rep, RIR — lo gestisce già il motore a regole, all'istante.
+    const justDone = this.exercises.find(e => e.id === id);
+    if (nowDone && justDone && (justDone.note || "").trim()) this.loadAIAdvice([exName]);
 
     // #batch2 — ultima serie di questo esercizio completata → avanza alla tendina successiva
     const setsOfEx = this.groupByExercise(this.exercises)[exName] || [];
