@@ -107,6 +107,8 @@ input { font-family:inherit; }
 .tt-note { margin-top:5px; font-size:10px; color:var(--muted); font-style:italic; border-top:1px solid var(--ink3); padding-top:5px; }
 .tt-pr { font-size:9px; font-weight:700; background:rgba(245,166,35,.15); color:var(--amber); border:1px solid rgba(245,166,35,.3); padding:1px 5px; border-radius:100px; margin-left:3px; }
 .chart-container { position:relative; }
+.chart-caption { font-size:10.5px; color:var(--muted); margin-top:8px; line-height:1.4; }
+.chart-caption:empty { display:none; }
 
 .semaforo-card { display:flex; align-items:center; gap:14px; background:var(--ink2); border:1px solid var(--ink3); border-radius:var(--radius-lg); padding:14px 18px; margin-bottom:14px; transition:border-color .3s; }
 .sem-icon { font-size:28px; flex-shrink:0; }

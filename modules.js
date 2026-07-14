@@ -68,6 +68,10 @@ const Progression = {
   // Raggruppa le righe (una per serie) in SESSIONI, con tutte le serie ordinate,
   // scartando quelle vuote (rep 0). Calcola top set, volume e record (PR).
   groupSessions() {
+    // Epley — stessa formula usata ovunque nell'app (session.js e1rm/capE1,
+    // buildRecords qui sotto): un unico modo di stimare la forza da kg+rep
+    // insieme, non i due massimi presi separatamente.
+    const e1 = (kg, reps) => (kg > 0 && reps > 0) ? kg * (1 + reps / 30) : reps;
     const groups = {};
     (this.history || []).forEach(r => {
       // una sessione = un giorno (il nome scheda non è univoco tra sessioni diverse)
@@ -81,28 +85,44 @@ const Progression = {
     });
     let out = Object.values(groups).map(g => {
       g.series = g.series.filter(s => s.reps > 0).sort((a, b) => a.n - b.n);
-      g.topKg   = g.series.length ? Math.max(...g.series.map(s => s.kg)) : 0;
-      g.topReps = g.series.length ? Math.max(...g.series.map(s => s.reps)) : 0;
+      // BUG corretto: prima topKg e topReps erano i massimi presi
+      // INDIPENDENTEMENTE (potevano venire da serie diverse, mai successe
+      // insieme) e il grafico plottava SOLO topKg — un peso invariato con
+      // più ripetizioni (progresso reale) restava una linea piatta. Ora si
+      // sceglie il MIGLIOR SET REALE per 1RM stimato (kg e rep della STESSA
+      // serie), così un aumento di rep a parità di peso conta come progresso.
+      let top = g.series[0] || { kg: 0, reps: 0 };
+      g.series.forEach(s => { if (e1(s.kg, s.reps) > e1(top.kg, top.reps)) top = s; });
+      g.topKg   = top.kg || 0;
+      g.topReps = top.reps || 0;
+      g.topE1   = Math.round(e1(top.kg, top.reps) * 10) / 10;
       g.volume  = g.series.reduce((t, s) => t + s.reps * (s.kg || 0), 0);
       g.repsTot = g.series.reduce((t, s) => t + s.reps, 0);
       return g;
     }).filter(g => g.series.length)
       .sort((a, b) => new Date(a.date) - new Date(b.date));   // dal più vecchio al più recente
-    // Record: il top set supera il massimo di TUTTE le sessioni precedenti
+    // Record: il TOP SET per 1RM stimato supera il massimo di TUTTE le
+    // sessioni precedenti — "stesso peso, più ripetizioni" ora conta
+    // correttamente come record (prima serviva alzare il peso per contare).
     let running = 0;
-    out.forEach((g, i) => { g.isPR = i > 0 && g.topKg > running && g.topKg > 0; running = Math.max(running, g.topKg); });
+    out.forEach((g, i) => { g.isPR = i > 0 && g.topE1 > running && g.topE1 > 0; running = Math.max(running, g.topE1); });
     return out;
   },
 
   buildChart() {
     const s = this.sessions || [];
     const canvas = document.getElementById("prog-chart");
+    const caption = document.getElementById("prog-chart-caption");
     if (this.chart) { this.chart.destroy(); this.chart = null; }
     if (!s.length || !canvas) return;
     const color = CONFIG.SCHEDE[this.activeScheda].color;
     const isBW  = s.every(g => g.topKg === 0);
     const labels = s.map(g => U.fmtDate(g.date));
-    const data   = s.map(g => isBW ? g.topReps : g.topKg);
+    // Linea = 1RM stimato del miglior set reale (kg+rep insieme), non solo il
+    // kg massimo: così un aumento di ripetizioni a parità di peso si vede
+    // come progresso, non come una linea piatta.
+    const data   = s.map(g => isBW ? g.topReps : g.topE1);
+    if (caption) caption.textContent = isBW ? "" : "Linea = 1RM stimato del miglior set (formula di Epley, peso+ripetizioni insieme) — non solo il peso usato.";
     const minD = Math.min(...data), maxD = Math.max(...data);
     const pad  = (maxD - minD) * 0.3 || 3;
     const ptColors = s.map(g => g.isPR ? "#F59E0B" : color);
@@ -114,8 +134,8 @@ const Progression = {
       const setsStr = g.series.map(x => isBW ? x.reps + "r" : U.fmt(x.kg) + "×" + x.reps).join("  ");
       return `
         <div class="tt-date">Sett. ${U.weekNum(g.date)} — ${U.fmtDate(g.date)}</div>
-        <div class="tt-main" style="color:${color}">${isBW ? g.topReps + " rep" : U.fmt(g.topKg) + " kg"}${prTag}</div>
-        <div class="tt-sub">${g.series.length} serie · ${setsStr}</div>
+        <div class="tt-main" style="color:${color}">${isBW ? g.topReps + " rep" : U.fmt(g.topE1) + " kg (1RM stimato)"}${prTag}</div>
+        <div class="tt-sub">${isBW ? "" : `Top set: ${U.fmt(g.topKg)}kg × ${g.topReps} · `}${g.series.length} serie · ${setsStr}</div>
       `;
     }, ".card");
     opts.scales.y.min = Math.max(0, minD - pad);
