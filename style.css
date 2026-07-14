@@ -977,11 +977,20 @@ body::after {
   .sidebar    { background:rgba(22,22,25,.82); -webkit-backdrop-filter:blur(12px) saturate(1.2); backdrop-filter:blur(12px) saturate(1.2); }
   .app-modal-box, .modal { -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); }
   @media (max-width:860px) {
-    /* #I perf — header sempre visibile: blur ridotto (18→10) e sfondo un filo
-       più opaco. La barra è già coprente al ~72%, quindi il blur pesante era
-       quasi invisibile ma costava caro su mobile. */
+    /* #I perf 2 — NIENTE backdrop-filter sulle barre sticky in mobile.
+       L'header è sticky: con il blur la GPU ri-sfocava la fascia dietro la
+       barra ad OGNI FRAME DI SCROLL — e in allenamento si scrolla di continuo.
+       Era il costo continuo più caro dell'app (batteria + telefono caldo).
+       La barra era già coprente al 72%: portandola al 96% il blur non si
+       vedeva quasi, quindi lo togliamo e teniamo il colore. Differenza visiva
+       minima, costo di compositing praticamente azzerato. */
     .sess-header, .page-header {
-      background:rgba(13,13,15,.72); -webkit-backdrop-filter:blur(10px) saturate(1.2); backdrop-filter:blur(10px) saturate(1.2);
+      background:rgba(13,13,15,.96);
+      -webkit-backdrop-filter:none; backdrop-filter:none;
+    }
+    .sidebar {
+      background:rgba(22,22,25,.97);
+      -webkit-backdrop-filter:none; backdrop-filter:none;
     }
   }
 }
@@ -1645,6 +1654,16 @@ body::before, body::after { will-change:transform, opacity; }
 .ai-advice-box.ai-rule > i.sh-up { color:var(--green); }
 .ai-advice-box.ai-rule > i.sh-dn { color:var(--amber); }
 .ai-advice-box.ai-rule > i.sh-ok { color:var(--blue); }
+
+/* Pillola "nuova versione disponibile" (dal Service Worker) */
+.update-pill { position:fixed; left:50%; transform:translateX(-50%);
+  bottom:calc(var(--bottombar-h, 64px) + 16px + env(safe-area-inset-bottom, 0px));
+  z-index:9000; display:inline-flex; align-items:center; gap:7px; min-height:44px;
+  padding:11px 16px; border-radius:100px; border:1px solid var(--line-soft);
+  background:var(--accent); color:#fff; font-size:12.5px; font-weight:700;
+  box-shadow:var(--sh-2, 0 6px 20px rgba(0,0,0,.35)); cursor:pointer;
+  animation:toastIn .25s var(--ease-out, ease) both; }
+.update-pill i { font-size:15px; }
 
 /* Recupero — "come ci arrivi oggi" (DOMS chiesti a inizio seduta) */
 .rec-banner { display:flex; align-items:flex-start; gap:9px; margin:0 0 12px; padding:11px 12px;

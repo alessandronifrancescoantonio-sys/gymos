@@ -15,7 +15,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-<link rel="stylesheet" href="style.css?v=84">
+<link rel="stylesheet" href="style.css?v=85">
 </head>
 <body>
 
@@ -703,16 +703,29 @@
   </div>
 </div>
 
-<script src="exercise-guide-index.js?v=84"></script>
-<script src="config.js?v=84"></script>
-<script src="api.js?v=84"></script>
-<script src="session.js?v=84"></script>
-<script src="modules.js?v=84"></script>
-<script src="timers.js?v=84"></script>
-<script src="app.js?v=84"></script>
+<script src="exercise-guide-index.js?v=85"></script>
+<script src="config.js?v=85"></script>
+<script src="api.js?v=85"></script>
+<script src="session.js?v=85"></script>
+<script src="modules.js?v=85"></script>
+<script src="timers.js?v=85"></script>
+<script src="app.js?v=85"></script>
 <script>
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(function(){});
+    // Il SW serve la cache SUBITO e rivalida dietro: quando trova davvero un
+    // file nuovo ce lo dice, e lo diciamo a te. Niente ricarica forzata a
+    // sorpresa: se sei a metà di una serie, decidi tu quando.
+    navigator.serviceWorker.addEventListener("message", function (ev) {
+      if (!ev.data || ev.data.type !== "gymos-update") return;
+      if (window.__gymosUpdateShown) return;
+      window.__gymosUpdateShown = true;
+      var b = document.createElement("button");
+      b.className = "update-pill";
+      b.innerHTML = '<i class="ti ti-refresh"></i> Nuova versione — tocca per aggiornare';
+      b.onclick = function () { location.reload(); };
+      document.body.appendChild(b);
+    });
   }
 </script>
 </body>

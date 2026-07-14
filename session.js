@@ -1928,30 +1928,44 @@ const Session = {
       if (s.note && (!cur || s.type === cur.type) && s.date !== curDate)
         noteByDate[s.date] = ((noteByDate[s.date] || "") + " · " + s.note).trim();
     });
-    for (const ex of (exNames || [])) {
-      if (!ex) continue;
-      try {
-        const hist = await API.getExerciseHistory(ex);
+    // Gli storici si scaricano in PARALLELO, non uno alla volta. Prima era un
+    // for...await: 8 esercizi = 8 round-trip Notion IN FILA, cioè 3-5 secondi su
+    // rete mobile prima di vedere obiettivi e record. Le richieste sono
+    // indipendenti tra loro — metterle in coda era tempo regalato.
+    // Concorrenza limitata (non tutte insieme): Notion ha un rate limit ~3 req/s,
+    // sparare 8 richieste in contemporanea si prenderebbe un 429.
+    const CONC = 4;
+    const queue = (exNames || []).filter(Boolean);
+    const worker = async () => {
+      while (queue.length) {
         if (token !== this._intelToken) return;   // sessione cambiata: abbandona
-        // stats SENZA la seduta di oggi (l'obiettivo si basa sul passato)
-        const st = this._statsFromHistory(hist).filter(g => g.date !== curDate);
-        // Attacca a ogni seduta la NOTA DI SESSIONE di quel giorno (stesso tipo)
-        st.forEach(g => { g.sessNote = noteByDate[g.date] || ""; });
-        this._exStats[ex] = st;
-        if (!seeded.has(ex)) {
-          const rec = store[ex] || { w: 0, e1rm: 0, repsAt: {} };
-          if (!rec.repsAt) rec.repsAt = {};
-          hist.forEach(h => {
-            if ((h.reps || 0) <= 0) return;
-            rec.w    = Math.max(rec.w || 0, h.kg || 0);
-            rec.e1rm = Math.max(rec.e1rm || 0, this.e1rm(h.kg || 0, h.reps));
-            const k = String(h.kg || 0);
-            if ((h.kg || 0) > 0) rec.repsAt[k] = Math.max(rec.repsAt[k] || 0, h.reps);
-          });
-          store[ex] = rec; seeded.add(ex);
-        }
-      } catch(e) { /* offline: riproverà alla prossima apertura */ }
-    }
+        const ex = queue.shift();
+        if (!ex) continue;
+        try {
+          const hist = await API.getExerciseHistory(ex);
+          if (token !== this._intelToken) return;
+          // stats SENZA la seduta di oggi (l'obiettivo si basa sul passato)
+          const st = this._statsFromHistory(hist).filter(g => g.date !== curDate);
+          // Attacca a ogni seduta la NOTA DI SESSIONE di quel giorno (stesso tipo)
+          st.forEach(g => { g.sessNote = noteByDate[g.date] || ""; });
+          this._exStats[ex] = st;
+          if (!seeded.has(ex)) {
+            const rec = store[ex] || { w: 0, e1rm: 0, repsAt: {} };
+            if (!rec.repsAt) rec.repsAt = {};
+            hist.forEach(h => {
+              if ((h.reps || 0) <= 0) return;
+              rec.w    = Math.max(rec.w || 0, h.kg || 0);
+              rec.e1rm = Math.max(rec.e1rm || 0, this.e1rm(h.kg || 0, h.reps));
+              const k = String(h.kg || 0);
+              if ((h.kg || 0) > 0) rec.repsAt[k] = Math.max(rec.repsAt[k] || 0, h.reps);
+            });
+            store[ex] = rec; seeded.add(ex);
+          }
+        } catch(e) { /* offline: riproverà alla prossima apertura */ }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(CONC, queue.length) }, worker));
+    if (token !== this._intelToken) return;
     this.prSaveStore();
     try { localStorage.setItem("gymos_pr_seeded", JSON.stringify([...seeded])); } catch(e){}
     this._systemicDown = this._computeSystemic(exNames);
