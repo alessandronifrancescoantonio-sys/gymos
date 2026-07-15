@@ -10,7 +10,7 @@
 // l'aggiornamento viene scaricato in background. Se il file è cambiato davvero,
 // avvisiamo la pagina, che mostra "nuova versione disponibile". Niente più
 // "chiudi e riapri l'app due volte per vedere le modifiche".
-const CACHE = "gymos-v86";
+const CACHE = "gymos-v87";
 
 // File essenziali: pre-caricati all'installazione, così la PRIMA apertura
 // offline dopo un aggiornamento funziona già.

@@ -3008,6 +3008,13 @@ const Coach = {
       .replace(/_(.+?)_/g, "<em>$1</em>");
   },
   _md(raw) {
+    // Blocchi di codice ```...```: l'utente li vede come un pezzo di codice
+    // grezzo in cima al messaggio, non come testo formattato — l'app parla di
+    // allenamento, non ha senso che il coach risponda con blocchi di codice.
+    // Li spogliamo SEMPRE, qualunque cosa Gemini mandi: prima ancora di
+    // escapare, così il testo dentro passa dritto nella normale formattazione
+    // invece di restare intrappolato in ``` letterali.
+    raw = String(raw == null ? "" : raw).replace(/```[a-z]*\n?([\s\S]*?)```/gi, "$1").trim();
     const esc = this._esc(raw);
     const blocks = esc.split(/\n{2,}/);
     return blocks.map(block => {
