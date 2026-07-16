@@ -15,7 +15,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-<link rel="stylesheet" href="style.css?v=87">
+<link rel="stylesheet" href="style.css?v=88">
 </head>
 <body>
 
@@ -46,6 +46,9 @@
     <li><a href="#" class="nav-link" data-page="diary">
       <i class="ti ti-notebook"></i><span>Diario</span>
     </a></li>
+    <li><a href="#" class="nav-link" data-page="report">
+      <i class="ti ti-report"></i><span>Report</span>
+    </a></li>
   </ul>
   <div class="sidebar-footer">
     <div class="conn-status" id="conn-status">
@@ -67,6 +70,9 @@
       </div>
       <div class="header-meta" id="dash-date"></div>
     </div>
+
+    <!-- Riepilogo settimanale: banner iniettato qui da WeeklyReport.renderBanner() -->
+    <div id="weekly-report-host"></div>
 
     <div class="dash-grid">
       <!-- Semaforo recovery -->
@@ -515,6 +521,20 @@
         <button class="btn-primary" onclick="Diary.saveHabit()"><i class="ti ti-device-floppy"></i>Salva abitudini</button>
         <span class="save-confirm" id="habit-save-msg"><i class="ti ti-circle-check"></i>Salvato!</span>
       </div>
+    </div>
+  </section>
+
+  <!-- ═══ REPORT (storico riepiloghi settimanali) ═══ -->
+  <section class="page" id="page-report">
+    <div class="page-header">
+      <div>
+        <div class="eyebrow">Storico</div>
+        <h1 class="page-title">Riepiloghi settimanali</h1>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title"><i class="ti ti-report"></i>Settimane passate</div>
+      <div id="wr-history-list"></div>
     </div>
   </section>
 

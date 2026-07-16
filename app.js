@@ -57,6 +57,7 @@ const App = {
       case "body":        Body.load().catch(fail);      break;
       case "diary":       Diary.load().catch(fail);     break;
       case "schede":      Schede.load().catch(fail);    break;
+      case "report":      WeeklyReport.loadHistory().catch(fail); break;
     }
   },
 

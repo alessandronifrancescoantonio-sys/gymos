@@ -1800,6 +1800,51 @@ body::before, body::after { will-change:transform, opacity; }
 .rc-good  { border-left-color:var(--green); }  .rc-good > i  { color:var(--green); }
 .rc-foot { margin-top:11px; font-size:10px; color:var(--muted); text-align:center; }
 
+/* Riepilogo settimanale — banner in Dashboard + storico in Report */
+#weekly-report-host:empty { display:none; }
+.wr-banner { border:1px solid rgba(255,59,47,.28); border-left-width:3px; border-radius:14px;
+  background:linear-gradient(180deg, rgba(255,59,47,.08), rgba(255,255,255,.02)); padding:14px 15px; margin-bottom:16px; }
+.wr-head { display:flex; align-items:flex-start; gap:10px; margin-bottom:10px; }
+.wr-title { font-size:14px; font-weight:700; color:var(--text); display:flex; align-items:center; gap:7px; flex:1; }
+.wr-title i { color:var(--accent); font-size:17px; }
+.wr-close { width:28px; height:28px; border-radius:100px; background:var(--ink3); color:var(--dim);
+  display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; }
+.wr-strip { display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap; }
+.wr-chip { flex:1; min-width:70px; display:flex; flex-direction:column; align-items:center; gap:1px;
+  padding:8px 6px; background:rgba(255,255,255,.03); border:1px solid var(--line-soft); border-radius:10px; }
+.wr-cv { font-family:'DM Mono',monospace; font-size:16px; font-weight:600; color:var(--text); }
+.wr-cl { font-size:9px; text-transform:uppercase; letter-spacing:.05em; color:var(--dim); }
+.wr-section { margin-bottom:10px; }
+.wr-sub { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--dim); margin-bottom:5px; }
+.wr-item { font-size:12.5px; color:var(--text2); line-height:1.5; padding:7px 10px; border-radius:9px;
+  background:rgba(255,255,255,.02); border:1px solid var(--line-soft); }
+.wr-vol-row { display:flex; justify-content:space-between; align-items:center; padding:5px 10px;
+  font-size:12.5px; color:var(--text2); border-bottom:1px solid var(--line-soft); }
+.wr-vol-row:last-child { border-bottom:0; }
+.wr-vol-name { color:var(--text); }
+.wr-up { color:var(--green); font-family:'DM Mono',monospace; font-size:11px; }
+.wr-dn { color:var(--amber); font-family:'DM Mono',monospace; font-size:11px; }
+.wr-pain { border-color:rgba(239,68,68,.3); background:rgba(239,68,68,.06); color:var(--text); margin-top:2px; display:flex; align-items:center; gap:8px; }
+.wr-pain i { color:#EF4444; font-size:16px; flex-shrink:0; }
+.wr-deload { border-color:rgba(245,166,35,.3); background:rgba(245,166,35,.08); color:var(--text); display:flex; align-items:center; gap:8px; margin-top:2px; }
+.wr-deload i { color:var(--amber); font-size:16px; flex-shrink:0; }
+.wr-coach { display:flex; gap:9px; margin-top:10px; padding:10px 11px; border-radius:10px;
+  background:rgba(255,255,255,.03); border:1px solid var(--line-soft); }
+.wr-coach i { color:var(--accent); font-size:16px; margin-top:1px; flex-shrink:0; }
+.wr-coach span { font-size:12.5px; color:var(--text2); line-height:1.5; }
+
+/* Storico riepiloghi (pagina Report) */
+.wr-hist-item { border:1px solid var(--line-soft); border-radius:12px; margin-bottom:10px; overflow:hidden; background:rgba(255,255,255,.02); }
+.wr-hist-item > summary { display:flex; justify-content:space-between; align-items:center; gap:8px;
+  padding:12px 14px; cursor:pointer; list-style:none; }
+.wr-hist-item > summary::-webkit-details-marker { display:none; }
+.wr-hist-range { font-size:13px; font-weight:700; color:var(--text); }
+.wr-hist-mini { font-size:11px; color:var(--dim); }
+.wr-hist-body { padding:0 14px 14px; }
+.wr-empty { display:flex; flex-direction:column; align-items:center; gap:8px; text-align:center;
+  padding:30px 10px; color:var(--dim); font-size:13px; }
+.wr-empty i { font-size:26px; }
+
 /* #G — export PDF: pulsante archivio + dialog di configurazione */
 .archive-export { display:inline-flex; align-items:center; gap:6px; margin-left:auto; margin-right:8px;
   font-size:12px; font-weight:700; color:var(--accent); background:rgba(255,59,47,.1);
