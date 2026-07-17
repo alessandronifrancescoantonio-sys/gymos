@@ -1845,6 +1845,38 @@ body::before, body::after { will-change:transform, opacity; }
   padding:30px 10px; color:var(--dim); font-size:13px; }
 .wr-empty i { font-size:26px; }
 
+/* ═══ Aggiornamenti scientifici (ScienceUpdates) — stesso linguaggio visivo di .wr-* ═══ */
+.sci-sub { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--dim); margin-bottom:8px; }
+.sci-card { border:1px solid var(--line-soft); border-radius:12px; padding:12px 14px; margin-bottom:10px;
+  background:rgba(255,255,255,.02); }
+.sci-card.sci-approved { border-color:rgba(34,197,94,.3); background:rgba(34,197,94,.05); }
+.sci-card.sci-rejected { opacity:.55; }
+.sci-card.sci-rejected .sci-claim { text-decoration:line-through; }
+.sci-card-head { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+.sci-area { font-size:12px; font-weight:700; color:var(--text); }
+.sci-verdict, .sci-strength { font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:.04em;
+  padding:3px 8px; border-radius:100px; }
+.sci-v-conferma { color:var(--green); background:rgba(34,197,94,.12); }
+.sci-v-contraddice { color:#EF4444; background:rgba(239,68,68,.12); }
+.sci-v-nuovo { color:var(--accent); background:rgba(255,59,47,.12); }
+.sci-s-alta { color:var(--green); background:rgba(34,197,94,.1); }
+.sci-s-media { color:var(--amber); background:rgba(245,166,35,.1); }
+.sci-s-bassa { color:var(--dim); background:rgba(255,255,255,.05); }
+.sci-claim { font-size:13px; color:var(--text); line-height:1.5; margin-bottom:6px; }
+.sci-fonte { font-size:11.5px; color:var(--dim); display:flex; align-items:center; gap:6px; margin-bottom:6px; }
+.sci-fonte i { font-size:13px; flex-shrink:0; }
+.sci-fonte a { color:var(--accent); text-decoration:none; }
+.sci-fonte a:hover { text-decoration:underline; }
+.sci-diff { font-size:12.5px; color:var(--text2); line-height:1.5; display:flex; gap:6px;
+  padding:8px 10px; border-radius:9px; background:rgba(255,255,255,.03); border:1px solid var(--line-soft); }
+.sci-diff i { color:var(--accent); font-size:13px; margin-top:2px; flex-shrink:0; }
+.sci-actions { display:flex; gap:8px; margin-top:10px; }
+.sci-actions button { flex:1; display:flex; align-items:center; justify-content:center; gap:6px; font-size:12px; }
+.sci-status-tag { margin-top:8px; font-size:11.5px; font-weight:700; display:flex; align-items:center; gap:6px; color:var(--dim); }
+.sci-status-tag i { font-size:14px; }
+.sci-card.sci-approved .sci-status-tag { color:var(--green); }
+.sci-error i, .sci-error .es-title { color:#EF4444; }
+
 /* #G — export PDF: pulsante archivio + dialog di configurazione */
 .archive-export { display:inline-flex; align-items:center; gap:6px; margin-left:auto; margin-right:8px;
   font-size:12px; font-weight:700; color:var(--accent); background:rgba(255,59,47,.1);

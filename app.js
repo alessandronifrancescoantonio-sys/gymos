@@ -58,6 +58,7 @@ const App = {
       case "diary":       Diary.load().catch(fail);     break;
       case "schede":      Schede.load().catch(fail);    break;
       case "report":      WeeklyReport.loadHistory().catch(fail); break;
+      case "science":     ScienceUpdates.load().catch(fail); break;
     }
   },
 
