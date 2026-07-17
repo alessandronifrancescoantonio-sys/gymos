@@ -792,7 +792,12 @@ const Volume = {
   //   sparito APPENA IN TEMPO                     -> invariato
   //   ANCORA indolenzito  OPPURE forza in calo    -> -1 serie (scarico se grave)
   // Restituisce SEMPRE un consiglio motivato: non tocca la scheda da solo.
-  nextVolume(muscle, currentDirect, domsState, perfDropped) {
+  // `sleepBad`: sonno di stanotte rosso (HRV<45 o <6h — stessa soglia di
+  // Dashboard.buildSemaforo). Non rende PIÙ caute le regole già caute
+  // (still/scarico), ma frena la salita quando il segnale sarebbe "vai su":
+  // una notte storta rende il "recupero completo" di oggi meno affidabile
+  // come base per aggiungere carico, non un motivo per allarmarsi da solo.
+  nextVolume(muscle, currentDirect, domsState, perfDropped, sleepBad) {
     const mev = this.MEV, mrv = this.mrvFor(muscle);
     const cur = Math.max(0, Number(currentDirect) || 0);
     const clamp = v => Math.max(mev, Math.min(mrv, v));
@@ -827,6 +832,10 @@ const Volume = {
     if (cur >= mrv) {
       return out(mrv, "ok",
         `recuperi bene, ma sei già al tetto stimato per questo muscolo (~${mrv} serie): meglio non salire ancora.`);
+    }
+    if (sleepBad) {
+      return out(clamp(cur), "ok",
+        "il muscolo sembra recuperato, ma hai dormito poco stanotte: aspetta un'altra seduta con sonno migliore prima di salire, per non confondere un OK di oggi con un OK stabile.");
     }
     return out(clamp(cur + 1), "up",
       "recuperi con margine e la forza tiene: c'è spazio per una serie in più.");
@@ -1381,10 +1390,15 @@ const Recovery = {
       msg: `Il tuo recupero è stabile rispetto al mese scorso: il carico che porti è sostenibile.` };
   },
 
-  renderCard() {
+  // `sleepData`: stesso array che Dashboard già carica per il semaforo sonno
+  // (API.getRecentSleep) — riusato qui, non una seconda chiamata. Stessa
+  // soglia di Dashboard.buildSemaforo: HRV<45 o <6h = rosso.
+  renderCard(sleepData) {
     const wrap = document.getElementById("dash-recovery");
     if (!wrap || typeof Volume === "undefined") return;
     const title = `<div class="card-title"><i class="ti ti-heartbeat"></i>Recupero muscolare</div>`;
+    const lastSleep = Array.isArray(sleepData) && sleepData.length ? sleepData[0] : null;
+    const sleepBad = !!(lastSleep && ((lastSleep.hrv && lastSleep.hrv < 45) || (lastSleep.ore || 7) < 6));
     // Muscoli con volume reale questa settimana (o pianificato se il "fatto"
     // non è ancora stato caricato): non ha senso un semaforo su ciò che non alleni.
     const dirMap = Volume._actualDir || Volume.compute().dir || {};
@@ -1396,7 +1410,7 @@ const Recovery = {
     }
     const items = rows.map(m => {
       const st = this.status(m);
-      const adv = Volume.nextVolume(m, st.dir, st.doms, false);
+      const adv = Volume.nextVolume(m, st.dir, st.doms, false, sleepBad);
       const advTxt = adv
         ? `<div class="rmap-adv rm-${adv.tone}">${adv.deload ? "Scarico consigliato" : (adv.delta > 0 ? "+1 serie" : adv.delta < 0 ? "−1 serie" : "Tieni così")} — ${this._esc(adv.why)}</div>`
         : `<div class="rmap-adv rm-none">Dimmi come ci arrivi alla prossima seduta e ti dico se salire o scendere di volume.</div>`;
@@ -1532,7 +1546,7 @@ const Dashboard = {
       this.buildWeekSplit(sessions);
       Volume.renderCard();
       Volume.loadActual(sessions);   // serie fatte davvero questa settimana (bg)
-      if (typeof Recovery !== "undefined") Recovery.renderCard();
+      if (typeof Recovery !== "undefined") Recovery.renderCard(sleepData);
       if (typeof JointLog !== "undefined") JointLog.renderCard();
       this.buildRecentSessions(sessions);
       this.buildSemaforo(sleepData);

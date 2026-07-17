@@ -420,7 +420,22 @@ const Session = {
         const setsToday = grouped[exName]
           ? grouped[exName].filter(s => (s.reps || 0) > 0).map(s => ({ kg: s.kg || 0, reps: s.reps, rir: s.rir ?? null, note: s.note || undefined }))
           : [];
-        const payload = { exercise: exName, rrMin, rrMax, rir, history, sleep: this._sleepInfo || null, systemicDown: !!this._systemicDown, diary: diary || undefined, standingLimitations: standingLimitations || undefined, phase: phase || undefined, muscleGroup: muscleGroup || undefined, todaySession: todaySession.length ? todaySession : undefined, setsToday: setsToday.length ? setsToday : undefined, coachNotes: (coachNotes && coachNotes.length) ? coachNotes : undefined };
+        // Feedback DOMS (card "Recupero muscolare", Home) per il/i muscolo/i
+        // di QUESTO esercizio: prima era un'isola, mai vista dal coach IA — un
+        // "ancora indolenzito" dato stamattina non arrivava mai qui, il coach
+        // scopriva il dolore solo se l'utente lo riscriveva a parole nella nota
+        // della serie. Segnale diretto e strutturato, priorità come il dolore
+        // testuale (SYSTEM_INSTRUCTION lo tratta allo stesso modo).
+        let recoveryFeedback = [];
+        try {
+          if (typeof Recovery !== "undefined" && muscleGroup) {
+            recoveryFeedback = muscleGroup.split("/").map(m => {
+              const fb = Recovery.latestFresh(m);
+              return fb ? { muscle: m, state: fb.state, daysAgo: fb.days } : null;
+            }).filter(Boolean);
+          }
+        } catch (e) {}
+        const payload = { exercise: exName, rrMin, rrMax, rir, history, sleep: this._sleepInfo || null, systemicDown: !!this._systemicDown, diary: diary || undefined, standingLimitations: standingLimitations || undefined, phase: phase || undefined, muscleGroup: muscleGroup || undefined, todaySession: todaySession.length ? todaySession : undefined, setsToday: setsToday.length ? setsToday : undefined, coachNotes: (coachNotes && coachNotes.length) ? coachNotes : undefined, recoveryFeedback: recoveryFeedback.length ? recoveryFeedback : undefined };
 
         // Aborta un'eventuale chiamata precedente ANCORA IN VOLO per lo
         // STESSO esercizio: ora che loadAIAdvice riparte dopo OGNI serie,
