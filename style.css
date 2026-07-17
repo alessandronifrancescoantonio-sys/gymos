@@ -1877,6 +1877,11 @@ body::before, body::after { will-change:transform, opacity; }
 .sci-card.sci-approved .sci-status-tag { color:var(--green); }
 .sci-error i, .sci-error .es-title { color:#EF4444; }
 
+/* Coach predittivo (Schede): proposta approvata ma la scrittura su Notion è
+   fallita — deve leggersi come "attenzione", non come rifiutata/opacizzata
+   (a differenza di .sci-rejected, qui la decisione dell'utente resta valida). */
+.sci-card.pred-not-applied { border-color:rgba(239,68,68,.35); background:rgba(239,68,68,.05); }
+
 /* #G — export PDF: pulsante archivio + dialog di configurazione */
 .archive-export { display:inline-flex; align-items:center; gap:6px; margin-left:auto; margin-right:8px;
   font-size:12px; font-weight:700; color:var(--accent); background:rgba(255,59,47,.1);

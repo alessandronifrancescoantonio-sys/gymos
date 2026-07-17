@@ -568,6 +568,18 @@
         <button class="btn-primary" onclick="Schede.newProgram()"><i class="ti ti-plus"></i>Nuovo programma</button>
       </div>
     </div>
+
+    <!-- Coach predittivo di fine mesociclo: proposta mensile basata sui TUOI dati
+         reali (non letteratura esterna, vedi ScienceUpdates sopra). Sta qui e non
+         in una pagina a parte perché agisce direttamente sulla scheda attiva —
+         approvarla scrive su Notion la STESSA scheda che stai gestendo in questa
+         pagina, quindi il contesto è più chiaro vicino all'editor schede. -->
+    <div class="card" id="predictive-card">
+      <div class="card-title"><i class="ti ti-brain"></i>Coach predittivo</div>
+      <div class="page-meta" style="margin:-6px 0 12px">Una volta al mese analizza gli ultimi 2 mesi dei tuoi allenamenti (carico, volume, dolore) e — solo se i dati lo giustificano — propone la sostituzione di UN esercizio nella scheda attiva. Decidi tu se applicarla.</div>
+      <div id="pred-list"></div>
+    </div>
+
     <div id="schede-list"></div>
   </section>
 
@@ -746,9 +758,9 @@
 <script src="config.js?v=87"></script>
 <script src="api.js?v=87"></script>
 <script src="session.js?v=87"></script>
-<script src="modules.js?v=88"></script>
+<script src="modules.js?v=89"></script>
 <script src="timers.js?v=87"></script>
-<script src="app.js?v=88"></script>
+<script src="app.js?v=89"></script>
 <script>
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(function(){});

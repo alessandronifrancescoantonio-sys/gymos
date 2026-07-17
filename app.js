@@ -56,7 +56,7 @@ const App = {
       case "progression": Progression.load().catch(fail); break;
       case "body":        Body.load().catch(fail);      break;
       case "diary":       Diary.load().catch(fail);     break;
-      case "schede":      Schede.load().catch(fail);    break;
+      case "schede":      Schede.load().catch(fail); PredictiveCoach.load().catch(fail); break;
       case "report":      WeeklyReport.loadHistory().catch(fail); break;
       case "science":     ScienceUpdates.load().catch(fail); break;
     }
