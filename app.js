@@ -97,6 +97,15 @@ const App = {
     await Dashboard.load().catch(console.error);
     setProgress(100, "Pronto!");
 
+    // Se c'era un allenamento IN CORSO (non salvato) prima del boot — es. dopo
+    // un reload per "nuova versione" — torna DIRETTAMENTE alla pagina Sessione
+    // invece di lasciare la Dashboard: senza questo, i dati erano sempre
+    // intatti ma sembrava che l'allenamento "sparisse" (restava un tap di
+    // distanza, mai riportato in vista da solo).
+    if (localStorage.getItem("gymos_active")) {
+      App.navigate("session");
+    }
+
     setTimeout(() => {
       loading.style.opacity = "0";
       loading.style.transition = "opacity .4s";

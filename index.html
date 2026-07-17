@@ -764,11 +764,16 @@
 <script>
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(function(){});
-    // Il SW serve la cache SUBITO e rivalida dietro: quando trova davvero un
-    // file nuovo ce lo dice, e lo diciamo a te. Niente ricarica forzata a
-    // sorpresa: se sei a metà di una serie, decidi tu quando.
-    navigator.serviceWorker.addEventListener("message", function (ev) {
-      if (!ev.data || ev.data.type !== "gymos-update") return;
+
+    // Controllo versione fatto QUI, non via postMessage del SW (si è rivelato
+    // fragile: un push SW→pagina subito dopo un reload pieno arriva a volte
+    // prima che il nuovo client sia registrato, il segnale si perde in
+    // silenzio — vedi commento in sw.js). La pagina stessa legge version.json
+    // (passa comunque dalla cache del SW, stesso costo) e confronta il numero
+    // di build con l'ultimo visto. Zero falsi positivi da ETag/CDN instabili
+    // (GitHub Pages può cambiare header a contenuto identico): qui conta solo
+    // il CONTENUTO di un file piccolo e dedicato, bump manuale ad ogni deploy.
+    function showUpdatePill() {
       if (window.__gymosUpdateShown) return;
       window.__gymosUpdateShown = true;
       var b = document.createElement("button");
@@ -776,6 +781,23 @@
       b.innerHTML = '<i class="ti ti-refresh"></i> Nuova versione — tocca per aggiornare';
       b.onclick = function () { location.reload(); };
       document.body.appendChild(b);
+    }
+    function checkVersion() {
+      fetch("./version.json", { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (v) {
+        var build = v && v.build;
+        if (!build) return;
+        var seen = localStorage.getItem("gymos_seen_build");
+        var isRealUpdate = seen && seen !== build;
+        // Aggiorna SEMPRE la baseline, prima di eventualmente avvisare:
+        // altrimenti dopo il reload (che riparte da qui con lo stesso build
+        // nuovo ma "seen" mai aggiornato) il banner si ripresenterebbe subito.
+        localStorage.setItem("gymos_seen_build", build);
+        if (isRealUpdate) showUpdatePill();
+      }).catch(function(){});
+    }
+    checkVersion();
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "visible") checkVersion();
     });
   }
 </script>
