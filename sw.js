@@ -13,7 +13,7 @@
 // fragile in pratica (il client nuovo non è sempre già in clients.matchAll()
 // nell'istante esatto in cui il SW confronta i contenuti — il segnale si perde
 // silenziosamente). Il SW qui fa solo cache-first + revalidate, niente di più.
-const CACHE = "gymos-v88";
+const CACHE = "gymos-v91";
 
 // File essenziali: pre-caricati all'installazione, così la PRIMA apertura
 // offline dopo un aggiornamento funziona già.

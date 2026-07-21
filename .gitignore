@@ -1,3 +1,13 @@
 node_modules/
 package.json
 package-lock.json
+
+# Artefatti di tool locali (claude-flow, graphify, MCP config) — mai nel repo
+# pubblico dell'app: contengono config/cache/DB locali, non codice GymOS.
+.claude/
+.claude-flow/
+.swarm/
+.mcp.json
+CLAUDE.md
+graphify-out/
+ruvector.db

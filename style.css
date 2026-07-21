@@ -1732,6 +1732,13 @@ body::before, body::after { will-change:transform, opacity; }
 .jl-alt b { color:var(--text); }
 .jl-foot { margin-top:11px; font-size:11px; color:var(--dim); line-height:1.45; }
 
+/* Equilibrio pattern di movimento (push/pull, squat/hinge) — tono neutro, non
+   allarmistico: è un suggerimento di programmazione, non un problema. */
+.pb-list { display:flex; flex-direction:column; gap:9px; margin-top:4px; }
+.pb-row { padding:9px 11px; border-radius:9px; font-size:12.5px; line-height:1.4;
+  color:var(--text2); border:1px solid var(--line-soft); background:rgba(148,163,184,.05); }
+.pb-row b { color:var(--text); font-weight:700; }
+
 /* Memoria di stress articolare — dolore ricorrente su un esercizio (FASE 5.3) */
 .joint-warn-wrap:empty { display:none; }
 .joint-warn { display:flex; align-items:flex-start; gap:9px; margin-bottom:12px; padding:11px 12px;
