@@ -783,6 +783,30 @@ const Volume = {
          Femorali:20, Glutei:16, Polpacci:25, Adduttori:16, Addome:25, Avambracci:20 },
   mrvFor(m) { return this.MRV[m] || 22; },
 
+  // ═══ QUANTO SEI GIÀ VICINO AL TETTO — non solo "ci sei arrivato" ══════════
+  // Prima il ramo "early" guardava SOLO se cur>=mrv (tutto o niente): un
+  // muscolo a 21/22 prendeva +1 con lo stesso entusiasmo di uno a 12/22.
+  // Sbagliato per due motivi già presenti nella scienza già raccolta in
+  // quest'app (vedi memoria "gymos-pt-scientifico" punto 2, Schoenfeld
+  // meta-analisi): il guadagno marginale per serie AGGIUNTIVA si riduce
+  // avvicinandosi al MRV (dose-risposta non lineare, +0,37%/serie in media ma
+  // la differenza alto-vs-basso volume è solo 3,9% totale) — quindi vale
+  // sempre meno rischiare di sforare il recupero per l'ultima serie.
+  // Frazione di quanto hai già "consumato" del margine MEV→MRV.
+  _volumeProgress(cur, mev, mrv) {
+    if (mrv <= mev) return 1;
+    return Math.max(0, Math.min(1, (cur - mev) / (mrv - mev)));
+  },
+  // Sopra questa frazione, il motore non consiglia più +1 di default: ti dice
+  // di consolidare (stesso tone="ok" del ramo "già al tetto", nessun allarme).
+  PROXIMITY_HOLD: 0.75,
+  // In fase di CUT la soglia è più bassa: lo stesso principio RED-S già usato
+  // altrove in quest'app (Body._energyFlag, consensus IOC) — in deficit
+  // calorico la capacità di recupero e la vera crescita muscolare sono ridotte,
+  // quindi il margine "sicuro" per continuare a salire di volume si restringe.
+  // Non è "mai aumentare in cut": è aumentare con più margine di sicurezza.
+  PROXIMITY_HOLD_CUT: 0.5,
+
   // ═══ VOLUME DINAMICO (FASE 2.1) ═══════════════════════════════════════════
   // Retroazione sul volume della PROSSIMA settimana, dal recupero reale +
   // andamento della forza. Regole (RP/Israetel), con i limiti MEV..MRV come
@@ -797,7 +821,18 @@ const Volume = {
   // (still/scarico), ma frena la salita quando il segnale sarebbe "vai su":
   // una notte storta rende il "recupero completo" di oggi meno affidabile
   // come base per aggiungere carico, non un motivo per allarmarsi da solo.
-  nextVolume(muscle, currentDirect, domsState, perfDropped, sleepBad) {
+  //
+  // `phase`: fase corporea attuale ("Cut"/"Bulk"/"Mant.", dall'ultimo check-in
+  // Misurazioni) — SOLO per abbassare la soglia di prossimità al MRV oltre cui
+  // il motore consolida invece di salire (RED-S, vedi PROXIMITY_HOLD_CUT).
+  // `diaryFatigue`: true se il diario di oggi o le note delle sedute recenti
+  // parlano di stanchezza/spossatezza — segnale scritto dall'utente stesso,
+  // più fresco e specifico di un DOMS dichiarato a inizio serie. Come
+  // sleepBad, frena SOLO la salita: non rende più severi i rami già cauti.
+  //
+  // Nessuno dei due nuovi input tocca i rami still/perfDropped/just: sono già
+  // le regole più caute, non c'è bisogno di renderle ANCORA più severe.
+  nextVolume(muscle, currentDirect, domsState, perfDropped, sleepBad, phase, diaryFatigue) {
     const mev = this.MEV, mrv = this.mrvFor(muscle);
     const cur = Math.max(0, Number(currentDirect) || 0);
     const clamp = v => Math.max(mev, Math.min(mrv, v));
@@ -828,14 +863,30 @@ const Volume = {
       return out(clamp(cur), "ok",
         "l'indolenzimento è passato giusto in tempo: sei nel punto giusto, tieni questo volume.");
     }
-    // "early": recuperato con margine e forza ok -> c'è spazio per crescere
+    // "early": recuperato con margine e forza ok -> c'è spazio per crescere,
+    // MA solo se nessun altro segnale (oggi, o strutturale) consiglia cautela.
     if (cur >= mrv) {
       return out(mrv, "ok",
         `recuperi bene, ma sei già al tetto stimato per questo muscolo (~${mrv} serie): meglio non salire ancora.`);
     }
+    if (diaryFatigue) {
+      return out(clamp(cur), "ok",
+        "nel diario o nelle note recenti hai scritto di sentirti stanco: il muscolo sembra recuperato, ma aspetta che passi prima di salire di volume.");
+    }
     if (sleepBad) {
       return out(clamp(cur), "ok",
         "il muscolo sembra recuperato, ma hai dormito poco stanotte: aspetta un'altra seduta con sonno migliore prima di salire, per non confondere un OK di oggi con un OK stabile.");
+    }
+    // Prossimità al MRV: più sei vicino al tetto, meno vale la pena rischiare
+    // il recupero per l'ultima serie (guadagno marginale in calo, Schoenfeld —
+    // vedi commento su PROXIMITY_HOLD). In Cut la soglia è più bassa (RED-S).
+    const progress = this._volumeProgress(cur, mev, mrv);
+    const isCut = /cut/i.test(phase || "");
+    const holdAt = isCut ? this.PROXIMITY_HOLD_CUT : this.PROXIMITY_HOLD;
+    if (progress >= holdAt) {
+      return out(clamp(cur), "ok", isCut
+        ? `sei già a ${cur}/${mrv} serie e in fase di cut: con un deficit calorico il margine di crescita è ridotto, meglio consolidare qui che salire ancora.`
+        : `sei già a ${cur}/${mrv} serie, vicino al tetto stimato: il guadagno per serie aggiuntiva cala avvicinandosi al massimo, consolidare qui ha più senso che continuare a salire.`);
     }
     return out(clamp(cur + 1), "up",
       "recuperi con margine e la forza tiene: c'è spazio per una serie in più.");
@@ -1390,15 +1441,53 @@ const Recovery = {
       msg: `Il tuo recupero è stabile rispetto al mese scorso: il carico che porti è sostenibile.` };
   },
 
+  // Fase corporea ATTUALE: ultimo check-in Misurazioni con una fase indicata,
+  // non la selezione di default del form (Body.activeFase è solo l'ultima
+  // pillola cliccata nel form, non lo stato reale dell'utente). Stesso punto
+  // dati che PredictiveCoach._buildData già legge allo stesso modo.
+  _currentPhase(checkins) {
+    if (!Array.isArray(checkins) || !checkins.length) return null;
+    for (let i = checkins.length - 1; i >= 0; i--) {
+      if (checkins[i] && checkins[i].fase) return checkins[i].fase;
+    }
+    return null;
+  },
+
+  // Parole di stanchezza/spossatezza scritte dall'utente stesso — nel diario
+  // di oggi (Diary.getJournal, aggiornato quasi ogni giorno) o nelle note
+  // delle ultime sedute (stesso campo "Note sessione" che l'utente compila da
+  // solo). Stile della regex coerente con painLevel/hard in session.js (parole
+  // chiave italiane, non un sentiment model): fatica GENERALE, non dolore
+  // (quello è già gestito altrove, JointLog/painLevel) — copre anche "stanco
+  // per il caldo" perché la parola-chiave è "stanco", non "caldo" da solo
+  // (l'app non traccia la temperatura: non inventiamo un dato che non ha).
+  FATIGUE_RE: /stanch\w*|sfinit\w*|esaurit\w*|sfiancat\w*|spossat\w*|distrutt\w*|a pezzi|provat\w*|senza energie|giornata pesante|molto caldo|troppo caldo|afa\b/i,
+  RECENT_NOTE_DAYS: 4,
+  _recentFatigueNote(sessions) {
+    let txt = "";
+    try { if (typeof Diary !== "undefined") txt += " " + (Diary.getJournal() || ""); } catch (e) {}
+    if (Array.isArray(sessions)) {
+      const cutoff = Date.now() - this.RECENT_NOTE_DAYS * 86400000;
+      sessions.forEach(s => {
+        if (s && s.note && s.date && new Date(s.date).getTime() >= cutoff) txt += " " + s.note;
+      });
+    }
+    return this.FATIGUE_RE.test(txt);
+  },
+
   // `sleepData`: stesso array che Dashboard già carica per il semaforo sonno
   // (API.getRecentSleep) — riusato qui, non una seconda chiamata. Stessa
   // soglia di Dashboard.buildSemaforo: HRV<45 o <6h = rosso.
-  renderCard(sleepData) {
+  // `checkins`/`sessions`: stessi array già caricati da Dashboard.load() per
+  // le stat/il weekly split — nessuna nuova chiamata a Notion per questa card.
+  renderCard(sleepData, checkins, sessions) {
     const wrap = document.getElementById("dash-recovery");
     if (!wrap || typeof Volume === "undefined") return;
     const title = `<div class="card-title"><i class="ti ti-heartbeat"></i>Recupero muscolare</div>`;
     const lastSleep = Array.isArray(sleepData) && sleepData.length ? sleepData[0] : null;
     const sleepBad = !!(lastSleep && ((lastSleep.hrv && lastSleep.hrv < 45) || (lastSleep.ore || 7) < 6));
+    const phase = this._currentPhase(checkins);
+    const diaryFatigue = this._recentFatigueNote(sessions);
     // Muscoli con volume reale questa settimana (o pianificato se il "fatto"
     // non è ancora stato caricato): non ha senso un semaforo su ciò che non alleni.
     const dirMap = Volume._actualDir || Volume.compute().dir || {};
@@ -1410,7 +1499,7 @@ const Recovery = {
     }
     const items = rows.map(m => {
       const st = this.status(m);
-      const adv = Volume.nextVolume(m, st.dir, st.doms, false, sleepBad);
+      const adv = Volume.nextVolume(m, st.dir, st.doms, false, sleepBad, phase, diaryFatigue);
       const advTxt = adv
         ? `<div class="rmap-adv rm-${adv.tone}">${adv.deload ? "Scarico consigliato" : (adv.delta > 0 ? "+1 serie" : adv.delta < 0 ? "−1 serie" : "Tieni così")} — ${this._esc(adv.why)}</div>`
         : `<div class="rmap-adv rm-none">Dimmi come ci arrivi alla prossima seduta e ti dico se salire o scendere di volume.</div>`;
@@ -1634,7 +1723,7 @@ const Dashboard = {
       this.buildWeekSplit(sessions);
       Volume.renderCard();
       Volume.loadActual(sessions);   // serie fatte davvero questa settimana (bg)
-      if (typeof Recovery !== "undefined") Recovery.renderCard(sleepData);
+      if (typeof Recovery !== "undefined") Recovery.renderCard(sleepData, checkins, sessions);
       if (typeof JointLog !== "undefined") JointLog.renderCard();
       if (typeof PatternBalance !== "undefined") PatternBalance.renderCard();
       this.buildRecentSessions(sessions);
