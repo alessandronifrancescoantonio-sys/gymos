@@ -1975,6 +1975,14 @@ const Session = {
       if (s.note && (!cur || s.type === cur.type) && s.date !== curDate)
         noteByDate[s.date] = ((noteByDate[s.date] || "") + " · " + s.note).trim();
     });
+    // Date delle sessioni dello STESSO TIPO (Full Body 1 ≠ Full Body 2, anche
+    // se condividono un esercizio con lo stesso nome): l'utente ha chiesto
+    // esplicitamente che due tipologie diverse "sembrino come 2 esercizi
+    // differenti" — altrimenti "obiettivo di oggi" (storico intero, ogni tipo)
+    // e il chip "volta scorsa" (già filtrato per tipo, vedi prevExercises più
+    // sotto) potevano riferirsi a due sedute diverse e mostrare numeri
+    // scollegati per lo stesso esercizio.
+    const sameTypeDates = cur ? new Set(this.sessions.filter(s => s.type === cur.type).map(s => s.date)) : null;
     // Gli storici si scaricano in PARALLELO, non uno alla volta. Prima era un
     // for...await: 8 esercizi = 8 round-trip Notion IN FILA, cioè 3-5 secondi su
     // rete mobile prima di vedere obiettivi e record. Le richieste sono
@@ -1992,8 +2000,16 @@ const Session = {
           const hist = await API.getExerciseHistory(ex);
           if (token !== this._intelToken) return;
           const exRrMax = (this.groupByExercise(this.exercises)[ex] || [])[0]?.rrMax || 12;
-          // stats SENZA la seduta di oggi (l'obiettivo si basa sul passato)
-          const st = this._statsFromHistory(hist, exRrMax).filter(g => g.date !== curDate);
+          // "Obiettivo di oggi"/trend SOLO dalle sedute dello STESSO TIPO —
+          // stessa scopatura del chip "volta scorsa" (prevExercises, sotto).
+          // Il RECORD PERSONALE (poco più giù) resta invece calcolato su TUTTO
+          // lo storico: un record è un record ovunque l'hai fatto, non cambia
+          // per scheda; è solo il confronto "come sto andando" a dover restare
+          // dentro la stessa rotazione, altrimenti lo stesso nome esercizio in
+          // due schede diverse produce un "obiettivo di oggi" scollegato dal
+          // vero numero mostrato nel chip qui sotto.
+          const histSameType = sameTypeDates ? hist.filter(h => sameTypeDates.has(String(h.date))) : hist;
+          const st = this._statsFromHistory(histSameType, exRrMax).filter(g => g.date !== curDate);
           // Attacca a ogni seduta la NOTA DI SESSIONE di quel giorno (stesso tipo)
           st.forEach(g => { g.sessNote = noteByDate[g.date] || ""; });
           this._exStats[ex] = st;
