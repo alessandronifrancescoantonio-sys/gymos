@@ -3216,6 +3216,7 @@ const Schede = {
 
   openEditor(id) {
     this.editing = id || null;
+    this._openIdx = new Set();
     const titleEl = document.getElementById("scheda-editor-title");
     if (id) {
       const s = App.schede.find(x => x.id === id);
@@ -3264,34 +3265,42 @@ const Schede = {
     }
     this.draftEx.forEach((ex, i) => {
       const row = document.createElement("div");
-      row.className = "ex-editor-item";
+      // Tendina chiusa di default: prima ogni esercizio arrivava già aperto
+      // (serie/rep/rec/RIR sempre visibili), lungo da scorrere con tante voci.
+      // this._openIdx tiene traccia di QUALI righe l'utente ha aperto in
+      // questa sessione di editing (si resetta ad ogni openEditor()).
+      const isOpen = this._openIdx && this._openIdx.has(i);
+      row.className = "ex-editor-item" + (isOpen ? "" : " collapsed");
       row.draggable = true;
       row.innerHTML = `
-        <div class="ex-editor-top">
-          <i class="ti ti-grip-vertical ex-editor-grip"></i>
+        <div class="ex-editor-top" onclick="Schede.toggleExRow(${i})">
+          <i class="ti ti-grip-vertical ex-editor-grip" onclick="event.stopPropagation()"></i>
           <span class="ex-editor-name">${U.exName(ex)}</span>
-          <button class="ex-editor-del" onclick="Schede.removeExercise(${i})"><i class="ti ti-x"></i></button>
+          <i class="ti ti-chevron-down ex-editor-chev"></i>
+          <button class="ex-editor-del" onclick="event.stopPropagation();Schede.removeExercise(${i})"><i class="ti ti-x"></i></button>
         </div>
-        <div class="ex-editor-fields">
-          <div class="ex-editor-sets">
-            <button type="button" onclick="Schede.bumpSets(${i},-1)">−</button>
-            <span id="scsets-${i}">${U.exSets(ex)}</span>
-            <button type="button" onclick="Schede.bumpSets(${i},1)">+</button>
-            <small>serie</small>
+        <div class="ex-editor-body">
+          <div class="ex-editor-fields">
+            <div class="ex-editor-sets">
+              <button type="button" onclick="Schede.bumpSets(${i},-1)">−</button>
+              <span id="scsets-${i}">${U.exSets(ex)}</span>
+              <button type="button" onclick="Schede.bumpSets(${i},1)">+</button>
+              <small>serie</small>
+            </div>
+            <label class="ex-editor-f ex-editor-range"><span>Rep</span>
+              <span class="range-pair">
+                <input type="number" min="1" max="40" placeholder="8" value="${U.exRrMin(ex)}" onchange="Schede.setRange(${i},'rrMin',this.value)">
+                <i>–</i>
+                <input type="number" min="1" max="40" placeholder="12" value="${U.exRrMax(ex)}" onchange="Schede.setRange(${i},'rrMax',this.value)">
+              </span></label>
+            <label class="ex-editor-f"><span>Rec s</span>
+              <input type="number" min="0" step="5" placeholder="90" value="${U.exRest(ex) ?? ""}" onchange="Schede.setMeta(${i},'recupero',this.value)"></label>
+            <label class="ex-editor-f"><span>RIR</span>
+              <input type="number" min="0" max="10" step="1" placeholder="2" value="${U.exRir(ex) ?? ""}" onchange="Schede.setMeta(${i},'rir',this.value)"></label>
           </div>
-          <label class="ex-editor-f ex-editor-range"><span>Rep</span>
-            <span class="range-pair">
-              <input type="number" min="1" max="40" placeholder="8" value="${U.exRrMin(ex)}" onchange="Schede.setRange(${i},'rrMin',this.value)">
-              <i>–</i>
-              <input type="number" min="1" max="40" placeholder="12" value="${U.exRrMax(ex)}" onchange="Schede.setRange(${i},'rrMax',this.value)">
-            </span></label>
-          <label class="ex-editor-f"><span>Rec s</span>
-            <input type="number" min="0" step="5" placeholder="90" value="${U.exRest(ex) ?? ""}" onchange="Schede.setMeta(${i},'recupero',this.value)"></label>
-          <label class="ex-editor-f"><span>RIR</span>
-            <input type="number" min="0" max="10" step="1" placeholder="2" value="${U.exRir(ex) ?? ""}" onchange="Schede.setMeta(${i},'rir',this.value)"></label>
-        </div>
-        <div class="ed-tech${(U.exTec(ex).length || U.exGrp(ex)) ? " has-tech" : ""}" id="ed-tech-${i}">
-          ${this.edTechHTML(i, ex)}
+          <div class="ed-tech${(U.exTec(ex).length || U.exGrp(ex)) ? " has-tech" : ""}" id="ed-tech-${i}">
+            ${this.edTechHTML(i, ex)}
+          </div>
         </div>
       `;
       row.addEventListener("dragstart", () => this.dragIdx = i);
@@ -3313,6 +3322,10 @@ const Schede = {
     const val = inp.value.trim();
     if (!val) return;
     this.draftEx.push({ nome: val, serie: 3, recupero: null, rir: null, rrMin: 8, rrMax: 12, tecnica: [], cadenza: "", info: "", gruppo: "" });
+    // Appena aggiunto → apri subito la tendina per impostare rep/rec/RIR,
+    // altrimenti bisognerebbe riaprirla a mano un attimo dopo averlo scritto.
+    this._openIdx = this._openIdx || new Set();
+    this._openIdx.add(this.draftEx.length - 1);
     inp.value = "";
     inp.focus();
     this.buildExList();
@@ -3378,6 +3391,15 @@ const Schede = {
       </div>`;
   },
   toggleEdTech(i, btn) { const w = btn.closest(".ed-tech"); if (w) w.classList.toggle("open"); },
+
+  // Tendina esercizio (serie/rep/rec/RIR + tecnica): aperta/chiusa a tap
+  // sull'intestazione, indipendente dalla tendina "Tecnica di intensità"
+  // annidata dentro.
+  toggleExRow(i) {
+    this._openIdx = this._openIdx || new Set();
+    if (this._openIdx.has(i)) this._openIdx.delete(i); else this._openIdx.add(i);
+    this.buildExList();
+  },
   _reTechRow(i) {
     const w = document.getElementById(`ed-tech-${i}`);
     if (!w) return;

@@ -717,9 +717,12 @@ body.session-view .rest-fab { display:none !important; }
 .ex-editor-list { display:flex; flex-direction:column; gap:6px; }
 .ex-editor-empty { font-size:12px; color:var(--muted); font-style:italic; padding:8px 0; }
 .ex-editor-item { display:flex; flex-direction:column; gap:9px; padding:10px 11px; background:var(--ink3); border:1px solid var(--ink4); border-radius:10px; }
-.ex-editor-top { display:flex; align-items:center; gap:10px; }
+.ex-editor-top { display:flex; align-items:center; gap:10px; cursor:pointer; }
 .ex-editor-grip { color:var(--muted); font-size:16px; cursor:grab; }
 .ex-editor-name { flex:1; font-size:14px; font-weight:600; color:var(--text); }
+.ex-editor-chev { color:var(--muted); font-size:15px; transition:transform .2s; }
+.ex-editor-item.collapsed .ex-editor-chev { transform:rotate(-90deg); }
+.ex-editor-item.collapsed .ex-editor-body { display:none; }
 .ex-editor-fields { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding-left:26px; }
 .ex-editor-f { display:inline-flex; align-items:center; gap:6px; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.3px; color:var(--muted); }
 .ex-editor-f input { width:54px; min-height:34px; padding:5px 8px; border-radius:8px; background:var(--ink2); border:1px solid var(--ink4); color:var(--text); font-family:'DM Mono',monospace; font-size:13px; text-align:center; }
