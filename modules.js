@@ -117,11 +117,16 @@ const Progression = {
     // nella linea, non un valore fasullo comparabile.
     const isBW = out.every(g => g.topKg === 0);
     out.forEach(g => { g.progVal = isBW ? g.repsTot : (g.topKg === 0 ? null : g.volume); });
-    let running = 0;
-    out.forEach((g, i) => {
+    // hasPrior: c'è già stato un punto REALE (non-null) prima di questo. Senza
+    // questo flag, la prima seduta pesata dopo un buco corpo-libero (i>0 ma
+    // `running` mai aggiornato) risultava un falso "Record" — non stava
+    // battendo nulla, era solo il primo dato confrontabile.
+    let running = 0, hasPrior = false;
+    out.forEach(g => {
       if (g.progVal == null) { g.isPR = false; return; }
-      g.isPR = i > 0 && g.progVal > running && g.progVal > 0;
+      g.isPR = hasPrior && g.progVal > running && g.progVal > 0;
       running = Math.max(running, g.progVal);
+      hasPrior = true;
     });
     return out;
   },
@@ -392,7 +397,10 @@ const Body = {
     }, ".card");
     opts.scales.y.min = minD - pad;
     opts.scales.y.max = maxD + pad;
-    opts.scales.y.ticks.callback = v => v.toFixed(1) + " kg";
+    // U.fmt (non toFixed(1) fisso) — un peso intero come 78 deve leggersi "78
+    // kg" sull'asse esattamente come nel tooltip ("78.0 kg" vs "78 kg" era
+    // lo stesso numero mostrato in due modi diversi nello stesso grafico).
+    opts.scales.y.ticks.callback = v => U.fmt(v) + " kg";
 
     this.pesoChart = new Chart(ctx, {
       type: "line",
@@ -971,7 +979,10 @@ const Volume = {
     const mark = actual != null ? `<div class="vol-plan-mark" style="left:${Math.min(99, p(planned))}%" title="Previste dal programma"></div>` : "";
     return `<div class="vol-bar"><div class="vol-zone" style="left:${mevPct}%;width:${mavPct - mevPct}%"></div><div class="vol-fill vz-${this.zone(fillVal)}" style="width:${p(fillVal)}%"></div>${mark}</div>`;
   },
-  fmt(v) { return Number.isInteger(v) ? v : v.toFixed(1).replace(".", ","); },
+  // Punto, non virgola: stesso stile di U.fmt (kg/e1RM/rep) usato ovunque
+  // nell'app — la card volume mostrava "10,5" serie accanto a "142.5" kg,
+  // due convenzioni decimali diverse per lo stesso tipo di numero.
+  fmt(v) { return Number.isInteger(v) ? v : v.toFixed(1); },
 
   // Una riga muscolo: mostra "fatto / previsto" se il fatto è disponibile.
   // Con split={dir,ind} aggiunge la scomposizione diretto/indiretto (½) sotto.
@@ -1488,6 +1499,15 @@ const Recovery = {
     const sleepBad = !!(lastSleep && ((lastSleep.hrv && lastSleep.hrv < 45) || (lastSleep.ore || 7) < 6));
     const phase = this._currentPhase(checkins);
     const diaryFatigue = this._recentFatigueNote(sessions);
+    // Segnale forza-in-calo REALE (già scritto altrove, vedi Body._energyFlag/
+    // DailyRecap), letto qui invece di essere passato hardcoded a `false` — i
+    // rami "perfDropped" di nextVolume (scarico/−1 serie) erano irraggiungibili
+    // dal vivo, anche quando il segnale era genuinamente attivo.
+    let perfDropped = false;
+    try {
+      const sig = JSON.parse(localStorage.getItem("gymos_strength_signal") || "null");
+      perfDropped = !!(sig && sig.down && (!sig.ts || (Date.now() - sig.ts) <= 28 * 86400000));
+    } catch (e) {}
     // Muscoli con volume reale questa settimana (o pianificato se il "fatto"
     // non è ancora stato caricato): non ha senso un semaforo su ciò che non alleni.
     const dirMap = Volume._actualDir || Volume.compute().dir || {};
@@ -1499,7 +1519,7 @@ const Recovery = {
     }
     const items = rows.map(m => {
       const st = this.status(m);
-      const adv = Volume.nextVolume(m, st.dir, st.doms, false, sleepBad, phase, diaryFatigue);
+      const adv = Volume.nextVolume(m, st.dir, st.doms, perfDropped, sleepBad, phase, diaryFatigue);
       const advTxt = adv
         ? `<div class="rmap-adv rm-${adv.tone}">${adv.deload ? "Scarico consigliato" : (adv.delta > 0 ? "+1 serie" : adv.delta < 0 ? "−1 serie" : "Tieni così")} — ${this._esc(adv.why)}</div>`
         : `<div class="rmap-adv rm-none">Dimmi come ci arrivi alla prossima seduta e ti dico se salire o scendere di volume.</div>`;
@@ -1914,8 +1934,11 @@ const Dashboard = {
   buildWeekSplit(sessions) {
     const days   = ["Dom","Lun","Mar","Mer","Gio","Ven","Sab"];
     const today  = new Date();
+    // Settimana da LUNEDÌ, allineata a Volume._weekStart/buildStats (prima era
+    // domenica-based: la domenica stessa restava fuori dal range mostrato,
+    // che diventava per intero giorni futuri della settimana successiva).
     const startW = new Date(today);
-    startW.setDate(today.getDate() - today.getDay());
+    startW.setDate(today.getDate() - ((today.getDay() + 6) % 7) - 1);
     const wrap = document.getElementById("week-split");
     wrap.innerHTML = "";
 
@@ -2762,7 +2785,11 @@ const Cardio = {
     const strip = document.getElementById("cardio-stats");
     if (!strip) return;
     const now = new Date();
-    const weekStart = new Date(now); weekStart.setDate(now.getDate() - now.getDay());
+    // Settimana da LUNEDÌ, allineata a Volume._weekStart/Dashboard.buildStats
+    // (prima domenica-based: i totali "sett." di Cardio non combaciavano con
+    // quelli di allenamento per gli stessi giorni a inizio settimana).
+    const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    weekStart.setDate(weekStart.getDate() - ((now.getDay() + 6) % 7));
     const thisWeek = this.sessions.filter(c => c.date && new Date(c.date) >= weekStart);
     const totMin  = thisWeek.reduce((a,c) => a + (c.durata || 0), 0);
     const totKm   = thisWeek.reduce((a,c) => a + (c.dist || 0), 0);
@@ -3485,16 +3512,25 @@ const ExportPDF = {
     // VOLUME TOTALE della seduta (peso×rep sommato su tutte le serie), non
     // il solo set migliore — stesso fix e stesso motivo (un set di punta
     // invariato ma le altre serie migliorate è comunque progresso reale).
-    const perEx = {};
+    // Per-esercizio, per-GIORNO (non per sessione): l'app può avere più di una
+    // sessione "done" nella stessa data (una lasciata a metà + quella vera
+    // completata, vedi Dashboard.buildWeekSplit) — Progression.groupSessions
+    // le fonde per data; questo export prima non lo faceva, producendo due
+    // punti/PR separati per lo stesso giorno invece di uno combinato.
+    const byExDate = {};
     withEx.forEach(s => {
       const g = {};
       s.exercises.forEach(r => { if ((r.reps || 0) <= 0) return; const k = U.exBase(r.name); (g[k] = g[k] || []).push(r); });
       Object.keys(g).forEach(k => {
         const volume = g[k].reduce((t, r) => t + (r.reps || 0) * (r.kg || 0), 0);
         const repsTot = g[k].reduce((t, r) => t + (r.reps || 0), 0);
-        (perEx[k] = perEx[k] || []).push({ date: s.date, volume, repsTot });
+        byExDate[k] = byExDate[k] || {};
+        const cur = byExDate[k][s.date];
+        byExDate[k][s.date] = cur ? { date: s.date, volume: cur.volume + volume, repsTot: cur.repsTot + repsTot } : { date: s.date, volume, repsTot };
       });
     });
+    const perEx = {};
+    Object.keys(byExDate).forEach(k => { perEx[k] = Object.values(byExDate[k]).sort((a, b) => new Date(a.date) - new Date(b.date)); });
     // record: il volume totale (rep totali a corpo libero) supera tutti i
     // precedenti. isBW è una decisione GLOBALE per esercizio (stesso motivo
     // di Progression.groupSessions): se una singola seduta a corpo libero
@@ -3503,11 +3539,12 @@ const ExportPDF = {
     Object.values(perEx).forEach(pts => {
       const isBW = pts.every(p => p.volume === 0);
       pts.forEach(p => { p.progVal = isBW ? p.repsTot : (p.volume === 0 ? null : p.volume); });
-      let run = 0;
-      pts.forEach((p, i) => {
+      let run = 0, hasPrior = false;
+      pts.forEach(p => {
         if (p.progVal == null) { p.isPR = false; return; }
-        p.isPR = i > 0 && p.progVal > run && p.progVal > 0;
+        p.isPR = hasPrior && p.progVal > run && p.progVal > 0;
         run = Math.max(run, p.progVal);
+        hasPrior = true;
       });
     });
     const charts = {};

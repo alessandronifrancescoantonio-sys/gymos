@@ -14,6 +14,13 @@
   --focus:0 0 0 2px var(--ink), 0 0 0 4px var(--accent);
 }
 * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+/* Frecce native ▲▼ del browser su TUTTI i number input, non solo .rr-in-sm:
+   erano nascoste in un solo posto e visibili (a volte collidenti col testo,
+   es. .ex-editor-f a 54px) in ogni altro campo numerico dell'app — kg/rep in
+   sessione, stat corporee, cardio, sonno, editor scheda, ecc. */
+input[type="number"] { -moz-appearance:textfield; }
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
 html, body { height:100%; }
 body { font-family:'Outfit',sans-serif; background:var(--ink); color:var(--text); overflow-x:hidden; }
 a { text-decoration:none; }

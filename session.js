@@ -1702,8 +1702,11 @@ const Session = {
     return goal(act, reason + subNote, "go", dataLine);
   },
 
-  // Comprime lo storico grezzo (una riga per serie) in sedute con top set e note
-  _statsFromHistory(hist) {
+  // Comprime lo storico grezzo (una riga per serie) in sedute con top set e note.
+  // rrMax cappa le rep nella scelta del "top set" — stesso principio di capE1 in
+  // progressionGoalHTML: rep oltre il range non devono vincere il confronto contro
+  // un set con meno rep ma dentro/sopra il range a peso maggiore.
+  _statsFromHistory(hist, rrMax) {
     const byDate = {};
     (hist || []).forEach(r => {
       if ((r.reps || 0) <= 0) return;
@@ -1713,10 +1716,12 @@ const Session = {
       if (r.note && String(r.note).trim()) byDate[d].notes.push(String(r.note).trim());
     });
     const e1 = (kg, reps) => (kg > 0 ? kg * (1 + reps / 30) : reps);
+    const cap = rrMax ? (reps) => Math.min(reps, rrMax) : (reps) => reps;
+    const e1cap = (kg, reps) => e1(kg, cap(reps));
     return Object.values(byDate).map(g => {
       let top = g.sets[0];
-      g.sets.forEach(s => { if (e1(s.kg, s.reps) > e1(top.kg, top.reps)) top = s; });
-      return { date: g.date, topKg: top.kg, topReps: top.reps, e1: Math.round(e1(top.kg, top.reps) * 10) / 10, sets: g.sets, notes: g.notes };
+      g.sets.forEach(s => { if (e1cap(s.kg, s.reps) > e1cap(top.kg, top.reps)) top = s; });
+      return { date: g.date, topKg: top.kg, topReps: top.reps, e1: Math.round(e1cap(top.kg, top.reps) * 10) / 10, sets: g.sets, notes: g.notes };
     }).sort((a, b) => new Date(a.date) - new Date(b.date));
   },
 
@@ -1986,8 +1991,9 @@ const Session = {
         try {
           const hist = await API.getExerciseHistory(ex);
           if (token !== this._intelToken) return;
+          const exRrMax = (this.groupByExercise(this.exercises)[ex] || [])[0]?.rrMax || 12;
           // stats SENZA la seduta di oggi (l'obiettivo si basa sul passato)
-          const st = this._statsFromHistory(hist).filter(g => g.date !== curDate);
+          const st = this._statsFromHistory(hist, exRrMax).filter(g => g.date !== curDate);
           // Attacca a ogni seduta la NOTA DI SESSIONE di quel giorno (stesso tipo)
           st.forEach(g => { g.sessNote = noteByDate[g.date] || ""; });
           this._exStats[ex] = st;
@@ -2828,13 +2834,24 @@ const Session = {
       // serie più recente ha segnato un PR successivo, ripristinare
       // cancellerebbe anche quello: si toglie solo il badge di QUESTA serie,
       // lo store resta al valore (più recente e legittimo) dell'altra.
-      const isLastWriter = !this._prLastSetId || this._prLastSetId[exName] === id;
+      const lastWriterForEx = this._prLastSetId && this._prLastSetId[exName];
+      const isLastWriter = !lastWriterForEx || lastWriterForEx === id;
       if (isLastWriter) {
         const snap = this._prSnapshots && this._prSnapshots[id];
         if (snap) {
           const store = this.prLoadStore();
           store[exName] = snap;
           this.prSaveStore();
+        }
+        // Ultimo scrittore annullato: il "vero ultimo scrittore" ora è
+        // sconosciuto (non tracciamo chi era il penultimo) — resettando a
+        // sconosciuto, un successivo annullamento di un PR più vecchio dello
+        // stesso esercizio passerà di nuovo il check e ripristinerà il SUO
+        // snapshot (preso prima del suo merge), invece di restare bloccato
+        // per sempre con un record fantasma irrecuperabile.
+        if (this._prLastSetId) {
+          delete this._prLastSetId[exName];
+          this.savePrLastSetId();
         }
       }
       this._prSets.delete(id);
@@ -2929,6 +2946,36 @@ const Session = {
     if (progEl) progEl.innerHTML = this.buildStatusBadge(
       this.getProgression(set, prevSet), set, exName, set.rrMin || 8, set.rrMax || 12, prevMax
     );
+    // Se questa serie è già "fatta" (o l'intera sessione è a sola-lettura di
+    // uno storico), modificarne kg/rep NON riesegue prMerge di default — il
+    // badge PR visivo (via prBeats, live) resta corretto, ma lo STORE persistito
+    // (gymos_pr, usato per giudicare i PR futuri) rimarrebbe fermo al valore
+    // scritto da completeSet, disallineato da quanto ora mostrato. Risincronizza:
+    // annulla il contributo precedente di questa serie (se ne aveva uno) e
+    // riapplica col valore attuale.
+    if (this._done.has(id) && !this.sessionDone) {
+      const card = document.getElementById(`setrow-${id}`);
+      if (this._prSets.has(id)) {
+        const snap = this._prSnapshots && this._prSnapshots[id];
+        if (snap) { const store = this.prLoadStore(); store[exName] = snap; this.prSaveStore(); }
+        this._prSets.delete(id);
+      }
+      if ((set.reps || 0) > 0) {
+        const rec0 = this.prRec(exName);
+        this._prSnapshots = this._prSnapshots || {};
+        this._prSnapshots[id] = rec0 ? JSON.parse(JSON.stringify(rec0)) : { w: 0, e1rm: 0, repsAt: {} };
+        this.savePrSnapshots();
+        const beat = this.prMerge(exName, set.kg || 0, set.reps);
+        if (beat.weight || beat.e1rm || beat.reps) {
+          this._prSets.add(id);
+          this._prLastSetId = this._prLastSetId || {};
+          this._prLastSetId[exName] = id;
+          this.savePrLastSetId();
+          if (card) card.classList.add("set-pr");
+        } else if (card) card.classList.remove("set-pr");
+      } else if (card) card.classList.remove("set-pr");
+      this.savePrSets();
+    }
     this.updateStats();
     this.refreshSetHints(exName);   // consigli serie successive in base a questa
     this.autosave(set);   // salvataggio automatico
