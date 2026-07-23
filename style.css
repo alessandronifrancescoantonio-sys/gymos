@@ -1751,6 +1751,13 @@ body::before, body::after { will-change:transform, opacity; }
 
 /* Memoria di stress articolare — dolore ricorrente su un esercizio (FASE 5.3) */
 .joint-warn-wrap:empty { display:none; }
+/* Nota esercizio impostata dal PROGRAMMA (campo "Info tecnica" in Schede) —
+   sempre visibile appena apri l'esercizio in sessione, niente tap in più
+   dentro l'accordion "Tecnica" per vederla. */
+.ex-info-banner { display:flex; align-items:flex-start; gap:8px; margin-bottom:12px; padding:10px 12px;
+  border-radius:10px; border:1px solid rgba(59,130,246,.25); background:rgba(59,130,246,.08); }
+.ex-info-banner > i { font-size:15px; color:var(--blue); margin-top:1px; flex-shrink:0; }
+.ex-info-banner > span { font-size:12.5px; color:var(--text); line-height:1.4; white-space:pre-wrap; }
 .joint-warn { display:flex; align-items:flex-start; gap:9px; margin-bottom:12px; padding:11px 12px;
   border-radius:10px; border:1px solid rgba(239,68,68,.3); background:rgba(239,68,68,.07); }
 .joint-warn > i { font-size:17px; color:var(--red); margin-top:1px; flex-shrink:0; }

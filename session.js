@@ -634,6 +634,7 @@ const Session = {
           <i class="ti ti-chevron-down ex-chevron"></i>
         </div>
         <div class="ex-body">
+          ${(ex.info || "").trim() ? `<div class="ex-info-banner"><i class="ti ti-note"></i><span>${(ex.info || "").trim().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</span></div>` : ""}
           ${(!this.viewMode && !this.sessionDone) ? `<div class="joint-warn-wrap" id="joint-${sid}">${this.jointWarnHTML(exName)}</div>` : ""}
           ${(!this.viewMode && !this.sessionDone) ? this.progressionGoalHTML(exName, prevSets, rrMin, rrMax, rir, this._orderShift(exName), this._sameMuscleDirect(exName), rest) : ""}
           ${(!this.viewMode && !this.sessionDone) ? this.warmupRampHTML(exName, prevMax) : ""}
