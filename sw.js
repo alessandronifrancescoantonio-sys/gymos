@@ -13,7 +13,7 @@
 // fragile in pratica (il client nuovo non è sempre già in clients.matchAll()
 // nell'istante esatto in cui il SW confronta i contenuti — il segnale si perde
 // silenziosamente). Il SW qui fa solo cache-first + revalidate, niente di più.
-const CACHE = "gymos-v92";
+const CACHE = "gymos-v96";
 
 // File essenziali: pre-caricati all'installazione, così la PRIMA apertura
 // offline dopo un aggiornamento funziona già.
@@ -44,6 +44,27 @@ self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
   const url = new URL(e.request.url);
   if (url.origin !== self.location.origin) return;   // API/CDN esterni: non toccarli
+
+  // version.json è l'UNICO file che la pagina usa per decidere se mostrare
+  // "nuova versione" — cache-first qui rendeva il controllo inaffidabile:
+  // a seconda di QUANDO la revalidation in background era arrivata, due
+  // aperture consecutive potevano leggere due numeri diversi e far
+  // ricomparire il banner più volte per lo stesso aggiornamento (o, al
+  // contrario, farlo sparire prima che l'utente avesse davvero ricaricato).
+  // Qui invece: rete SEMPRE, cache solo come fallback offline.
+  if (url.pathname.endsWith("/version.json")) {
+    e.respondWith((async () => {
+      try {
+        const res = await fetch(e.request);
+        if (res && res.ok) { const c = await caches.open(CACHE); c.put(e.request, res.clone()).catch(() => {}); }
+        return res;
+      } catch (e2) {
+        const cache = await caches.open(CACHE);
+        return (await cache.match(e.request, { ignoreSearch: true })) || new Response("{}", { headers: { "Content-Type": "application/json" } });
+      }
+    })());
+    return;
+  }
 
   e.respondWith((async () => {
     const cache = await caches.open(CACHE);
