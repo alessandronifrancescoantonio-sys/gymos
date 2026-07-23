@@ -4263,7 +4263,20 @@ const Coach = {
         body: JSON.stringify({ question, context: Object.keys(context).length ? context : undefined, history }),
         signal: ctrl.signal,
       }).finally(() => clearTimeout(timer));
-      if (!res.ok) throw new Error("Il coach non ha risposto (errore " + res.status + ")");
+      if (!res.ok) {
+        // Il worker inoltra il body JSON di errore anche sui fallimenti (502
+        // include `detail`, il vero motivo di Gemini) — prima veniva ignorato
+        // e si mostrava solo "errore 502, riprova": con la quota gratuita
+        // Gemini esaurita (20 richieste/giorno, condivisa tra consiglio
+        // automatico/coach/report) "riprova" invitava a ritentare all'infinito
+        // qualcosa che non si risolve prima di domani.
+        let detail = "";
+        try { const j = await res.json(); detail = (j && (j.detail || j.error)) || ""; } catch (e) {}
+        if (/RESOURCE_EXHAUSTED|quota/i.test(detail)) {
+          throw new Error("Quota giornaliera Gemini esaurita (troppe richieste oggi tra consiglio automatico e coach) — riprova domani, non è un errore da ritentare ora");
+        }
+        throw new Error("Il coach non ha risposto (errore " + res.status + ")");
+      }
       const data = await res.json();
       if (!data || !data.answer) throw new Error("Risposta vuota dal coach");
       const id = "c" + Date.now();
