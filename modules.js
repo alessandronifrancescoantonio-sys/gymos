@@ -1142,7 +1142,10 @@ const ProgressPhotos = {
 
   // Data LOCALE (YYYY-MM-DD): evita l'off-by-one del fuso orario di toISOString()
   _localDate(d) { d = d || new Date(); const p = n => String(n).padStart(2, "0"); return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()); },
-  _fmtW(w) { return (w == null) ? "" : String(w).replace(".", ",") + " kg"; },
+  // Punto, non virgola: stesso stile di U.fmt (kg/e1RM/rep) usato ovunque
+  // nell'app — il peso corporeo qui mostrava "74,3 kg" mentre la Dashboard
+  // mostra "74.3 kg" per lo stesso identico dato.
+  _fmtW(w) { return (w == null) ? "" : String(w) + " kg"; },
   // Ultimo peso registrato nei check-in corporei (per pre-compilare)
   _latestWeight() {
     try {
@@ -3705,7 +3708,10 @@ const DailyRecap = {
     return { rate: (dKg / ref.peso) * 100 / (days / 7), dKg, days, peso: last.peso };
   },
 
-  _fmtRate(r) { const v = Math.round(r * 10) / 10; return `${v > 0 ? "+" : ""}${String(v).replace(".", ",")}%/sett`; },
+  // Punto, non virgola: era l'unico posto a mostrare "-0,1%/sett" mentre il
+  // resto dell'app (kg, e1RM, volume) usa il punto ovunque — stesso valore,
+  // stile diverso a seconda di dove lo guardavi (vedi #daily-recap "PESO/SETT").
+  _fmtRate(r) { const v = Math.round(r * 10) / 10; return `${v > 0 ? "+" : ""}${v}%/sett`; },
   _protein(peso) { return peso ? `${Math.round(peso * 1.6)}–${Math.round(peso * 2.2)} g/die` : "1,6–2,2 g/kg"; },
 
   // Quanti check-in CONSECUTIVI (dal più recente a ritroso) sono nella stessa
