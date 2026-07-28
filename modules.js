@@ -2758,7 +2758,17 @@ const PredictiveCoach = {
     const scheda = (App.schede || []).find(s => s.id === d.schedaId);
     if (!scheda) throw new Error("Seduta non trovata (forse eliminata o rinominata)");
     const idx = (scheda.exercises || []).findIndex(e => U.exName(e) === d.oldExercise);
-    if (idx === -1) throw new Error(`Esercizio "${d.oldExercise}" non più presente in questa seduta`);
+    if (idx === -1) {
+      // Idempotenza: se il worker aveva già scritto su Notion (updateScheda
+      // riuscito) ma la POST che segna la proposta "approved" falliva subito
+      // dopo (rete flaky), un secondo tap su "Approva" ripartiva da qui e
+      // trovava oldExercise già sostituito — throw fuorviante "non più
+      // presente" anche se il cambio era in realtà già andato a buon fine.
+      // Se il NUOVO esercizio è già lì, considera il cambio già applicato.
+      const already = (scheda.exercises || []).some(e => U.exName(e) === d.newExercise);
+      if (already) return;
+      throw new Error(`Esercizio "${d.oldExercise}" non più presente in questa seduta`);
+    }
     // Conserva TUTTI gli altri parametri dell'esercizio (serie, rep range,
     // recupero, RIR, tecnica, cadenza...): è un cambio di esercizio a parità
     // di programmazione, non una riscrittura della scheda.

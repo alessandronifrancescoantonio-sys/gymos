@@ -2252,8 +2252,15 @@ const Session = {
     const existing = grouped[exName] || [];
     const last     = existing[existing.length - 1];
     // Prossimo numero = max S<n> esistente (non il conteggio: dopo la rimozione
-    // di una serie centrale il conteggio duplicherebbe un numero già usato)
-    const si       = this.nextSetNum(existing) - 1;
+    // di una serie centrale il conteggio duplicherebbe un numero già usato).
+    // SOLO per il titolo Notion (deve restare univoco) — NON per la
+    // visualizzazione: prima veniva riusato anche come indice/contatore
+    // mostrato ("Serie 4/4" invece di "Serie 3/3" dopo aver rimosso una
+    // serie centrale) e come indice per "volta scorsa" (poteva disallinearsi
+    // dalla vera posizione odierna). `si` = vera posizione tra le serie
+    // REALI di oggi, usata per display e allineamento volta-scorsa.
+    const titleNum = this.nextSetNum(existing);
+    const si       = existing.length;
     const sess     = this.sessions.find(s => s.id === this.activeId);
     const date     = sess?.date || U.today();
 
@@ -2264,7 +2271,7 @@ const Session = {
 
     // Crea nuova entry in Notion
     const props = {};
-    props[CONFIG.PROPS.EL_NAME]    = API.prop.title(`${exName} – ${sess?.name || ""} – S${si + 1}`);
+    props[CONFIG.PROPS.EL_NAME]    = API.prop.title(`${exName} – ${sess?.name || ""} – S${titleNum}`);
     props[CONFIG.PROPS.EL_SESSION] = API.prop.relation([this.activeId]);
     props[CONFIG.PROPS.EL_SETS]    = API.prop.number(1);
     props[CONFIG.PROPS.EL_REPS]    = API.prop.number(0);
@@ -2292,7 +2299,7 @@ const Session = {
       const newPage = await API.create(CONFIG.DB.ESERCIZI_LOG, props);
       const newSet = {
         id:     newPage.id,
-        name:   `${exName} – ${sess?.name || ""} – S${si + 1}`,
+        name:   `${exName} – ${sess?.name || ""} – S${titleNum}`,
         sets:   1,
         reps:   0,
         kg:     last?.kg || 0,
@@ -2340,6 +2347,19 @@ const Session = {
     // Rimuovi da array locale + stato "fatto"
     this.exercises = this.exercises.filter(e => e.id !== id);
     if (this._done) { this._done.delete(id); this.saveDone(); }
+    // Se questa serie aveva segnato un PR, ripristina lo store (come fa
+    // "Annulla" su completeSet/refreshSetValue) — altrimenti eliminare la
+    // serie invece di annullarla lasciava il record fantasma per sempre.
+    if (this._prSets && this._prSets.has(id)) {
+      const lastWriterForEx = this._prLastSetId && this._prLastSetId[exName];
+      if (!lastWriterForEx || lastWriterForEx === id) {
+        const snap = this._prSnapshots && this._prSnapshots[id];
+        if (snap) { const store = this.prLoadStore(); store[exName] = snap; this.prSaveStore(); }
+        if (this._prLastSetId) { delete this._prLastSetId[exName]; this.savePrLastSetId(); }
+      }
+      this._prSets.delete(id);
+      this.savePrSets();
+    }
     // Rimozione vera (archiviata): così il conteggio resta coerente anche dopo refresh
     await API.archivePage(id).catch(console.error);
     this.updateStats();
@@ -2503,6 +2523,13 @@ const Session = {
   async reconcileWithScheda(sess) {
     const sched = CONFIG.SCHEDE[sess.type];
     if (!sched) return;
+    // Guardia anti-race: questa funzione fa vari await (create/archive Notion)
+    // mutando `this.exercises` — se nel frattempo l'utente cambia sessione dal
+    // menu (loadSession di un'ALTRA sessione), senza controllo le righe create/
+    // rimosse per `sess` finivano iniettate nell'array della sessione ORA
+    // attiva. `forId` fissa a quale sessione appartiene questo reconcile;
+    // ricontrollato dopo ogni await che tocca `this.exercises`.
+    const forId = sess.id;
     const grouped   = this.groupByExercise(this.exercises);
     const present   = Object.keys(grouped);
     const tmpl      = (sched.exercises || []).map(e => ({
@@ -2518,18 +2545,22 @@ const Session = {
       const cur = grouped[e.nome];
       if (!cur) {
         const made = await this._createExerciseSets(e.nome, e.serie, e);
+        if (this.activeId !== forId) return;
         this.exercises.push(...made);
       } else if (e.serie > cur.length) {
         const made = await this._createExerciseSets(e.nome, e.serie - cur.length, cur[0]);
+        if (this.activeId !== forId) return;
         this.exercises.push(...made);
       } else if (e.serie < cur.length) {
         const removable = cur.filter(s => !(s.reps > 0) && !this._done.has(s.id));
         const drop = removable.slice(-(cur.length - e.serie));
         for (const s of drop) {
           await API.archivePage(s.id).catch(() => {});
+          if (this.activeId !== forId) return;
           this.exercises = this.exercises.filter(x => x.id !== s.id);
         }
       }
+      if (this.activeId !== forId) return;
       // allinea i meta (la scheda è la sorgente) su tutte le serie dell'esercizio
       const cur2 = this.groupByExercise(this.exercises)[e.nome] || [];
       if (cur2.length) {
@@ -2545,6 +2576,7 @@ const Session = {
         }
       }
     }
+    if (this.activeId !== forId) return;
     // 2) togli dalla sessione (in corso) gli esercizi non più nella scheda.
     const toRemove = present.filter(name => !tmplNames.includes(name));
     const noData = [], withData = [];
@@ -2553,16 +2585,18 @@ const Session = {
     });
     const archive = async name => {
       await Promise.all(grouped[name].map(s => API.archivePage(s.id).catch(() => {})));
+      if (this.activeId !== forId) return;
       this.exercises = this.exercises.filter(x => U.exBase(x.name) !== U.exBase(name));
     };
     // Senza dati: rimuovi subito (recuperabili dal cestino Notion)
-    for (const name of noData) await archive(name);
+    for (const name of noData) { await archive(name); if (this.activeId !== forId) return; }
     // Con dati registrati: chiedi conferma (una volta sola per tutti)
     if (withData.length) {
       const ok = await U.confirm(
         `Questi esercizi sono stati tolti dalla scheda ma hanno serie già registrate in questa sessione: ${withData.join(", ")}. Rimuoverli anche dalla sessione?`,
         { danger: true, okText: "Rimuovi" }
       );
+      if (this.activeId !== forId) return;
       if (ok) {
         for (const name of withData) await archive(name);
       } else {

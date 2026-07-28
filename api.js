@@ -51,8 +51,11 @@ const API = {
   },
 
   // ─── QUERY DATABASE ───
+  // page_size clamp a 100: alcuni chiamanti (ExportPDF, PredictiveCoach)
+  // passavano 150/200 — oltre il massimo Notion, causava un 400 e la
+  // feature falliva SEMPRE, non solo per chi ha davvero tanti dati.
   async query(dbId, filter = null, sorts = null, pageSize = 100) {
-    const body = { page_size: pageSize };
+    const body = { page_size: Math.min(pageSize, 100) };
     if (filter) body.filter = filter;
     if (sorts)  body.sorts  = sorts;
     const res = await this.call(`/databases/${dbId}/query`, "POST", body);
@@ -220,13 +223,22 @@ const API = {
       CONFIG.DB.ESERCIZI_LOG,
       {
         property: CONFIG.PROPS.EL_NAME,
-        rich_text: { contains: target }
+        // starts_with, non contains: il titolo reale è SEMPRE
+        // "NomeEsercizio – Scheda – Sn", quindi il nome base è per
+        // costruzione un PREFISSO, mai un frammento a metà stringa.
+        // "contains" pescava anche righe di un ALTRO esercizio il cui nome
+        // conteneva il nostro come sottostringa ovunque (es. "Curl" dentro
+        // "Panca Curl Manubri – ...") — quelle righe occupavano posti nel
+        // tetto di 100 SENZA mai passare il filtro esatto qui sotto,
+        // troncando silenziosamente lo storico vero quando il nome
+        // collideva con un esercizio loggato più spesso.
+        rich_text: { starts_with: target }
       },
-      // Discendente: con il limite a 50 righe prendi le sedute più RECENTI
+      // Discendente: con il limite a 100 righe prendi le sedute più RECENTI
       // (ascendente prenderebbe le più vecchie e l'analisi resterebbe indietro).
       // I consumatori (Progression, _statsFromHistory) riordinano da soli.
       [{ property: CONFIG.PROPS.EL_DATE, direction: "descending" }],
-      50
+      100
     );
     return pages.map(p => ({
       id:   p.id,
