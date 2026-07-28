@@ -140,7 +140,7 @@ const Session = {
     });
   },
 
-  async loadSession(id) {
+  async loadSession(id, opts) {
     this.activeId = id;
     // esci dalla schermata iniziale: mostra il contenuto della sessione
     const _pg = document.getElementById("page-session");
@@ -183,7 +183,10 @@ const Session = {
 
     // Riallinea la sessione IN CORSO alla sua seduta (aggiunge esercizi nuovi
     // della scheda; toglie quelli rimossi dalla scheda solo se senza dati).
-    if (sess.done === false) await this.reconcileWithScheda(sess).catch(console.error);
+    // Skip se APPENA creata da "Crea e inizia": è già 1:1 con la scheda per
+    // costruzione (l'abbiamo creata noi riga per riga qui sopra), un
+    // round-trip Notion in meno prima di iniziare ad allenarsi.
+    if (sess.done === false && !(opts && opts.freshlyCreated)) await this.reconcileWithScheda(sess).catch(console.error);
 
     // Ordine esercizi. Priorità:
     //  1) ordine che TU hai dato a questa sessione (gymos_order_<id>);
@@ -2927,12 +2930,19 @@ const Session = {
       }
     }
 
-    // 2) recupera un auto-salvataggio già scaduto mentre l'app era in background
+    // 2) recupera un auto-salvataggio già scaduto mentre l'app era in background.
+    // Se il momento era GIÀ passato mentre l'app era chiusa (es. finisci le
+    // serie, chiudi l'app, la riapri 20 min dopo), salvare ALL'ISTANTE del
+    // riavvio sembrava che "la sessione si chiudesse da sola" e il cronometro
+    // (appena mostrato correttamente da DurationTimer.init sopra) si annullasse
+    // subito dopo — nessun momento per accorgersene. Margine minimo di 15s
+    // prima del recupero: il timer ha il tempo di comparire davvero, il
+    // salvataggio resta comunque garantito (non si perde nulla).
     const saveDue = parseInt(localStorage.getItem(`gymos_autosave_${id}`) || "0");
     if (saveDue) {
       if (this.allSetsDone()) {
-        if (Date.now() >= saveDue) this._doAutoSave();
-        else this._autoSaveTimer = setTimeout(() => this._doAutoSave(), saveDue - Date.now());
+        const delay = Math.max(saveDue - Date.now(), 15000);
+        this._autoSaveTimer = setTimeout(() => this._doAutoSave(), delay);
       } else {
         localStorage.removeItem(`gymos_autosave_${id}`);
       }
@@ -3519,13 +3529,16 @@ Session._doCreateSession = async function(name) {
     });
     await Promise.all(creates);
 
-    Session.sessions = await API.getWorkoutSessions(20);
+    // Niente re-fetch delle ultime 20 sessioni da Notion: la sappiamo già
+    // per intero (l'abbiamo appena creata noi) — un round-trip in meno prima
+    // di poter allenarsi. Stessa forma esatta di API.getWorkoutSessions().
+    Session.sessions.unshift({ id: sessId, name, date: today, type: name, done: false, split: "Full Body", note: "" });
     Session.buildSelect();
     const sel = document.getElementById("sess-select");
     if (sel) sel.value = sessId;
 
     document.getElementById("new-sess-modal").style.display = "none";
-    await Session.loadSession(sessId);
+    await Session.loadSession(sessId, { freshlyCreated: true });
 
   } catch(e) {
     console.error(e);
