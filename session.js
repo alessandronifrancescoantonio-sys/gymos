@@ -163,7 +163,11 @@ const Session = {
     // Inizializza il timer durata (NON parte da solo, lo avvia l'utente col bottone)
     if (typeof DurationTimer !== "undefined") DurationTimer.init(id);
 
-    this.exercises = await API.getSessionExercises(id);
+    // Sessione appena creata da "Crea e inizia": le righe sono quelle che
+    // abbiamo appena scritto noi (opts.freshExercises, stessa forma esatta
+    // di getSessionExercises) — evita un query Notion in più proprio sulle
+    // righe scritte un istante fa (niente attesa di replica).
+    this.exercises = (opts && opts.freshExercises) ? opts.freshExercises : await API.getSessionExercises(id);
 
     // Stato "serie completata" (locale per sessione)
     this._done = new Set(JSON.parse(localStorage.getItem(`gymos_done_${id}`) || "[]"));
@@ -3532,7 +3536,7 @@ Session._doCreateSession = async function(name) {
     localStorage.setItem(`gymos_created_${sessId}`, Date.now());   // per l'auto-avvio del timer durata
 
     const exercises = CONFIG.SCHEDE[name].exercises || [];
-    const creates   = [];
+    const creates   = [];   // ognuna risolve nel record locale già pronto per Session.exercises
     exercises.forEach(function(item) {
       var exNm  = U.exName(item);
       var nSets = U.exSets(item);   // quante serie creare per questo esercizio
@@ -3558,10 +3562,21 @@ Session._doCreateSession = async function(name) {
         props[CONFIG.PROPS.EL_GRUPPO]  = API.prop.select(grp);
         props[CONFIG.PROPS.EL_INFO]    = API.prop.rich_text(inf);
         props[CONFIG.PROPS.EL_DATE]    = API.prop.date(today);
-        creates.push(API.create(CONFIG.DB.ESERCIZI_LOG, props));
+        // Record locale, STESSA forma di API.getSessionExercises(): lo teniamo
+        // pronto qui invece di rileggerlo da Notion subito dopo — prima
+        // loadSession faceva un query in più per rileggere le righe appena
+        // scritte (e Notion può avere un attimo di ritardo prima che una
+        // query le veda), il vero motivo per cui le tendine esercizi
+        // comparivano lente dopo "Crea e inizia".
+        var record = {
+          name: exNm + " – " + name + " – S" + i, sets: 1, reps: 0, kg: 0,
+          rrMin: 8, rrMax: 12, note: "", date: today,
+          tecnica: tec, cadenza: cad, gruppo: grp, recupero: rec, rir: rir, info: inf,
+        };
+        creates.push(API.create(CONFIG.DB.ESERCIZI_LOG, props).then(function(page) { record.id = page.id; return record; }));
       }
     });
-    await Promise.all(creates);
+    const madeExercises = await Promise.all(creates);
 
     // Niente re-fetch delle ultime 20 sessioni da Notion: la sappiamo già
     // per intero (l'abbiamo appena creata noi) — un round-trip in meno prima
@@ -3572,7 +3587,7 @@ Session._doCreateSession = async function(name) {
     if (sel) sel.value = sessId;
 
     document.getElementById("new-sess-modal").style.display = "none";
-    await Session.loadSession(sessId, { freshlyCreated: true });
+    await Session.loadSession(sessId, { freshlyCreated: true, freshExercises: madeExercises });
 
   } catch(e) {
     console.error(e);
