@@ -2075,7 +2075,11 @@ const WeeklyReport = {
   _load() { try { return JSON.parse(localStorage.getItem(this.KEY) || "[]"); } catch (e) { return []; } },
   _saveAll(list) { try { localStorage.setItem(this.KEY, JSON.stringify(list)); } catch (e) {} },
   save(report) {
-    const list = this._load();
+    // Dedupe difensivo per weekStart: la guardia _checking in checkAndGenerate
+    // previene il caso comune, ma senza questo un report duplicato residuo
+    // (già scritto prima del fix, o da un altro percorso) resterebbe per
+    // sempre nello storico.
+    const list = this._load().filter(r => r.weekStart !== report.weekStart);
     list.push(report);
     list.sort((a, b) => String(a.weekStart).localeCompare(String(b.weekStart)));
     // Cap: droppa i più vecchi, non gli ultimi generati.
@@ -2095,6 +2099,14 @@ const WeeklyReport = {
   // Chiamato da Dashboard.load(): silenzioso se le condizioni non scattano
   // (nessun banner, nessuna chiamata rete).
   async checkAndGenerate() {
+    // Guardia anti-doppio-avvio: LAST_COVERED_KEY viene scritto solo a fine
+    // funzione, DOPO vari await (query sessioni, aggregazioni, chiamata
+    // coach) — un secondo Dashboard.load() partito mentre il primo è ancora
+    // in volo (es. doppio tap sul tab Home durante il boot) superava lo
+    // stesso controllo e produceva due report duplicati per la stessa
+    // settimana. Flag sincrono, valido prima di qualunque await.
+    if (this._checking) return;
+    this._checking = true;
     try {
       const now = new Date();
       const thisMonday = this._mondayOf(now);
@@ -2122,6 +2134,7 @@ const WeeklyReport = {
       localStorage.setItem(this.LAST_COVERED_KEY, weekStartStr);
       this.renderBanner(report);
     } catch (e) { console.error("WeeklyReport.checkAndGenerate:", e); }
+    finally { this._checking = false; }
   },
 
   // ─── CALCOLO AGGREGATI (punti 1-8, client-side) ───
@@ -2480,7 +2493,14 @@ const ScienceUpdates = {
       </div>`;
   },
 
+  // Guardia anti doppio-tap (stesso pattern di PredictiveCoach.decide): i
+  // bottoni Approva/Rifiuta restavano interattivi per tutto il round-trip
+  // (fino a 15s di timeout) — due tap veloci su una rete lenta mandavano due
+  // decide() concorrenti per la stessa proposta.
+  busy: false,
   async decide(id, approved) {
+    if (this.busy) return;
+    this.busy = true;
     try {
       const res = await this._fetchWithTimeout(`${CONFIG.AI_WORKER_URL}/science-proposals/decide`, {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -2496,6 +2516,8 @@ const ScienceUpdates = {
     } catch (e) {
       console.error("ScienceUpdates.decide:", e);
       if (typeof U !== "undefined" && U.toast) U.toast("Errore: " + (e && e.message || e), "err");
+    } finally {
+      this.busy = false;
     }
   },
 };
@@ -2533,6 +2555,13 @@ const PredictiveCoach = {
   // >= RUN_EVERY_DAYS giorni dall'ultimo tentativo. Silenzioso su ogni errore
   // o dato insufficiente: non è una feature core, non deve mai disturbare. ───
   async checkAndGenerate() {
+    // Stessa guardia anti-doppio-avvio di WeeklyReport: LAST_RUN_KEY viene
+    // scritto solo dopo l'await di getWorkoutSessions — un secondo
+    // Dashboard.load() partito nel frattempo (doppio tap sul tab durante il
+    // boot) superava lo stesso controllo temporale e finiva per lanciare due
+    // /predictive-run per lo stesso ciclo.
+    if (this._checking) return;
+    this._checking = true;
     try {
       const last = parseInt(localStorage.getItem(this.LAST_RUN_KEY) || "0", 10);
       const now = Date.now();
@@ -2558,6 +2587,7 @@ const PredictiveCoach = {
       // Non serve leggere la risposta qui: la proposta (se generata) è già
       // salvata lato worker in KV, la sezione Schede la mostra al prossimo load().
     } catch (e) { console.error("PredictiveCoach.checkAndGenerate:", e); }
+    finally { this._checking = false; }
   },
 
   // ─── AGGREGAZIONE DATI (client-side) — riusa Progression._computeSessions,
@@ -3772,8 +3802,14 @@ const DailyRecap = {
     }
 
     // ── SPINTA / FATICA — segnale forza diffuso ──
+    // Stessa finestra di freschezza usata da Body._energyFlag e
+    // Recovery.renderCard (28gg, non 21): prima disallineate, la card
+    // "Recupero muscolare" poteva trattare il segnale come ancora valido
+    // (<=28gg) mentre "Il punto di oggi" lo considerava già scaduto (>21gg)
+    // per lo STESSO identico segnale — un giorno la finestra a 24gg mostrava
+    // consigli contraddittori fianco a fianco sulla stessa Home.
     const sig = d.strengthSig;
-    const sigFresh = sig && sig.ts && (Date.now() - sig.ts) < 21 * 86400000;
+    const sigFresh = sig && sig.ts && (Date.now() - sig.ts) < 28 * 86400000;
     const strDown = sigFresh && sig.down;
     if (strDown) add("warn", "ti-battery-2", "Forza in calo diffuso", "Cali su più esercizi: stai accumulando fatica. Valuta una seduta più leggera o un giorno di stacco, e cura sonno e cibo.");
 

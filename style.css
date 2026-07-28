@@ -280,6 +280,11 @@ input { font-family:inherit; }
 .tg-data i { font-size:11px; opacity:.8; }
 /* Volume settimanale per muscolo */
 #dash-volume .card-title { flex-wrap:nowrap; }
+/* Nomi esercizio lunghi ("Distensioni su panca inclinata con manubri" ecc.)
+   in "I tuoi record — X" / "Storico sessioni — X" andavano a capo dentro il
+   flex-row del card-title, scentrando l'icona rispetto al testo — stesso
+   trattamento ellissi già usato per .vol-prog qui sopra. */
+#prog-rec-name, #prog-ex-name { display:inline-block; max-width:170px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; vertical-align:bottom; }
 .vol-prog { font-size:11px; font-weight:600; color:var(--accent); background:rgba(255,59,47,.1); border:1px solid rgba(255,59,47,.25); padding:2px 9px; border-radius:100px; margin-left:8px;
   max-width:104px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex-shrink:1; min-width:0; }
 .vol-edit-btn { margin-left:auto; display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:600; color:var(--dim); background:var(--ink3); border:1px solid var(--ink4); border-radius:100px; padding:5px 11px; }
@@ -457,6 +462,10 @@ input { font-family:inherit; }
   .sess-stats, .body-stats { margin:12px 16px; }
   .sess-stats { grid-template-columns:repeat(2,1fr); }
   .body-stats { grid-template-columns:repeat(2,1fr); }
+  /* A 2 colonne, :last-child toglie il bordo solo all'ultima tile (in basso
+     a destra) — la tile in ALTO a destra (2ª di 4) resta con un border-right
+     "orfano" che non separa più nulla, visibile su Cardio e Misurazioni. */
+  .bstat:nth-child(2) { border-right:none; }
   #exercises-container, #page-session .card, .card { margin-left:16px; margin-right:16px; }
   .page > .scheda-row { padding:14px 16px 0; }
   .stats-row { grid-template-columns:repeat(2,1fr); padding:0 16px; }
