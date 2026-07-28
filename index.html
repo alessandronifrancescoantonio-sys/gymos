@@ -774,14 +774,20 @@
     // di build con l'ultimo visto. Zero falsi positivi da ETag/CDN instabili
     // (GitHub Pages può cambiare header a contenuto identico): qui conta solo
     // il CONTENUTO di un file piccolo e dedicato, bump manuale ad ogni deploy.
-    function showUpdatePill() {
-      if (window.__gymosUpdateShown) return;
-      window.__gymosUpdateShown = true;
-      var b = document.createElement("button");
-      b.className = "update-pill";
-      b.innerHTML = '<i class="ti ti-refresh"></i> Nuova versione — tocca per aggiornare';
-      b.onclick = function () { location.reload(); };
-      document.body.appendChild(b);
+    // Niente più bottone "Nuova versione — tocca per aggiornare": l'utente
+    // ha chiesto aggiornamento silenzioso e automatico, con UN solo vincolo
+    // assoluto — MAI durante un allenamento in corso (un reload a metà serie
+    // interromperebbe timer/rest-timer/input che si stanno usando in quel
+    // momento). "In allenamento" = gymos_active in localStorage: lo stesso
+    // flag che Session imposta a inizio sessione e toglie a salvataggio
+    // completato (session.js) — nessuna dipendenza dall'oggetto Session,
+    // funziona anche se questo script gira prima che session.js sia pronto.
+    function isTraining() {
+      try { return !!localStorage.getItem("gymos_active"); } catch (e) { return false; }
+    }
+    var pendingReload = false;
+    function reloadIfIdle() {
+      if (pendingReload && !isTraining()) location.reload();
     }
     function checkVersion() {
       fetch("./version.json", { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (v) {
@@ -789,17 +795,28 @@
         if (!build) return;
         var seen = localStorage.getItem("gymos_seen_build");
         var isRealUpdate = seen && seen !== build;
-        // Aggiorna SEMPRE la baseline, prima di eventualmente avvisare:
+        // Aggiorna SEMPRE la baseline, prima di eventualmente ricaricare:
         // altrimenti dopo il reload (che riparte da qui con lo stesso build
-        // nuovo ma "seen" mai aggiornato) il banner si ripresenterebbe subito.
+        // nuovo ma "seen" mai aggiornato) scatterebbe di nuovo subito.
         localStorage.setItem("gymos_seen_build", build);
-        if (isRealUpdate) showUpdatePill();
+        if (isRealUpdate) pendingReload = true;
+        reloadIfIdle();
       }).catch(function(){});
     }
     checkVersion();
     document.addEventListener("visibilitychange", function () {
       if (document.visibilityState === "visible") checkVersion();
+      else reloadIfIdle();   // torni in background senza allenamento in corso → aggiorna ora
     });
+    // Mentre l'app resta aperta a lungo (es. un allenamento lungo), ricontrolla
+    // ogni 5 min: se nel frattempo hai salvato/finito, l'aggiornamento in
+    // sospeso parte al primo controllo successivo, senza aspettare che tu
+    // riapra l'app da capo.
+    setInterval(checkVersion, 5 * 60 * 1000);
+    // Richiamato da session.js appena una sessione viene salvata/finita, per
+    // applicare subito un aggiornamento rimasto in sospeso durante l'allenamento
+    // invece di aspettare il prossimo giro dei 5 minuti.
+    window.gymosMaybeReload = reloadIfIdle;
   }
 </script>
 </body>

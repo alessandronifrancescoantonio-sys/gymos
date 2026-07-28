@@ -127,6 +127,9 @@ const Session = {
     if (page) page.classList.add("session-empty");
     document.body.classList.add("sess-landing");
     document.body.classList.remove("session-view");
+    // Se un aggiornamento è rimasto in sospeso perché eri in allenamento,
+    // applicalo ORA che hai salvato — non serve aspettare il prossimo giro.
+    if (window.gymosMaybeReload) window.gymosMaybeReload();
   },
 
   buildSelect() {
