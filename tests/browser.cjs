@@ -58,12 +58,14 @@ const server=http.createServer((req,res)=>{
  await page.evaluate(()=>window.scrollTo({top:0,behavior:'instant'}));
  await page.screenshot({path:path.join(root,'test-results','session-320.png'),fullPage:true});
  await page.emulateMedia({colorScheme:'dark'});
- assert.equal(await page.evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--ink').trim()),'#000');
+ assert.equal(await page.evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--ink').trim()),'#070708');
  await page.waitForTimeout(350);
  await page.screenshot({path:path.join(root,'test-results','session-320-dark.png'),fullPage:true});
  await page.emulateMedia({colorScheme:'light'});
- assert.equal(await page.evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--ink').trim()),'#f2f2f7');
- console.log('PASS adaptive light and dark appearance');
+ assert.equal(await page.evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--ink').trim()),'#070708');
+ await page.setViewportSize({width:1280,height:900});
+ await page.screenshot({path:path.join(root,'test-results','session-1280.png'),fullPage:false});
+ console.log('PASS consistent black and orange appearance across device themes');
  const sid=await page.evaluate(()=>[Session.sanitize('Leg curl'),Session.sanitize('Leg-curl')]);assert.notEqual(sid[0],sid[1]);
  await page.evaluate(()=>{
    const name=`Esercizio "dell'atleta" <img src=x onerror=alert(1)>`;
