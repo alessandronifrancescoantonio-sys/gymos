@@ -8,6 +8,7 @@ const App = {
 
   async init() {
     Accessibility.init();
+    SyncCenter.init();
     this.setupNav();
     window.addEventListener("online", () => Notes.retry().catch(() => U.toast("Alcune note attendono ancora il salvataggio", "err")));
     await this.boot();
@@ -28,6 +29,8 @@ const App = {
     // Aggiorna entrambe le nav (sidebar + bottom)
     document.querySelectorAll(".nav-link, .bn-link").forEach(l => l.classList.remove("active"));
     document.querySelectorAll(`[data-page="${page}"]`).forEach(l => l.classList.add("active"));
+    const primaryMobile = ["dashboard","session","cardio","progression","schede"];
+    document.querySelector(".bn-more")?.classList.toggle("active", !primaryMobile.includes(page));
 
     // Aggiorna pagine
     document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
@@ -59,9 +62,10 @@ const App = {
       case "progression": Progression.load().catch(fail); break;
       case "body":        Body.load().catch(fail);      break;
       case "diary":       Diary.load().catch(fail);     break;
-      case "schede":      Schede.load().catch(fail); PredictiveCoach.load().catch(fail); break;
+      case "schede":      Schede.load().catch(fail); break;
       case "report":      WeeklyReport.loadHistory().catch(fail); break;
       case "science":     ScienceUpdates.load().catch(fail); break;
+      case "calendar":    Planning.load().catch(fail); break;
     }
   },
 

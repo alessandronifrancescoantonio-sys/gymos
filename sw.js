@@ -1,6 +1,6 @@
 // GymOS — immutable offline shell per build. A new worker installs the whole
 // shell before activation. version.json remains network-first for update alerts.
-const CACHE = "gymos-v107";
+const CACHE = "gymos-v108";
 
 // File essenziali: pre-caricati all'installazione, così la PRIMA apertura
 // offline dopo un aggiornamento funziona già.
@@ -8,7 +8,7 @@ const CORE = [
   "./", "./index.html", "./style.css", "./config.js", "./api.js",
   "./app.js", "./session.js", "./modules.js", "./timers.js", "./version.json",
   "./notes.js", "./ai-client.js", "./quality.css", "./apple-theme.css", "./exercise-guide-index.js",
-  "./accessibility.js",
+  "./accessibility.js", "./sync-center.js",
   "./backup.js",
   "./vendor/idb.js",
 ];

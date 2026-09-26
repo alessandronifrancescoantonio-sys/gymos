@@ -37,6 +37,17 @@ const server=http.createServer((req,res)=>{
  await page.setViewportSize({width:320,height:800});
  for(const name of ['Report','Scienza']){await page.getByRole('button',{name:'Altro',exact:true}).click();await page.getByRole('button',{name,exact:true}).click();assert.equal(await page.locator('.page.active').getAttribute('id'),name==='Report'?'page-report':'page-science')}
  console.log('PASS mobile Report and Science navigation');
+ await page.evaluate(async()=>{
+  App.navigate('calendar');
+  const b=Planning.bounds(0);
+  API.getPlannerTasks=async()=>[{id:'p1',name:'Full Body 1',date:U.today(),type:'Allenamento',done:false}];
+  API.getWorkoutSessions=async()=>[{id:'s1',name:'Full Body 1',date:U.today(),done:true}];
+  await Planning.load(0);
+  if(document.querySelectorAll('.calendar-day').length!==7)throw Error('Calendar does not render seven days');
+  if(!document.getElementById('calendar-comparison').innerText.includes('100%'))throw Error('Planned versus actual mismatch');
+  SyncCenter.init();if(!document.querySelector('[data-sync-label]').textContent)throw Error('Sync status missing');
+ });
+ console.log('PASS weekly planning, planned-vs-actual and sync status');
  await page.evaluate(()=>{
   App.navigate('session');document.getElementById('page-session').classList.remove('session-empty');document.body.classList.remove('sess-landing');
   Session.activeId='test';Session.sessions=[{id:'test',date:'2026-09-26',name:'Test',type:'Test'}];Session.viewMode=false;Session.sessionDone=false;
@@ -113,10 +124,14 @@ const server=http.createServer((req,res)=>{
    const data=await Backup.collect();
    if(data.values.gymos_backup_probe!=='originale'||!data.photos.length)throw Error('Backup incomplete');
    data.values.gymos_backup_probe='da non sovrascrivere';data.values.gymos_restored_probe='recuperato';
+   data.checksum=await Backup.digest(data);
    await Backup.restore(data);
    if(localStorage.getItem('gymos_backup_probe')!=='originale'||localStorage.getItem('gymos_restored_probe')!=='recuperato')throw Error('Backup restore conflict');
    let rejected=false;try{Backup.validate({...data,values:{auth_token:'secret'}})}catch(_){rejected=true}
    if(!rejected)throw Error('Unsafe backup accepted');
+   const tampered={...data,values:{...data.values,gymos_restored_probe:'alterato'}};let integrityRejected=false;
+   try{await Backup.restore(tampered)}catch(_){integrityRejected=true}
+   if(!integrityRejected)throw Error('Tampered backup accepted');
  });
  console.log('PASS local backup includes photos, preserves existing data and rejects secrets');
  const unlabeled=await page.evaluate(()=>[...document.querySelectorAll('input,select,textarea')].filter(e=>e.type!=='hidden'&&!e.labels?.length&&!e.getAttribute('aria-label')&&!e.getAttribute('aria-labelledby')).length);

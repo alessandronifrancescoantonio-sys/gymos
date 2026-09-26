@@ -13,9 +13,9 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-<link rel="stylesheet" href="style.css?v=107">
-<link rel="stylesheet" href="quality.css?v=107">
-<link rel="stylesheet" href="apple-theme.css?v=107">
+<link rel="stylesheet" href="style.css?v=108">
+<link rel="stylesheet" href="quality.css?v=108">
+<link rel="stylesheet" href="apple-theme.css?v=108">
 </head>
 <body>
 
@@ -30,6 +30,9 @@
     </a></li>
     <li><a href="#" class="nav-link" data-page="session">
       <i class="ti ti-barbell"></i><span>Sessione</span>
+    </a></li>
+    <li><a href="#" class="nav-link" data-page="calendar">
+      <i class="ti ti-calendar-week"></i><span>Calendario</span>
     </a></li>
     <li><a href="#" class="nav-link" data-page="cardio">
       <i class="ti ti-run"></i><span>Cardio</span>
@@ -54,6 +57,7 @@
     </a></li>
   </ul>
   <div class="sidebar-footer">
+    <button type="button" onclick="SyncCenter.open()"><span data-sync-dot class="sync-dot"></span><span data-sync-label>Stato sincronizzazione</span></button>
     <button type="button" onclick="Backup.download()">Scarica backup locale</button>
     <button type="button" onclick="document.getElementById('backup-file').click()">Ripristina dati mancanti</button>
     <button type="button" onclick="AIClient.configure()">Collega coach AI</button>
@@ -80,6 +84,8 @@
     <!-- Riepilogo settimanale: banner iniettato qui da WeeklyReport.renderBanner() -->
     <div id="weekly-report-host"></div>
 
+    <div class="home-focus" id="home-focus"><div class="empty-state">Preparazione della giornata…</div></div>
+
     <div class="dash-grid">
       <!-- Semaforo recovery -->
       <div class="semaforo-card" id="semaforo-card">
@@ -88,16 +94,6 @@
           <div class="sem-title" id="sem-title">Recovery: Verde</div>
           <div class="sem-sub" id="sem-sub">Puoi spingere oggi</div>
         </div>
-      </div>
-
-      <!-- Scorciatoie -->
-      <div class="quick-links">
-        <button class="quick-link" onclick="App.navigate('body')">
-          <i class="ti ti-ruler-measure"></i><span>Misurazioni</span>
-        </button>
-        <button class="quick-link" onclick="App.navigate('diary')">
-          <i class="ti ti-notebook"></i><span>Diario</span>
-        </button>
       </div>
 
       <!-- Stat cards -->
@@ -143,12 +139,6 @@
         </div>
       </div>
 
-      <!-- Weekly split -->
-      <div class="card">
-        <div class="card-title"><i class="ti ti-calendar-week"></i>Split settimanale</div>
-        <div class="week-split" id="week-split"></div>
-      </div>
-
       <!-- Volume settimanale per muscolo (programma attivo) -->
       <div class="card" id="dash-volume"></div>
       <div class="card" id="dash-recovery"></div>
@@ -171,9 +161,6 @@
         </div>
       </div>
 
-      <!-- #H — Il punto di oggi (recap/consigli giornalieri) -->
-      <div class="card" id="daily-recap"></div>
-
       <!-- Chiedi al coach — Q&A scienza-based, memoria delle domande passate,
            ricerca Google reale. Zona fissa qui in Home + apribile anche dalla
            Sessione (FAB nell'header) mentre ti alleni, stessa memoria condivisa. -->
@@ -189,6 +176,15 @@
         </div>
       </div>
     </div>
+  </section>
+
+  <!-- ═══ CALENDARIO E PIANIFICAZIONE ═══ -->
+  <section class="page" id="page-calendar">
+    <div class="page-header"><div><div class="eyebrow">Pianificazione</div><h1 class="page-title">Calendario</h1><div class="page-meta">Organizza allenamenti, cardio, mobilità e recupero. Il confronto mostra ciò che avevi programmato rispetto a ciò che hai realmente registrato.</div></div></div>
+    <div class="calendar-toolbar"><button class="btn-secondary" type="button" onclick="Planning.shift(-1)"><i class="ti ti-chevron-left"></i></button><strong id="calendar-range"></strong><button class="btn-secondary" type="button" onclick="Planning.shift(1)"><i class="ti ti-chevron-right"></i></button></div>
+    <div class="calendar-comparison" id="calendar-comparison"></div>
+    <div class="calendar-week" id="calendar-week"></div>
+    <div class="card calendar-add-card"><div class="card-title"><i class="ti ti-calendar-plus"></i>Pianifica attività</div><div class="calendar-form"><input class="field-inp" id="calendar-name" placeholder="Es. Full Body 2" aria-label="Attività da pianificare"><input class="field-inp" id="calendar-date" type="date" aria-label="Data attività"><select class="select-dark" id="calendar-type" aria-label="Tipo attività"><option>Allenamento</option><option>Cardio</option><option>Mobilità</option><option>Recupero</option><option>Altro</option></select><button class="btn-primary" id="calendar-add" type="button" onclick="Planning.add()"><i class="ti ti-plus"></i>Aggiungi</button></div></div>
   </section>
 
   <!-- ═══ SESSIONE ═══ -->
@@ -580,17 +576,6 @@
       </div>
     </div>
 
-    <!-- Coach predittivo di fine mesociclo: proposta mensile basata sui TUOI dati
-         reali (non letteratura esterna, vedi ScienceUpdates sopra). Sta qui e non
-         in una pagina a parte perché agisce direttamente sulla scheda attiva —
-         approvarla scrive su Notion la STESSA scheda che stai gestendo in questa
-         pagina, quindi il contesto è più chiaro vicino all'editor schede. -->
-    <div class="card" id="predictive-card">
-      <div class="card-title"><i class="ti ti-brain"></i>Coach predittivo</div>
-      <div class="page-meta" style="margin:-6px 0 12px">Una volta al mese analizza gli ultimi 2 mesi dei tuoi allenamenti (carico, volume, dolore) e — solo se i dati lo giustificano — propone la sostituzione di UN esercizio nella scheda attiva. Decidi tu se applicarla.</div>
-      <div id="pred-list"></div>
-    </div>
-
     <div id="schede-list"></div>
   </section>
 
@@ -646,6 +631,8 @@
 <!-- TIMER RECUPERO (FAB + overlay) -->
 <dialog id="more-menu" class="more-menu">
   <h2>Altre sezioni</h2>
+  <button type="button" onclick="App.navigate('calendar');this.closest('dialog').close()">Calendario</button>
+  <button type="button" onclick="this.closest('dialog').close();SyncCenter.open()">Sincronizzazione</button>
   <button type="button" onclick="App.navigate('report');this.closest('dialog').close()">Report</button>
   <button type="button" onclick="App.navigate('science');this.closest('dialog').close()">Scienza</button>
   <button type="button" onclick="App.navigate('body');this.closest('dialog').close()">Misurazioni</button>
@@ -773,22 +760,27 @@
       <i class="ti ti-search"></i>
       <input id="archive-q" type="text" placeholder="Cerca per nome o mese (es. Full Body, Giugno)…" oninput="Dashboard.renderArchive()" aria-label="Cerca per nome o mese (es. Full Body, Giugno)…">
     </div>
+    <div class="archive-filters"><label>Dal <input id="archive-from" type="date" onchange="Dashboard.renderArchive()"></label><label>Al <input id="archive-to" type="date" onchange="Dashboard.renderArchive()"></label><select id="archive-sort" onchange="Dashboard.renderArchive()" aria-label="Ordine"><option value="new">Più recenti</option><option value="old">Più vecchie</option></select></div>
     <div class="archive-chips" id="archive-chips"></div>
+    <div class="archive-comparison" id="archive-comparison"><div class="empty-state">Seleziona due sessioni per confrontarle.</div></div>
     <div class="archive-list" id="archive-list"></div>
   </div>
 </div>
 
-<script src="exercise-guide-index.js?v=107"></script>
-<script src="config.js?v=107"></script>
-<script src="notes.js?v=107"></script>
-<script src="ai-client.js?v=107"></script>
-<script src="accessibility.js?v=107"></script>
-<script src="backup.js?v=107"></script>
-<script src="api.js?v=107"></script>
-<script src="session.js?v=107"></script>
-<script src="modules.js?v=107"></script>
-<script src="timers.js?v=107"></script>
-<script src="app.js?v=107"></script>
+<dialog class="sync-center" id="sync-center"><div class="sync-head"><div><div class="eyebrow">DATI E CONNESSIONI</div><h2>Sincronizzazione</h2></div><button class="archive-close" type="button" onclick="SyncCenter.close()" aria-label="Chiudi"><i class="ti ti-x"></i></button></div><div id="sync-details"></div><div class="form-actions"><button class="btn-secondary" type="button" onclick="SyncCenter.retry()"><i class="ti ti-refresh"></i>Ricontrolla</button></div></dialog>
+
+<script src="exercise-guide-index.js?v=108"></script>
+<script src="config.js?v=108"></script>
+<script src="notes.js?v=108"></script>
+<script src="ai-client.js?v=108"></script>
+<script src="accessibility.js?v=108"></script>
+<script src="backup.js?v=108"></script>
+<script src="sync-center.js?v=108"></script>
+<script src="api.js?v=108"></script>
+<script src="session.js?v=108"></script>
+<script src="modules.js?v=108"></script>
+<script src="timers.js?v=108"></script>
+<script src="app.js?v=108"></script>
 <script>
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(function(){});

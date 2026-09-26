@@ -7,36 +7,37 @@ const Dashboard = {
       new Date().toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" });
 
     try {
-      const [sessions, checkins, sleepData, habits, todayHabit] = await Promise.all([
+      const week = typeof Planning !== "undefined" ? Planning.bounds(new Date()) : null;
+      const [sessions, checkins, sleepData, habits, todayHabit, plannerTasks] = await Promise.all([
         API.getWorkoutSessions(14).catch(() => []),
         API.getBodyMetrics(12).catch(() => []),   // 12 (non 5): serve storia sufficiente per stimare da quanto si è nella fase attuale (diet-break)
         API.getRecentSleep(7).catch(() => []),
         API.getRecentHabits(7).catch(() => []),
         API.getTodayHabit().catch(() => null),
+        week ? API.getPlannerTasks(Planning.iso(week.start), Planning.iso(week.end)).catch(() => []) : Promise.resolve([]),
       ]);
 
-      this.buildStats(sessions, checkins, sleepData, habits, todayHabit);
-      this.buildWeekSplit(sessions);
+      this.buildStats(sessions, checkins, sleepData, habits, todayHabit, plannerTasks);
+      this.buildFocus(sessions, sleepData, plannerTasks);
       Volume.renderCard();
       Volume.loadActual(sessions);   // serie fatte davvero questa settimana (bg)
       if (typeof Recovery !== "undefined") Recovery.renderCard(sleepData, checkins, sessions);
       if (typeof JointLog !== "undefined") JointLog.renderCard();
       if (typeof PatternBalance !== "undefined") PatternBalance.renderCard();
       this.buildRecentSessions(sessions);
-      API.getTodayTasks().then(tasks => this.buildChecklist(tasks)).catch(() => {
+      this.buildChecklist(plannerTasks.filter(t => t.date === U.today()));
+      if (typeof Planning !== "undefined") Planning.state = { ...Planning.state, tasks: plannerTasks, sessions };
+      /* fallback only when the weekly endpoint is unavailable */
+      if (!plannerTasks.length) API.getTodayTasks().then(tasks => this.buildChecklist(tasks)).catch(() => {
         const host = document.getElementById("planner-list");
         if (host) host.textContent = "Planner non disponibile: riprova dalla Home.";
       });
       this.buildSemaforo(sleepData);
-      try { DailyRecap.render({ sessions, checkins, sleep: sleepData, habits, todayHabit }); } catch (e) { console.error("DailyRecap:", e); }
       try { Coach.renderAll(); } catch (e) { console.error("Coach.renderAll:", e); }
       // Riepilogo settimanale: silenzioso se non ci sono le condizioni (>=7gg
       // dall'ultimo report + >=1 seduta nella settimana appena chiusa), non
       // blocca il resto della dashboard se fallisce (rete, worker AI down).
       try { WeeklyReport.checkAndGenerate(); } catch (e) { console.error("WeeklyReport:", e); }
-      // Coach predittivo di fine mesociclo: stesso principio, silenzioso e
-      // non bloccante — gira al più una volta ogni ~4 settimane (vedi RUN_EVERY_DAYS).
-      try { PredictiveCoach.checkAndGenerate(); } catch (e) { console.error("PredictiveCoach:", e); }
     } catch(e) { console.error("Dashboard.load:", e); }
   },
 
@@ -51,7 +52,7 @@ const Dashboard = {
     el.style.strokeDashoffset = (C * (1 - f)).toFixed(2);
   },
 
-  buildStats(sessions, checkins, sleepData, habits, todayHabit) {
+  buildStats(sessions, checkins, sleepData, habits, todayHabit, plannerTasks = []) {
     const thisWeek = sessions.filter(s => {
       if (!s.date) return false;
       const d = new Date(s.date);
@@ -65,7 +66,8 @@ const Dashboard = {
     });
 
     // Denominatore = numero di sedute del programma attivo (obiettivo settimanale)
-    const target = Object.keys(CONFIG.SCHEDE || {}).length || thisWeek.length;
+    const plannedWorkouts = plannerTasks.filter(t => t.type === "Allenamento");
+    const target = plannedWorkouts.length || Object.keys(CONFIG.SCHEDE || {}).length || thisWeek.length;
     const done = thisWeek.filter(s => s.done).length;
     document.getElementById("d-sessions").textContent = done + "/" + target;
     document.getElementById("d-sessions-sub").textContent = done >= target && target > 0
@@ -103,6 +105,22 @@ const Dashboard = {
     } else {
       hEl.textContent = "—";
     }
+  },
+
+  buildFocus(sessions, sleepData, plannerTasks) {
+    const host = document.getElementById("home-focus");
+    if (!host) return;
+    const today = U.today();
+    const doneToday = sessions.find(s => s.date === today && s.done);
+    const planned = plannerTasks.find(t => t.date === today && t.type === "Allenamento" && !t.done);
+    const sleepAvg = sleepData.length ? sleepData.reduce((a, s) => a + (s.ore || 0), 0) / sleepData.length : null;
+    const title = doneToday ? "Allenamento di oggi completato" : planned ? planned.name : "Scegli l'allenamento di oggi";
+    const sub = doneToday ? `${doneToday.name} è nell'archivio.` : planned ? "È l'attività programmata per oggi." : "Non hai un allenamento pianificato: puoi iniziare liberamente o aggiungerlo al calendario.";
+    const caution = sleepAvg !== null && sleepAvg < 6.5 ? " Sonno medio basso: parti conservativo e rivaluta dopo il riscaldamento." : "";
+    host.innerHTML = `<div class="focus-copy"><span class="focus-kicker">OGGI</span><h2>${U.escape(title)}</h2><p>${U.escape(sub + caution)}</p></div><div class="focus-actions"><button class="btn-secondary" data-focus-calendar><i class="ti ti-calendar"></i>Pianifica</button>${doneToday ? '<button class="btn-primary" data-focus-archive><i class="ti ti-history"></i>Rivedi</button>' : '<button class="btn-primary" data-focus-start><i class="ti ti-player-play"></i>Inizia</button>'}</div>`;
+    host.querySelector("[data-focus-calendar]")?.addEventListener("click", () => App.navigate("calendar"));
+    host.querySelector("[data-focus-start]")?.addEventListener("click", () => Session.openNewFromHome());
+    host.querySelector("[data-focus-archive]")?.addEventListener("click", () => this.openArchive());
   },
 
   buildRecentSessions(sessions) {
@@ -160,19 +178,20 @@ const Dashboard = {
     const listEl = document.getElementById("archive-list");
     listEl.innerHTML = '<div class="empty-state">Caricamento…</div>';
     let all = [];
-    try { all = await API.getWorkoutSessions(100); } catch (e) { all = this._recentSessions || []; }
+    try { all = await API.getWorkoutSessions(300); } catch (e) { all = this._recentSessions || []; }
     this._archiveAll = all.filter(s => s.done);
     this._archiveFilter = "";
     const q = document.getElementById("archive-q");
     if (q) q.value = "";
+    ["archive-from", "archive-to"].forEach(id => { const el = document.getElementById(id); if (el) el.value = ""; });
+    this._archiveCompare = [];
     // chip per ogni scheda presente, in ordine di frequenza
     const counts = {};
     this._archiveAll.forEach(s => { const t = this._typeOf(s); counts[t] = (counts[t] || 0) + 1; });
     const types = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
     const chips = document.getElementById("archive-chips");
-    chips.innerHTML =
-      `<button class="arch-chip on" onclick="Dashboard.setArchiveFilter('', this)">Tutte</button>` +
-      types.map(t => `<button class="arch-chip" onclick="Dashboard.setArchiveFilter(this.dataset.t, this)" data-t="${this._esc(t)}">${this._esc(t)} <span>${counts[t]}</span></button>`).join("");
+    chips.innerHTML = `<button class="arch-chip on" data-t="">Tutte</button>` + types.map(t => `<button class="arch-chip" data-t="${this._esc(t)}">${this._esc(t)} <span>${counts[t]}</span></button>`).join("");
+    chips.querySelectorAll(".arch-chip").forEach(btn => btn.addEventListener("click", () => this.setArchiveFilter(btn.dataset.t, btn)));
     this.renderArchive();
   },
 
@@ -194,18 +213,44 @@ const Dashboard = {
       U.fmtDate(s.date).toLowerCase().includes(q) ||
       this._monthLabel(s.date).toLowerCase().includes(q) ||
       (s.date || "").includes(q));
-    items.sort((a, b) => new Date(b.date) - new Date(a.date));
+    const from = document.getElementById("archive-from")?.value || "";
+    const to = document.getElementById("archive-to")?.value || "";
+    if (from) items = items.filter(s => s.date >= from);
+    if (to) items = items.filter(s => s.date <= to);
+    const asc = document.getElementById("archive-sort")?.value === "old";
+    items.sort((a, b) => (new Date(b.date) - new Date(a.date)) * (asc ? -1 : 1));
     if (!items.length) { listEl.innerHTML = '<div class="empty-state">Nessuna sessione trovata.</div>'; return; }
     let html = "", curMonth = null;
     items.forEach(s => {
       const m = this._monthLabel(s.date);
       if (m !== curMonth) { curMonth = m; html += `<div class="arch-month">${m}</div>`; }
-      html += `<button class="recent-sess-item clickable arch-item" onclick="Dashboard.openArchived(${U.arg(s.id)})">
+      const selected = (this._archiveCompare || []).includes(s.id);
+      html += `<div class="arch-row"><button class="arch-compare${selected ? " on" : ""}" data-compare="${this._esc(s.id)}" aria-pressed="${selected}" title="Seleziona per confronto"><i class="ti ti-columns-2"></i></button><button class="recent-sess-item clickable arch-item" data-open="${this._esc(s.id)}">
         <div class="rs-icon"><i class="ti ti-barbell"></i></div>
         <div class="rs-main"><div class="rs-name">${this._esc(s.name)}</div><div class="rs-date">${U.fmtDate(s.date)}</div></div>
-        <i class="ti ti-chevron-right rs-go"></i></button>`;
+        <i class="ti ti-chevron-right rs-go"></i></button></div>`;
     });
     listEl.innerHTML = html;
+    listEl.querySelectorAll("[data-open]").forEach(btn => btn.addEventListener("click", () => this.openArchived(btn.dataset.open)));
+    listEl.querySelectorAll("[data-compare]").forEach(btn => btn.addEventListener("click", () => this.toggleArchiveCompare(btn.dataset.compare)));
+  },
+
+  async toggleArchiveCompare(id) {
+    this._archiveCompare = this._archiveCompare || [];
+    const i = this._archiveCompare.indexOf(id);
+    if (i >= 0) this._archiveCompare.splice(i, 1); else if (this._archiveCompare.length < 2) this._archiveCompare.push(id); else { U.toast("Puoi confrontare due sessioni alla volta", "info"); return; }
+    this.renderArchive();
+    const host = document.getElementById("archive-comparison");
+    if (!host) return;
+    if (this._archiveCompare.length < 2) { host.innerHTML = `<div class="empty-state">Seleziona ${2 - this._archiveCompare.length} sessione per confrontare volume, serie ed esercizi.</div>`; return; }
+    host.innerHTML = '<div class="empty-state">Confronto in preparazione…</div>';
+    const selected = this._archiveCompare.map(x => this._archiveAll.find(s => s.id === x));
+    try {
+      const rows = await Promise.all(selected.map(s => API.getSessionExercises(s.id)));
+      const stats = rows.map(r => ({ sets: r.length, volume: r.reduce((n, x) => n + (+x.kg || 0) * (+x.reps || 0), 0), exercises: new Set(r.map(x => U.exBase(x.name || x.exercise || ""))).size }));
+      const delta = stats[1].volume - stats[0].volume;
+      host.innerHTML = `<div class="compare-title">${U.escape(selected[0].name)} → ${U.escape(selected[1].name)}</div><div class="compare-grid"><div><b>${stats[0].sets}</b><span>serie prima</span></div><div><b>${stats[1].sets}</b><span>serie dopo</span></div><div><b>${delta >= 0 ? "+" : ""}${Math.round(delta)} kg</b><span>variazione volume</span></div><div><b>${stats[0].exercises} → ${stats[1].exercises}</b><span>esercizi</span></div></div>`;
+    } catch (_) { host.innerHTML = '<div class="empty-state">Confronto non disponibile. Riprova quando sei online.</div>'; }
   },
 
   openArchived(id) { this.closeArchive(); Session.openById(id); },
@@ -220,6 +265,7 @@ const Dashboard = {
     const startW = new Date(today);
     startW.setDate(today.getDate() - ((today.getDay() + 6) % 7) - 1);
     const wrap = document.getElementById("week-split");
+    if (!wrap) return;
     wrap.innerHTML = "";
 
     for (let i = 1; i <= 7; i++) {

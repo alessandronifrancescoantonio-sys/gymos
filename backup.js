@@ -8,7 +8,9 @@ const Backup = {
       const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error);reader.readAsDataURL(record.blob)});
       photos.push({...record,blob:undefined,data});
     }
-    return {format:'gymos-local-backup',version:1,createdAt:new Date().toISOString(),values,photos};
+    const payload={format:'gymos-local-backup',version:2,createdAt:new Date().toISOString(),values,photos};
+    payload.checksum=await this.digest(payload);
+    return payload;
   },
   async download() {
     try {
@@ -20,13 +22,21 @@ const Backup = {
     } catch (_) { U.toast('Backup non creato: controlla lo spazio e riprova', 'err'); }
   },
   validate(data) {
-    if(data?.format!=='gymos-local-backup'||data.version!==1||!data.values||typeof data.values!=='object'||Array.isArray(data.values)||!Array.isArray(data.photos))throw Error('Formato backup non valido');
+    if(data?.format!=='gymos-local-backup'||![1,2].includes(data.version)||!data.values||typeof data.values!=='object'||Array.isArray(data.values)||!Array.isArray(data.photos))throw Error('Formato backup non valido');
+    if(data.version===2&&(!data.checksum||typeof data.checksum!=='string'))throw Error('Backup senza controllo di integrità');
     if(Object.keys(data.values).length>20000||data.photos.length>2000)throw Error('Backup troppo grande');
     for(const [key,value]of Object.entries(data.values))if(!this.allowedKey(key)||typeof value!=='string')throw Error('Chiave del backup non ammessa');
     for(const p of data.photos)if(!p||typeof p.id!=='string'||!p.id||!['front','side','back'].includes(p.pose)||typeof p.date!=='string'||!/^\d{4}-\d{2}-\d{2}/.test(p.date)||typeof p.data!=='string'||!/^data:image\/(jpeg|png|webp);base64,[a-zA-Z0-9+/=]+$/.test(p.data))throw Error('Foto nel backup non valida');
   },
+  async digest(data) {
+    const clean={...data};delete clean.checksum;
+    const bytes=new TextEncoder().encode(JSON.stringify(clean));
+    const hash=await crypto.subtle.digest('SHA-256',bytes);
+    return Array.from(new Uint8Array(hash),b=>b.toString(16).padStart(2,'0')).join('');
+  },
   async restore(data) {
     this.validate(data);
+    if(data.version===2&&await this.digest(data)!==data.checksum)throw Error('Backup modificato o danneggiato');
     const db=await ProgressPhotos._open(),tx=db.transaction(ProgressPhotos.STORE,'readwrite');
     const inserted=[];let photoCount=0;
     try {

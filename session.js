@@ -525,12 +525,14 @@ const Session = {
     const tone = ["go", "hold", "warn"].includes(data.tone) ? data.tone : "go";
     const ic = tone === "warn" ? "ti-sparkles" : tone === "hold" ? "ti-sparkles" : "ti-sparkles";
     const confLbl = data.confidence === "bassa" ? " · poca certezza" : "";
+    const reason = data.reason ? this._escAI(data.reason) : "Consiglio basato sui dati disponibili in questa sessione e nello storico recente.";
+    const signals = Array.isArray(data.signals) ? data.signals.slice(0, 4).map(s => `<li>${this._escAI(s)}</li>`).join("") : "";
     el.dataset.ai = "1";                                   // IA ha scritto: la base a regole non la sovrascrive
     el.dataset.si = String(this._currentSetIndex(exName)); // …finché resto su questa stessa serie
     el.innerHTML = `
       <div class="ai-advice-box ai-${tone}">
         <i class="ti ${ic}"></i>
-        <div class="ai-txt"><span class="ai-lbl">IA${confLbl}</span><span class="ai-main">${this._escAI(data.advice)}</span></div>
+        <div class="ai-txt"><span class="ai-lbl">COACH · certezza ${this._escAI(data.confidence || "non disponibile")}${confLbl}</span><span class="ai-main">${this._escAI(data.advice)}</span><details class="ai-why"><summary>Perché questo consiglio</summary><p>${reason}</p>${signals ? `<ul>${signals}</ul>` : ""}</details></div>
       </div>`;
   },
   _escAI(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); },

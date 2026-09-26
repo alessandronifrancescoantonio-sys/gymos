@@ -15,6 +15,7 @@ const API = {
 
   // ─── BASE CALL ───
   async call(path, method = "GET", body = null) {
+    if (typeof SyncCenter !== "undefined") SyncCenter.start();
     // Timeout globale: senza AbortController una fetch appesa (rete che cade
     // a metà, worker che non risponde) bloccava per sempre i flussi a monte —
     // pagina sessione bloccata, bottone Salva su "Salvataggio…" senza uscita.
@@ -30,15 +31,18 @@ const API = {
     try {
       res = await fetch(`${CONFIG.WORKER_URL}${path}`, opts);
     } catch (e) {
+      if (typeof SyncCenter !== "undefined") SyncCenter.failure(e && e.message);
       this._netToast(e && e.name === "AbortError" ? "Il server non risponde — riprova" : "Nessuna connessione — riprova");
       throw e;
     } finally {
       clearTimeout(timer);
     }
     if (!res.ok) {
+      if (typeof SyncCenter !== "undefined") SyncCenter.failure(`Notion: errore ${res.status}`);
       this._netToast(`Errore server (${res.status})`);
       throw new Error(`Notion API error: ${res.status}`);
     }
+    if (typeof SyncCenter !== "undefined") SyncCenter.success();
     return res.json();
   },
 
@@ -345,10 +349,39 @@ const API = {
     return pages.map(p => ({
       id:   p.id,
       name: this.read.title(p, CONFIG.PROPS.WP_NAME),
+      date: this.read.date(p, CONFIG.PROPS.WP_DATE),
       type: this.read.select(p, CONFIG.PROPS.WP_TYPE),
       done: this.read.checkbox(p, CONFIG.PROPS.WP_DONE),
     }));
   },
+
+  // Planner completo per intervallo, usato dal calendario e dal confronto
+  // programmato/effettivo. Le date sono locali e inclusive.
+  async getPlannerTasks(start, end) {
+    const pages = await this.query(CONFIG.DB.WEEKLY_PLANNER, { and: [
+      { property: CONFIG.PROPS.WP_DATE, date: { on_or_after: start } },
+      { property: CONFIG.PROPS.WP_DATE, date: { on_or_before: end } },
+    ] }, [{ property: CONFIG.PROPS.WP_DATE, direction: "ascending" }], 300);
+    return pages.map(p => ({
+      id:p.id,
+      name:this.read.title(p, CONFIG.PROPS.WP_NAME),
+      date:this.read.date(p, CONFIG.PROPS.WP_DATE),
+      type:this.read.select(p, CONFIG.PROPS.WP_TYPE),
+      done:this.read.checkbox(p, CONFIG.PROPS.WP_DONE),
+    })).filter(t => t.date);
+  },
+
+  async createPlannerTask(data) {
+    const props = {};
+    props[CONFIG.PROPS.WP_NAME] = API.prop.title(data.name);
+    props[CONFIG.PROPS.WP_DATE] = API.prop.date(data.date);
+    props[CONFIG.PROPS.WP_TYPE] = API.prop.select(data.type || "Allenamento");
+    props[CONFIG.PROPS.WP_DONE] = API.prop.checkbox(Boolean(data.done));
+    const page = await this.create(CONFIG.DB.WEEKLY_PLANNER, props);
+    return { id:page.id, name:data.name, date:data.date, type:data.type || "Allenamento", done:Boolean(data.done) };
+  },
+
+  async deletePlannerTask(pageId) { return this.archivePage(pageId); },
 
   // Segna task come completato
   async completeTask(pageId, done = true) {
