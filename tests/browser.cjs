@@ -59,8 +59,8 @@ const server=http.createServer((req,res)=>{
  await page.screenshot({path:path.join(root,'test-results','session-320.png'),fullPage:true});
  await page.emulateMedia({colorScheme:'dark'});
  assert.equal(await page.evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--ink').trim()),'#070708');
- assert.equal(await page.evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--blue').trim()),'#ff6a00');
- assert.equal(await page.locator('.rr-in-sm').first().evaluate(el=>getComputedStyle(el).color),'rgb(255, 106, 0)');
+ assert.equal(await page.evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--blue').trim()),'#FF3B2F');
+ assert.equal(await page.locator('.rr-in-sm').first().evaluate(el=>getComputedStyle(el).color),'rgb(255, 59, 47)');
  await page.waitForTimeout(350);
  await page.screenshot({path:path.join(root,'test-results','session-320-dark.png'),fullPage:true});
  await page.emulateMedia({colorScheme:'light'});
