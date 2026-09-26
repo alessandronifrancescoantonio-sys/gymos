@@ -1,7 +1,7 @@
 /* GymOS — style.css (mobile-first responsive) */
 :root {
   --ink:#0D0D0F; --ink2:#161619; --ink3:#1F1F24; --ink4:#2A2A31;
-  --muted:#52525C; --dim:#7A7A8A; --ghost:#A0A0B0; --text:#EDEDF2; --text2:#C0C0CC;
+  --muted:#9898A5; --dim:#A3A3B2; --ghost:#B0B0C0; --text:#EDEDF2; --text2:#C0C0CC;
   --accent:#FF3B2F; --green:#27D17F; --amber:#F5A623; --blue:#3B82F6; --red:#EF4444;
   --purple:#A78BFA; --pink:#F472B6;
   --radius:12px; --radius-sm:8px; --radius-lg:16px; --bottombar-h:74px;

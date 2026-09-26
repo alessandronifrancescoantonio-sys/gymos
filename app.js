@@ -7,8 +7,11 @@ const App = {
   currentPage: "dashboard",
 
   async init() {
+    Accessibility.init();
     this.setupNav();
+    window.addEventListener("online", () => Notes.retry().catch(() => U.toast("Alcune note attendono ancora il salvataggio", "err")));
     await this.boot();
+    Notes.retry().catch(() => U.toast("Note conservate sul dispositivo: riproverò quando torna la connessione", "info"));
   },
 
   setupNav() {
@@ -162,6 +165,9 @@ function setConnStatus(ok) {
 
 // Utilities globali usate da tutti i moduli
 const U = {
+  escape: value => String(value ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c])),
+  arg: value => U.escape(JSON.stringify(String(value ?? ""))),
+  url: value => { try { const u = new URL(value); return u.protocol === "https:" ? U.escape(u.href) : "#"; } catch (_) { return "#"; } },
   fmt:  n => n == null ? "—" : (n % 1 === 0 ? "" + n : n.toFixed(1)),
   fmtV: v => v >= 1000 ? (v / 1000).toFixed(1) + "k kg" : Math.round(v) + " kg",
   vol:  (s, r, kg) => Math.round(s * r * (kg || 0)),
@@ -219,6 +225,7 @@ const U = {
       msgEl.textContent = opts.message || "";
       msgEl.style.display = opts.message ? "block" : "none";
       if (opts.input) {
+        inp.type = opts.type || "text";
         inp.style.display = "block";
         inp.value = opts.value || "";
         inp.placeholder = opts.placeholder || "";
@@ -231,6 +238,7 @@ const U = {
 
       const cleanup = () => {
         ov.style.display = "none";
+        inp.value = "";
         ok.onclick = cancel.onclick = ov.onclick = inp.onkeydown = null;
         ok.classList.remove("danger");
       };
@@ -242,7 +250,7 @@ const U = {
     });
   },
   confirm(message, opts = {}) { return this._modal({ message, title: opts.title, danger: opts.danger, okText: opts.okText || "Conferma" }); },
-  prompt(message, opts = {})  { return this._modal({ input: true, title: message, placeholder: opts.placeholder, value: opts.value, okText: opts.okText || "Aggiungi" }); },
+  prompt(message, opts = {})  { return this._modal({ input: true, type: opts.type, title: message, placeholder: opts.placeholder, value: opts.value, okText: opts.okText || "Aggiungi" }); },
   alert(message, opts = {})   { return this._modal({ message, title: opts.title, kind: "alert", okText: opts.okText || "Ok" }); },
 
   fmtDate(isoDate) {

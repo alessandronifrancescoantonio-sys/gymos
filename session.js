@@ -155,6 +155,15 @@ const Session = {
     this.viewMode = this._fromHistory;
     const sess = this.sessions.find(s => s.id === id);
     if (!sess) return;
+    const pendingNotes = Notes.pending(id);
+    if (pendingNotes?.note !== undefined) sess.note = pendingNotes.note;
+    let legacyNotes = {};
+    try { legacyNotes = JSON.parse(localStorage.getItem("gymos_exnote_" + id) || "{}"); } catch (_) {}
+    sess.exerciseNotes = { ...sess.exerciseNotes, ...legacyNotes, ...pendingNotes?.exercises };
+    if (Object.keys(legacyNotes).length) {
+      Notes.stage(id, { exercises: sess.exerciseNotes });
+      Notes.flush(id).then(() => localStorage.removeItem("gymos_exnote_" + id)).catch(() => this.setSyncState("error"));
+    }
     this.sessionDone = sess.done === true;   // sessione già salvata/completata
     // Ricorda l'allenamento in corso, così sopravvive a cambi pagina e reload
     if (!this.sessionDone && !this._fromHistory) localStorage.setItem("gymos_active", id);
@@ -212,7 +221,13 @@ const Session = {
     else                                      this.exOrder = keys;
 
     // Sessione precedente stesso tipo
-    const sameType = this.sessions.filter(s => s.id !== id && s.type === sess.type);
+    let sameType = this.sessions.filter(s => s.id !== id && s.type === sess.type && s.done && (s.date < sess.date || (s.date === sess.date && s.createdAt && s.createdAt < sess.createdAt)))
+      .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+    try {
+      const previous = await API.getPreviousWorkoutSession(sess);
+      sameType = previous ? [previous] : [];
+    } catch (_) { /* Cached recent sessions remain usable during a network fault. */ }
+    this._prevExerciseNotes = sameType[0]?.exerciseNotes || {};
     this.prevExercises = sameType.length > 0
       ? await API.getSessionExercises(sameType[0].id)
       : [];
@@ -298,9 +313,9 @@ const Session = {
     if (!pending.length) return hide();
     const esc = s => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const rows = pending.map(m => {
-      const arg = String(m).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+      const arg = String(m);
       const chips = Recovery.STATES.map(s =>
-        `<button class="rec-chip rc-${s.tone}" onclick="Session.setRecovery('${arg}','${s.id}')">
+        `<button class="rec-chip rc-${s.tone}" onclick="Session.setRecovery(${U.arg(arg)},${U.arg(s.id)})">
            <i class="ti ${s.ic}"></i>${esc(s.lbl)}
          </button>`).join("");
       return `<div class="rec-row"><span class="rec-mus">${esc(m)}</span><div class="rec-chips">${chips}</div></div>`;
@@ -457,7 +472,7 @@ const Session = {
         const ctrl = new AbortController();
         this._aiCtrls[exName] = ctrl;
         const timer = setTimeout(() => ctrl.abort(), 8000);
-        const res = await fetch(`${CONFIG.AI_WORKER_URL}/advice`, {
+        const res = await AIClient.fetch(`${CONFIG.AI_WORKER_URL}/advice`, {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload), signal: ctrl.signal,
         }).finally(() => { clearTimeout(timer); if (this._aiCtrls[exName] === ctrl) delete this._aiCtrls[exName]; });
@@ -520,23 +535,33 @@ const Session = {
   },
   _escAI(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); },
 
-  // #F — Note per singolo esercizio, per sessione, salvate ON-DEVICE
-  // (localStorage), come le foto progressi. Non toccano lo schema Notion.
+  // Exercise notes: immediate recovery copy, then persistent Notion session data.
   _exNoteKey() { return `gymos_exnote_${this.activeId || "none"}`; },
-  _exNoteMap() { try { return JSON.parse(localStorage.getItem(this._exNoteKey()) || "{}"); } catch (e) { return {}; } },
+  _exNoteMap() {
+    let legacy = {}; try { legacy = JSON.parse(localStorage.getItem(this._exNoteKey()) || "{}"); } catch (_) {}
+    const remote = this.sessions.find(s => s.id === this.activeId)?.exerciseNotes || {};
+    return { ...remote, ...legacy, ...Notes.pending(this.activeId)?.exercises };
+  },
   getExNote(exName) { return this._exNoteMap()[U.exBase(exName)] || ""; },
   // Un timer di debounce PER ESERCIZIO (non uno condiviso): col timer unico,
   // scrivere la nota di un esercizio e passare entro 400ms alla textarea di
   // un altro cancellava il salvataggio pendente del primo — nota persa.
   _exNoteTimers: {},
   setExNote(exName, text) {
+    if (this.viewMode || !this.activeId) return;
+    const id = this.activeId;
     const k = U.exBase(exName);
-    clearTimeout(this._exNoteTimers[k]);
-    this._exNoteTimers[k] = setTimeout(() => {
-      delete this._exNoteTimers[k];
-      const map = this._exNoteMap(), t = (text || "").trim();
-      if (t) map[k] = t; else delete map[k];
-      try { localStorage.setItem(this._exNoteKey(), JSON.stringify(map)); } catch (e) {}
+    try { Notes.stage(id, { exercises: { [k]: (text || "").trim() } }); }
+    catch (e) { this.setSyncState("error"); U.toast("Memoria piena: la nota non è stata salvata", "err"); return; }
+    const current = this.sessions.find(s => s.id === id);
+    if (current) current.exerciseNotes = { ...current.exerciseNotes, [k]: (text || "").trim() };
+    const timerKey = id + "|" + k;
+    clearTimeout(this._exNoteTimers[timerKey]);
+    this.setSyncState("saving");
+    this._exNoteTimers[timerKey] = setTimeout(async () => {
+      delete this._exNoteTimers[timerKey];
+      try { await Notes.flush(id); this.setSyncState("saved"); }
+      catch (_) { this.setSyncState("error"); }
     }, 400);
   },
 
@@ -614,26 +639,26 @@ const Session = {
           <span class="drag-handle" aria-label="Trascina"><i class="ti ti-grip-vertical"></i></span>
           <span class="ex-num">${exIdx + 1}</span>
           <div class="ex-hd-main">
-            <div class="ex-name">${exName}
-              <button type="button" class="ex-howto-btn" title="Come si esegue?" onclick="event.stopPropagation();ExerciseGuide.open('${exName.replace(/'/g, "\\'")}')"><i class="ti ti-help-circle"></i></button>
+            <div class="ex-name">${U.escape(exName)}
+              <button type="button" class="ex-howto-btn" title="Come si esegue?" onclick="event.stopPropagation();ExerciseGuide.open(${U.arg(exName)})"><i class="ti ti-help-circle"></i></button>
             </div>
             <div class="ex-sub">
               <span class="ex-target-inline">Target
                 <input class="rr-in-sm" type="number" value="${rrMin}" min="1" max="40"
                   onclick="event.stopPropagation()"
-                  oninput="Session.updateRR('${exName}','min',this.value)">–<input class="rr-in-sm" type="number" value="${rrMax}" min="1" max="40"
+                  oninput="Session.updateRR(${U.arg(exName)},'min',this.value)">–<input class="rr-in-sm" type="number" value="${rrMax}" min="1" max="40"
                   onclick="event.stopPropagation()"
-                  oninput="Session.updateRR('${exName}','max',this.value)"> rep
+                  oninput="Session.updateRR(${U.arg(exName)},'max',this.value)"> rep
               </span>
               <span class="ex-target-inline">· rec
                 <input class="rr-in-sm" type="number" value="${rest}" min="0" step="5" placeholder="90"
                   onclick="event.stopPropagation()"
-                  oninput="Session.updateRest('${exName}',this.value)"> s
+                  oninput="Session.updateRest(${U.arg(exName)},this.value)"> s
               </span>
               <span class="ex-target-inline">· RIR
                 <input class="rr-in-sm" type="number" value="${rir}" min="0" max="10" step="1" placeholder="2"
                   onclick="event.stopPropagation()"
-                  oninput="Session.updateRIR('${exName}',this.value)">
+                  oninput="Session.updateRIR(${U.arg(exName)},this.value)">
               </span>
               ${prevMax > 0 ? `<span>· max ${U.fmt(prevMax)} kg</span>` : ""}
             </div>
@@ -650,26 +675,27 @@ const Session = {
           ${(!this.viewMode && !this.sessionDone) ? this.warmupRampHTML(exName, prevMax) : ""}
           ${(!this.viewMode && !this.sessionDone) ? `<div class="ai-advice" id="ai-${sid}"></div>` : ""}
           ${this.prevNotesHTML(prevSets)}
+          ${this._prevExerciseNotes?.[exName] ? `<div class="prev-ex-note">Nota esercizio della volta scorsa: ${U.escape(this._prevExerciseNotes[exName])}</div>` : ""}
           <div id="sets-${sid}"></div>
           <div class="add-set-row">
-            <button class="add-set-btn" onclick="Session.addSet('${exName}')">
+            <button class="add-set-btn" onclick="Session.addSet(${U.arg(exName)})">
               <i class="ti ti-plus"></i> Aggiungi serie
             </button>
           </div>
           ${(() => {
-            // #F — nota per singolo esercizio (per QUESTA sessione, on-device).
+            // Current exercise note, retained for history and the next workout.
             const n = this.getExNote(exName);
             if (this.viewMode && !n) return "";                 // in sola-lettura mostra solo se c'è
             const esc = String(n).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
             return `<div class="ex-note-wrap">
               <i class="ti ti-note ex-note-ic"></i>
-              <textarea class="ex-note-in" rows="1" ${this.viewMode ? "readonly" : ""} placeholder="Nota su questo esercizio (solo oggi)…" oninput="Session.setExNote('${exName}', this.value)">${esc}</textarea>
+              <textarea class="ex-note-in" rows="2" aria-label="Nota esercizio" ${this.viewMode ? "readonly" : ""} placeholder="Nota esercizio: la ritroverai la prossima volta" oninput="Session.setExNote(${U.arg(exName)}, this.value)">${esc}</textarea>
             </div>`;
           })()}
           <div class="ex-tech${(ex.tecnica && ex.tecnica.length) || ex.gruppo ? " has-tech" : ""}" id="extech-${sid}">
             ${this.exTechInnerHTML(exName, ex)}
           </div>
-          <button class="del-ex-btn" onclick="Session.deleteExercise('${exName}')">
+          <button class="del-ex-btn" onclick="Session.deleteExercise(${U.arg(exName)})">
             <i class="ti ti-trash"></i> Rimuovi esercizio dalla scheda
           </button>
         </div>
@@ -716,14 +742,14 @@ const Session = {
   exTechInnerHTML(exName, ex) {
     const partners = this.supersetPartners(exName);
     const sup = ex.gruppo
-      ? `<span class="ex-tech-sup"><i class="ti ti-link"></i>Superset${partners.length ? " con " + partners.join(", ") : ""}</span>`
+      ? `<span class="ex-tech-sup"><i class="ti ti-link"></i>Superset${partners.length ? " con " + U.escape(partners.join(", ")) : ""}</span>`
       : "";
-    const tecLbl = (ex.tecnica && ex.tecnica.length) ? `<span>${ex.tecnica.join(", ")}</span>` : "";
+    const tecLbl = (ex.tecnica && ex.tecnica.length) ? `<span>${U.escape(ex.tecnica.join(", "))}</span>` : "";
     const summary = (sup || tecLbl)
       ? `<span class="ex-tech-summary">${sup}${tecLbl}</span>`
       : `<span class="ex-tech-summary muted">imposta…</span>`;
     return `
-      <button type="button" class="ex-tech-toggle" onclick="Session.toggleTechBox('${exName}', this)">
+      <button type="button" class="ex-tech-toggle" onclick="Session.toggleTechBox(${U.arg(exName)}, this)">
         <i class="ti ti-bolt"></i><span class="ex-tech-label">Tecnica di intensità</span>
         ${summary}
         <i class="ti ti-chevron-down ex-tech-chev"></i>
@@ -736,7 +762,7 @@ const Session = {
     const chips = CONFIG.TECNICHE.map(t => {
       const on = active.includes(t.name);
       return `<button type="button" class="tech-chip${on ? " on" : ""}" style="${on ? `--tc:${t.color}` : ""}"
-        onclick="event.stopPropagation();Session.setExTec('${exName}','${t.name}')">${t.name}</button>`;
+        onclick="event.stopPropagation();Session.setExTec(${U.arg(exName)},${U.arg(t.name)})">${t.name}</button>`;
     }).join("");
     const grouped = this.groupByExercise(this.exercises);
     const others  = Object.keys(grouped).filter(n => n !== exName);
@@ -746,7 +772,7 @@ const Session = {
       const other = og && og !== ex.gruppo;   // già in un altro superset
       return `<label class="tg-ex${other ? " off" : ""}${same ? " on" : ""}">
         <input type="checkbox" ${same ? "checked" : ""} ${other ? "disabled" : ""}
-          onchange="event.stopPropagation();Session.correlate('${exName}','${n}',this.checked)"><span>${n}</span></label>`;
+          onchange="event.stopPropagation();Session.correlate(${U.arg(exName)},${U.arg(n)},this.checked)"><span>${U.escape(n)}</span></label>`;
     }).join("");
     return `
       <div class="ex-tech-box" onclick="event.stopPropagation()">
@@ -754,12 +780,12 @@ const Session = {
         <div class="tech-chips">${chips}</div>
         <div class="tech-fields">
           <label class="tech-field"><span>Cadenza</span>
-            <input class="tech-in" type="text" placeholder="3-1-1" value="${ex.cadenza || ""}"
-              onchange="Session.setExField('${exName}','cadenza',this.value)"></label>
+            <input class="tech-in" type="text" aria-label="Cadenza" placeholder="3-1-1" value="${U.escape(ex.cadenza || "")}"
+              onchange="Session.setExField(${U.arg(exName)},'cadenza',this.value)"></label>
         </div>
         <div class="tg-lbl">Info tecnica</div>
         <textarea class="tech-in tg-info" rows="2" placeholder="Es. drop al 70%, 2 cali; eccentrica 3s..."
-          onchange="Session.setExField('${exName}','info',this.value)">${ex.info || ""}</textarea>
+          onchange="Session.setExField(${U.arg(exName)},'info',this.value)">${U.escape(ex.info || "")}</textarea>
         <div class="tg-lbl">Superset — raggruppa con</div>
         <div class="tg-exs">${corr || '<span class="tech-empty">Nessun altro esercizio</span>'}</div>
       </div>`;
@@ -1842,16 +1868,16 @@ const Session = {
         JointLog.touch(U.exBase(exName), b.sub && b.sub.name, this._sessionDate(), null);
     } catch (e) {}
     const esc = s => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    const arg = String(exName).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+    const arg = String(exName);
     const sub = b.sub;
     const body = sub
       ? `<span class="jw-sub">Ti propongo <b>${esc(sub.name)}</b>: stesso muscolo, ma movimento e attrezzo diversi — meno stress su quell'articolazione.</span>
          <div class="jw-actions">
-           <button class="jw-btn jw-ok" onclick="Session.applyJointSub('${arg}')"><i class="ti ti-refresh"></i> Sostituisci con ${esc(sub.name)}</button>
-           <button class="jw-btn jw-no" onclick="Session.keepDespitePain('${arg}')">Tieni comunque</button>
+           <button class="jw-btn jw-ok" onclick="Session.applyJointSub(${U.arg(arg)})"><i class="ti ti-refresh"></i> Sostituisci con ${esc(sub.name)}</button>
+           <button class="jw-btn jw-no" onclick="Session.keepDespitePain(${U.arg(arg)})">Tieni comunque</button>
          </div>`
       : `<span class="jw-sub">Tra gli esercizi che conosci non trovo un sostituto davvero più gentile: valuta di cambiarlo. Se il dolore continua, sentine un professionista.</span>
-         <div class="jw-actions"><button class="jw-btn jw-no" onclick="Session.keepDespitePain('${arg}')">Ho capito</button></div>`;
+         <div class="jw-actions"><button class="jw-btn jw-no" onclick="Session.keepDespitePain(${U.arg(arg)})">Ho capito</button></div>`;
     return `
       <div class="joint-warn">
         <i class="ti ti-alert-hexagon"></i>
@@ -2190,7 +2216,7 @@ const Session = {
     // Riga "volta scorsa" dedicata: etichetta chiara + valore + pulsante "Usa"
     const prevTag  = canTap ? "button" : "div";
     const prevRow  = hasPrev
-      ? `<${prevTag} class="prev-use${canTap ? " tap" : ""}"${canTap ? ` type="button" onclick="Session.prefillFromPrev('${set.id}','${exName}')"` : ""}>
+      ? `<${prevTag} class="prev-use${canTap ? " tap" : ""}"${canTap ? ` type="button" onclick="Session.prefillFromPrev(${U.arg(set.id)},${U.arg(exName)})"` : ""}>
            <i class="ti ti-history pu-ic"></i>
            <span class="pu-txt">
              <span class="pu-lbl">Volta scorsa</span>
@@ -2205,7 +2231,7 @@ const Session = {
     const repCls = set.reps > 0 ? "stepper-val" : "stepper-val empty";
 
     row.innerHTML = `
-      <div class="set-hd" onclick="Session.toggleSet('${set.id}','${exName}')">
+      <div class="set-hd" onclick="Session.toggleSet(${U.arg(set.id)},${U.arg(exName)})">
         <span class="set-num">${si + 1}</span>
         <div class="set-hd-sum${set.reps > 0 ? "" : " empty"}" id="sumwrap-${set.id}">
           <span class="ssum" id="ssum-kg-${set.id}">${U.fmt(set.kg)}</span><span class="ssum-u">kg</span>
@@ -2220,29 +2246,29 @@ const Session = {
       <div class="set-body">
         <div class="set-body-top">
           <span class="set-counter">Serie ${si + 1}/${total || 1}</span>
-          <button class="rm-set-btn" onclick="Session.removeSet('${set.id}','${exName}')" aria-label="Rimuovi serie">
+          <button class="rm-set-btn" onclick="Session.removeSet(${U.arg(set.id)},${U.arg(exName)})" aria-label="Rimuovi serie">
             <i class="ti ti-x"></i>
           </button>
         </div>
         ${prevRow}
         <div class="stepper-row">
           <span class="stepper-lbl">Kg</span>
-          <button class="adj" data-id="${set.id}" data-f="k" data-d="-2.5" data-ex="${exName}">−</button>
+          <button class="adj" data-id="${set.id}" data-f="k" data-d="-2.5" data-ex="${U.escape(exName)}">−</button>
           <span class="${repCls}" id="kg-${set.id}" title="Tocca per inserire il valore"
-            onclick="Session.editVal('${set.id}','k','${exName}')">${U.fmt(set.kg)}</span>
-          <button class="adj" data-id="${set.id}" data-f="k" data-d="2.5" data-ex="${exName}">+</button>
+            onclick="Session.editVal(${U.arg(set.id)},'k',${U.arg(exName)})">${U.fmt(set.kg)}</span>
+          <button class="adj" data-id="${set.id}" data-f="k" data-d="2.5" data-ex="${U.escape(exName)}">+</button>
         </div>
         <div class="stepper-row">
           <span class="stepper-lbl">Rep</span>
-          <button class="adj" data-id="${set.id}" data-f="r" data-d="-1" data-ex="${exName}">−</button>
+          <button class="adj" data-id="${set.id}" data-f="r" data-d="-1" data-ex="${U.escape(exName)}">−</button>
           <span class="${repCls}" id="rep-${set.id}" title="Tocca per inserire il valore"
-            onclick="Session.editVal('${set.id}','r','${exName}')">${set.reps > 0 ? set.reps : "0"}</span>
-          <button class="adj" data-id="${set.id}" data-f="r" data-d="1" data-ex="${exName}">+</button>
+            onclick="Session.editVal(${U.arg(set.id)},'r',${U.arg(exName)})">${set.reps > 0 ? set.reps : "0"}</span>
+          <button class="adj" data-id="${set.id}" data-f="r" data-d="1" data-ex="${U.escape(exName)}">+</button>
         </div>
-        <input class="note-inp" type="text" value="${set.note || ""}"
+        <input class="note-inp" type="text" aria-label="Nota della serie" value="${U.escape(set.note || "")}"
           placeholder="Note: forma, sensazione..."
-          onchange="Session.saveNote('${set.id}',this.value)">
-        <button class="set-done-btn" onclick="Session.completeSet('${set.id}','${exName}')">
+          onchange="Session.saveNote(${U.arg(set.id)},this.value)">
+        <button class="set-done-btn" onclick="Session.completeSet(${U.arg(set.id)},${U.arg(exName)})">
           ${done ? '<i class="ti ti-rotate-2"></i> Annulla' : '<i class="ti ti-check"></i> Serie fatta'}
         </button>
       </div>
@@ -2696,34 +2722,6 @@ const Session = {
   },
 
   // Semina i record dallo storico Notion, una volta per esercizio (in background).
-  async prSeedBg(exNames) {
-    let seeded;
-    try { seeded = new Set(JSON.parse(localStorage.getItem("gymos_pr_seeded") || "[]")); }
-    catch(e) { seeded = new Set(); }
-    const todo = (exNames || []).filter(n => n && !seeded.has(n));
-    if (!todo.length) return;
-    const s = this.prLoadStore();
-    for (const ex of todo) {
-      try {
-        const hist = await API.getExerciseHistory(ex);
-        const rec  = s[ex] || { w: 0, e1rm: 0, repsAt: {} };
-        if (!rec.repsAt) rec.repsAt = {};
-        hist.forEach(h => {
-          if ((h.reps || 0) <= 0) return;
-          rec.w    = Math.max(rec.w || 0, h.kg || 0);
-          rec.e1rm = Math.max(rec.e1rm || 0, this.e1rm(h.kg || 0, h.reps));
-          const k = String(h.kg || 0);
-          if ((h.kg || 0) > 0) rec.repsAt[k] = Math.max(rec.repsAt[k] || 0, h.reps);
-        });
-        s[ex] = rec;
-        seeded.add(ex);
-      } catch(e) { /* offline: riproverà alla prossima apertura */ }
-    }
-    this.prSaveStore();
-    try { localStorage.setItem("gymos_pr_seeded", JSON.stringify([...seeded])); } catch(e){}
-    this.refreshBadges();   // ora che i record sono noti, aggiorna i badge PR
-  },
-
   savePrSets() {
     if (this.activeId) try { localStorage.setItem(`gymos_pr_${this.activeId}`, JSON.stringify([...this._prSets])); } catch(e){}
   },
@@ -3246,11 +3244,12 @@ const Session = {
     const id = this.activeId;
     const sess = this.sessions.find(s => s.id === id);
     if (sess) sess.note = val;   // aggiorna in memoria (così ricompare come "scorsa volta")
+    try { Notes.stage(id, { note: val || "" }); } catch (_) { this.setSyncState("error"); return; }
     clearTimeout(this._saveTimers["sessnote"]);
     this._saveTimers["sessnote"] = setTimeout(async () => {
       this.setSyncState("saving");
       try {
-        await API.update(id, { [CONFIG.PROPS.WL_NOTE]: API.prop.rich_text(val || "") });
+        await Notes.flush(id);
         this.setSyncState("saved");
       } catch(e) { console.error("saveSessionNote:", e); this.setSyncState("error"); }
     }, 800);
@@ -3345,6 +3344,10 @@ const Session = {
     const btns = [...document.querySelectorAll(".sess-save-desktop, .bn-save")];
     btns.forEach(b => { b.disabled = true; b.innerHTML = '<i class="ti ti-loader"></i> Salvataggio…'; });
     try {
+      if (this.activeId) {
+        Notes.stage(this.activeId, { exercises: this._exNoteMap() });
+        await Notes.flush(this.activeId);
+      }
       const updates = this.exercises
         .filter(s => s.reps > 0)
         .map(s => API.updateExerciseEntry(s.id, s.sets || 1, s.reps, s.kg, s.note));
@@ -3393,7 +3396,7 @@ const Session = {
     }
   },
 
-  sanitize: str => str.replace(/[^a-z0-9]/gi, "_").toLowerCase(),
+  sanitize: str => Array.from(String(str)).map(c => c.codePointAt(0).toString(16)).join("-"),
 };
 
 function switchSession(id) { Session.loadSession(id); }
@@ -3584,7 +3587,7 @@ Session._doCreateSession = async function(name) {
     // Niente re-fetch delle ultime 20 sessioni da Notion: la sappiamo già
     // per intero (l'abbiamo appena creata noi) — un round-trip in meno prima
     // di poter allenarsi. Stessa forma esatta di API.getWorkoutSessions().
-    Session.sessions.unshift({ id: sessId, name, date: today, type: name, done: false, split: "Full Body", note: "" });
+    Session.sessions.unshift({ id: sessId, name, date: today, createdAt: newSess.created_time || new Date().toISOString(), type: name, done: false, split: "Full Body", note: "" });
     Session.buildSelect();
     const sel = document.getElementById("sess-select");
     if (sel) sel.value = sessId;

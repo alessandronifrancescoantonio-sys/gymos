@@ -1,3 +1,4 @@
+// Generated from features/*.js by npm run build. Edit feature sources.
 // ═══════════════════════════════════════════════
 //  GymOS — progression.js
 // ═══════════════════════════════════════════════
@@ -63,7 +64,7 @@ const Progression = {
     } catch(e) { console.error("Progression.loadHistory:", e); }
   },
 
-  _esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); },
+  _esc(s) { return U.escape(s); },
 
   // Raggruppa le righe (una per serie) in SESSIONI, con tutte le serie ordinate,
   // scartando quelle vuote (rep 0). Calcola top set, volume e record (PR).
@@ -264,6 +265,7 @@ const Progression = {
 // ═══════════════════════════════════════════════
 //  GymOS — body.js
 // ═══════════════════════════════════════════════
+
 const Body = {
   checkins:     [],
   activeMisura: CONFIG.MISURE[0].key,
@@ -359,7 +361,7 @@ const Body = {
     const l  = this.last();
     const fc = this.FASE_COLORS[l.fase] || this.FASE_COLORS["Mant."];
     document.getElementById("fase-badge-hd").innerHTML =
-      `<span class="fase-badge" style="background:${fc.bg};border-color:${fc.border};color:${fc.text}">${l.fase || "—"}</span>`;
+      `<span class="fase-badge" style="background:${fc.bg};border-color:${fc.border};color:${fc.text}">${U.escape(l.fase || "—")}</span>`;
 
     const dp = this.delta("peso");
     const strip = document.getElementById("body-stats");
@@ -392,7 +394,7 @@ const Body = {
         <div class="tt-date">${U.fmtDate(c.date)}</div>
         <div class="tt-main" style="color:#FF3B2F">${U.fmt(c.peso)} kg</div>
         ${dp != null ? `<div class="tt-sub" style="color:${dp < 0 ? "var(--green)" : "var(--red)"}">${dp > 0 ? "+" : ""}${U.fmt(dp)} vs prec.</div>` : ""}
-        ${c.note ? `<div class="tt-note">${c.note}</div>` : ""}
+        ${c.note ? `<div class="tt-note">${U.escape(c.note)}</div>` : ""}
       `;
     }, ".card");
     opts.scales.y.min = minD - pad;
@@ -490,7 +492,7 @@ const Body = {
       const prev = i > 0 ? this.checkins[i - 1] : null;
       const dp   = prev ? Math.round((c.peso - prev.peso) * 10) / 10 : null;
       const fc   = this.FASE_COLORS[c.fase] || this.FASE_COLORS["Mant."];
-      const faseBadge = `<span class="fase-badge" style="background:${fc.bg};color:${fc.text};border-color:${fc.border}">${c.fase || "—"}</span>`;
+      const faseBadge = `<span class="fase-badge" style="background:${fc.bg};color:${fc.text};border-color:${fc.border}">${U.escape(c.fase || "—")}</span>`;
       const dpHTML    = dp != null ? U.deltaHTML(dp, true) : "—";
       const tr = document.createElement("tr");
       tr.innerHTML = `
@@ -499,7 +501,7 @@ const Body = {
         <td class="mono">${U.fmt(c.vita)} cm</td><td class="mono">${U.fmt(c.petto)} cm</td>
         <td class="mono">${U.fmt(c.coscia)} cm</td><td class="mono">${U.fmt(c.braccio)} cm</td>
         <td class="mono">${U.fmt(c.bf)}%</td>
-        <td class="note-text">${c.note || "—"}</td>
+        <td class="note-text">${U.escape(c.note || "—")}</td>
       `;
       tbody.appendChild(tr);
     });
@@ -576,6 +578,7 @@ function addCheckin() { Body.addCheckin(); }
 //  (Schoenfeld et al.). Si riferisce SEMPRE al programma attivo (CONFIG.SCHEDE):
 //  se cambi programma, cambia tutto.
 // ═══════════════════════════════════════════════
+
 const Volume = {
   MUSCLES: ["Petto", "Dorso", "Spalle", "Bicipiti", "Tricipiti", "Quadricipiti", "Femorali", "Glutei", "Polpacci", "Adduttori", "Addome", "Avambracci"],
   MEV: 10, MAV_HI: 20,   // zona ottimale (MAV): 10–20 serie/settimana
@@ -1088,7 +1091,7 @@ const Volume = {
     if (sec.length) info.push("+ " + sec.join(", ") + " (½)");
     if (primary === "—") info.push("da assegnare");
     else if (isAuto) info.push("auto");
-    const exAttr = ex.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/"/g, "&quot;");
+    const exAttr = ex;
     const opts = ["—", ...this.MUSCLES];
     return `
       <div class="vol-ex">
@@ -1096,13 +1099,13 @@ const Volume = {
           <span class="vol-ex-name">${this._esc(ex)}</span>
           <span class="vol-ex-sec">${info.join(" · ")}</span>
         </div>
-        <select class="vol-ex-sel" onchange="Volume.setPrimary('${exAttr}', this.value)">
+        <select class="vol-ex-sel" onchange="Volume.setPrimary(${U.arg(exAttr)}, this.value)">
           ${opts.map(o => `<option value="${o}"${o === primary ? " selected" : ""}>${o === "—" ? "Automatico" : o}</option>`).join("")}
         </select>
       </div>`;
   },
 
-  _esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); },
+  _esc(s) { return U.escape(s); },
 };
 
 // ═══════════════════════════════════════════════
@@ -1111,6 +1114,7 @@ const Volume = {
 //  lato/schiena, galleria per data, confronto prima/dopo. Immagini ridotte a
 //  max 1280px per risparmiare spazio.
 // ═══════════════════════════════════════════════
+
 const ProgressPhotos = {
   DBN: "gymos-photos", STORE: "photos", _db: null,
   POSE: { front: "Fronte", side: "Lato", back: "Schiena" },
@@ -1123,7 +1127,7 @@ const ProgressPhotos = {
   _open() {
     if (this._db) return Promise.resolve(this._db);
     if (!this._openPromise) {
-      this._openPromise = import("https://cdn.jsdelivr.net/npm/idb@8/+esm")
+      this._openPromise = import("./vendor/idb.js")
         .then(({ openDB }) => openDB(this.DBN, 1, {
           upgrade: db => { if (!db.objectStoreNames.contains(this.STORE)) db.createObjectStore(this.STORE, { keyPath: "id" }); },
         }))
@@ -1270,7 +1274,7 @@ const ProgressPhotos = {
     this._revoke();
     const all = (await this._all().catch(() => [])).sort((a, b) => this._ts(b) - this._ts(a));
     const poses = [["all", "Tutte"], ["front", "Fronte"], ["side", "Lato"], ["back", "Schiena"]];
-    tabsEl.innerHTML = poses.map(([k, l]) => `<button class="ph-chip${this._filter === k ? " on" : ""}" onclick="ProgressPhotos.setFilter('${k}')">${l}</button>`).join("")
+    tabsEl.innerHTML = poses.map(([k, l]) => `<button class="ph-chip${this._filter === k ? " on" : ""}" onclick="ProgressPhotos.setFilter(${U.arg(k)})">${l}</button>`).join("")
       + `<button class="ph-chip ph-cmp${this._compare ? " on" : ""}" onclick="ProgressPhotos.toggleCompare()"><i class="ti ti-arrows-diff"></i> Confronta</button>`;
     const list = this._filter === "all" ? all : all.filter(x => x.pose === this._filter);
     if (this._compare) { gal.innerHTML = this._compareHTML(list); return; }
@@ -1281,7 +1285,7 @@ const ProgressPhotos = {
       <div class="ph-day">
         <div class="ph-day-h">${U.fmtDate(d)}</div>
         <div class="ph-grid">${groups[d].map(r => `
-          <button class="ph-cell" onclick="ProgressPhotos.view('${r.id}')">
+          <button class="ph-cell" onclick="ProgressPhotos.view(${U.arg(r.id)})">
             <img src="${this._url(r.blob)}" alt="" loading="lazy">
             <span class="ph-cell-pose">${this.POSE[r.pose]}</span>
             ${r.weight ? `<span class="ph-cell-w">${this._fmtW(r.weight)}</span>` : ""}
@@ -1319,7 +1323,7 @@ const ProgressPhotos = {
         <span>${U.fmtDate(this._day(r))} · ${this.POSE[r.pose]}${r.weight ? ` · ${this._fmtW(r.weight)}` : ""}</span>
         <div class="ph-vbtns">
           <a class="ph-vbtn" href="${url}" download="gymos-${r.pose}-${r.date.split("T")[0]}.jpg" title="Scarica"><i class="ti ti-download"></i></a>
-          <button class="ph-vbtn" onclick="ProgressPhotos.del('${r.id}', this)" title="Elimina"><i class="ti ti-trash"></i></button>
+          <button class="ph-vbtn" onclick="ProgressPhotos.del(${U.arg(r.id)}, this)" title="Elimina"><i class="ti ti-trash"></i></button>
           <button class="ph-vbtn" onclick="ProgressPhotos.closeViewer()" title="Chiudi"><i class="ti ti-x"></i></button>
         </div>
       </div>
@@ -1357,6 +1361,7 @@ const ProgressPhotos = {
 //  una sensazione grossolana, e nessuno la compila davvero ogni volta.
 //  Salvato ON-DEVICE (come foto e note esercizio): nessun cambio di schema Notion.
 // ═══════════════════════════════════════════════════════════════════════════
+
 const Recovery = {
   KEY: "gymos_recovery",
   STATES: [
@@ -1389,7 +1394,7 @@ const Recovery = {
     return days <= this.STALE_DAYS ? { ...l, days } : null;
   },
   stateOf(id) { return this.STATES.find(s => s.id === id) || null; },
-  _esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); },
+  _esc(s) { return U.escape(s); },
 
   // ═══ MAPPA DI RECUPERO (semaforo per muscolo) ═════════════════════════════
   // Rosso  = arrivi ancora indolenzito, OPPURE sei già al tetto MRV stimato
@@ -1569,13 +1574,14 @@ const Recovery = {
 //  Onestà: questo è un DIARIO, non una diagnosi. Se un esercizio non ti dà più
 //  fastidio, "Dimentica" lo toglie e ricomincia da zero.
 // ═══════════════════════════════════════════════════════════════════════════
+
 const JointLog = {
   KEY: "gymos_joint_log",
   KEEP: "gymos_joint_keep",
   _load() { try { return JSON.parse(localStorage.getItem(this.KEY) || "{}"); } catch (e) { return {}; } },
   _save(m) { try { localStorage.setItem(this.KEY, JSON.stringify(m)); } catch (e) {} },
   _keep() { try { return JSON.parse(localStorage.getItem(this.KEEP) || "{}"); } catch (e) { return {}; } },
-  _esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); },
+  _esc(s) { return U.escape(s); },
 
   // Chiamato dalla sessione quando l'avviso scatta / l'utente decide.
   touch(exName, subName, date, action) {
@@ -1609,7 +1615,7 @@ const JointLog = {
     wrap.style.display = "";
     const fmtD = d => { try { return new Date(d).toLocaleDateString("it-IT", { day: "numeric", month: "short" }); } catch (e) { return d || "—"; } };
     const rows = list.map(e => {
-      const arg = String(e.name).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+      const arg = String(e.name);
       const stato = e.action === "sub"
         ? `<span class="jl-tag jl-sub"><i class="ti ti-refresh"></i>Sostituito con ${this._esc(e.sub || "—")}</span>`
         : e.action === "keep"
@@ -1621,7 +1627,7 @@ const JointLog = {
         <div class="jl-row">
           <div class="jl-head">
             <span class="jl-name">${this._esc(e.name)}</span>
-            <button class="jl-forget" onclick="JointLog.forget('${arg}')" title="Non mi dà più fastidio">
+            <button class="jl-forget" onclick="JointLog.forget(${U.arg(arg)})" title="Non mi dà più fastidio">
               <i class="ti ti-x"></i>
             </button>
           </div>
@@ -1652,6 +1658,7 @@ const JointLog = {
 //  logica di buon senso di programmazione che l'app applica già altrove
 //  (es. Volume.MEV/MAV per il volume). Soglie conservative, avviso neutro.
 // ═══════════════════════════════════════════════════════════════════════════
+
 const PatternBalance = {
   // Coppie di pattern OPPOSTI da controllare, con la spiegazione se manca il
   // "lato B" e cosa suggerire. missingMsg/lowMsg sono la parte centrale della
@@ -1668,7 +1675,7 @@ const PatternBalance = {
   // del lato A. 0.5 = il lato scarso ha meno della metà delle serie dell'altro.
   LOW_RATIO: 0.5,
 
-  _esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); },
+  _esc(s) { return U.escape(s); },
 
   // Serie DIRETTE per pattern, dagli esercizi della scheda ATTIVA (stessa fonte
   // di Volume.compute(): CONFIG.SCHEDE). Ogni esercizio conta per intero nel
@@ -1725,6 +1732,7 @@ const PatternBalance = {
   },
 };
 
+
 const Dashboard = {
   async load() {
     const hour = new Date().getHours();
@@ -1750,6 +1758,10 @@ const Dashboard = {
       if (typeof JointLog !== "undefined") JointLog.renderCard();
       if (typeof PatternBalance !== "undefined") PatternBalance.renderCard();
       this.buildRecentSessions(sessions);
+      API.getTodayTasks().then(tasks => this.buildChecklist(tasks)).catch(() => {
+        const host = document.getElementById("planner-list");
+        if (host) host.textContent = "Planner non disponibile: riprova dalla Home.";
+      });
       this.buildSemaforo(sleepData);
       try { DailyRecap.render({ sessions, checkins, sleep: sleepData, habits, todayHabit }); } catch (e) { console.error("DailyRecap:", e); }
       try { Coach.renderAll(); } catch (e) { console.error("Coach.renderAll:", e); }
@@ -1846,7 +1858,7 @@ const Dashboard = {
       item.innerHTML = `
         <div class="rs-icon"><i class="ti ti-barbell"></i></div>
         <div class="rs-main">
-          <div class="rs-name">${s.name}</div>
+          <div class="rs-name">${U.escape(s.name)}</div>
           <div class="rs-date">${U.fmtDate(s.date)}</div>
         </div>
         <i class="ti ti-circle-check rs-check"></i>
@@ -1868,7 +1880,7 @@ const Dashboard = {
   _archiveAll: [],
   _archiveFilter: "",
 
-  _esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); },
+  _esc(s) { return U.escape(s); },
   _typeOf(s) { return s.type || s.name || "—"; },
   _monthLabel(date) {
     const M = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
@@ -1923,7 +1935,7 @@ const Dashboard = {
     items.forEach(s => {
       const m = this._monthLabel(s.date);
       if (m !== curMonth) { curMonth = m; html += `<div class="arch-month">${m}</div>`; }
-      html += `<button class="recent-sess-item clickable arch-item" onclick="Dashboard.openArchived('${s.id}')">
+      html += `<button class="recent-sess-item clickable arch-item" onclick="Dashboard.openArchived(${U.arg(s.id)})">
         <div class="rs-icon"><i class="ti ti-barbell"></i></div>
         <div class="rs-main"><div class="rs-name">${this._esc(s.name)}</div><div class="rs-date">${U.fmtDate(s.date)}</div></div>
         <i class="ti ti-chevron-right rs-go"></i></button>`;
@@ -1967,17 +1979,21 @@ const Dashboard = {
         <div class="split-pip${isT ? " today-pip" : ""}${sess?.done ? " done" : ""}">
           <i class="ti ${sess ? "ti-barbell" : "ti-zzz"}" style="font-size:13px;color:${sess?.done ? "var(--green)" : isT ? "var(--accent)" : "var(--muted)"}"></i>
         </div>
-        <span class="split-status">${sess ? (sess.done ? "✓ " : "") + sess.name.split(" ")[0] : "—"}</span>
+        <span class="split-status">${sess ? (sess.done ? "✓ " : "") + U.escape(sess.name.split(" ")[0]) : "—"}</span>
       `;
       wrap.appendChild(col);
     }
   },
 
   buildChecklist(tasks) {
-    const list  = document.getElementById("today-checklist");
-    const doneN = document.getElementById("cl-done");
-    const totN  = document.getElementById("cl-total");
-    const bar   = document.getElementById("cl-bar");
+    const list  = document.getElementById("planner-list");
+    const doneN = document.getElementById("planner-done");
+    const totN  = document.getElementById("planner-total");
+    const bar   = document.getElementById("planner-bar");
+    if (!list) return;
+    doneN.textContent = tasks.filter(t => t.done).length;
+    totN.textContent = tasks.length;
+    bar.style.width = tasks.length ? Math.round(tasks.filter(t => t.done).length / tasks.length * 100) + "%" : "0%";
     list.innerHTML = "";
 
     if (!tasks.length) {
@@ -1991,14 +2007,18 @@ const Dashboard = {
     bar.style.width   = Math.round(doneCount / tasks.length * 100) + "%";
 
     tasks.forEach(t => {
-      const item = document.createElement("div");
+      const item = document.createElement("button");
+      item.type = "button";
+      item.setAttribute("aria-pressed", String(t.done));
       item.className = "check-item" + (t.done ? " checked" : "");
       item.innerHTML = `
         <div class="chk${t.done ? " done" : ""}"><i class="ti ti-check" style="font-size:11px;${t.done ? "" : "display:none"}"></i></div>
-        <span class="chk-text">${t.name}</span>
-        ${t.type ? `<span class="chk-tag">${t.type}</span>` : ""}
+        <span class="chk-text">${U.escape(t.name)}</span>
+        ${t.type ? `<span class="chk-tag">${U.escape(t.type)}</span>` : ""}
       `;
       item.onclick = async () => {
+        const wasDone = t.done;
+        item.disabled = true;
         t.done = !t.done;
         item.classList.toggle("checked", t.done);
         const chk = item.querySelector(".chk");
@@ -2007,7 +2027,9 @@ const Dashboard = {
         doneCount = tasks.filter(x => x.done).length;
         doneN.textContent = doneCount;
         bar.style.width   = Math.round(doneCount / tasks.length * 100) + "%";
-        await API.completeTask(t.id, t.done).catch(console.error);
+        try { await API.completeTask(t.id, t.done); }
+        catch (_) { t.done = wasDone; U.toast("Task non salvato: riprova", "err"); }
+        this.buildChecklist(tasks);
       };
       list.appendChild(item);
     });
@@ -2051,12 +2073,13 @@ const Dashboard = {
 //  Storage: localStorage (non un nuovo DB Notion — volume basso, 1 oggetto a
 //  settimana, e non richiede setup manuale su Notion). Cap a 26 (mezzo anno).
 // ═══════════════════════════════════════════════════════════════════════════
+
 const WeeklyReport = {
   KEY: "gymos_weekly_reports",
   LAST_COVERED_KEY: "gymos_weekly_report_last_covered",
   CAP: 26,
 
-  _esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); },
+  _esc(s) { return U.escape(s); },
   _iso(d) { const p = n => String(n).padStart(2, "0"); return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()); },
   // Lunedì (00:00 locale) della settimana di `d` — stesso schema di
   // Volume._weekStart / DailyRecap._weekDone: settimana fissa LUN-DOM, non rolling.
@@ -2308,7 +2331,7 @@ const WeeklyReport = {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 8000);
     try {
-      const res = await fetch(`${CONFIG.AI_WORKER_URL}/weekly-report`, {
+      const res = await AIClient.fetch(`${CONFIG.AI_WORKER_URL}/weekly-report`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sessionsDone: data.sessionsDone, sessionsPlanned: data.sessionsPlanned,
@@ -2344,7 +2367,7 @@ const WeeklyReport = {
   _summaryHTML(report, withClose) {
     const d = report.data;
     const closeBtn = withClose
-      ? `<button class="wr-close" onclick="WeeklyReport.dismiss('${report.weekStart}')" title="Chiudi"><i class="ti ti-x"></i></button>`
+      ? `<button class="wr-close" onclick="WeeklyReport.dismiss(${U.arg(report.weekStart)})" title="Chiudi"><i class="ti ti-x"></i></button>`
       : "";
     const volRows = (d.volumeTrend || []).slice(0, 6).map(v => `
       <div class="wr-vol-row">
@@ -2401,11 +2424,12 @@ const WeeklyReport = {
 //  confronto → verifica avversariale → assemblaggio), l'utente decide se
 //  approvare (entra nel prompt del coach) o rifiutare ogni proposta.
 // ═══════════════════════════════════════════════
+
 const ScienceUpdates = {
   proposals: [],
   errorMsg: null,
 
-  _esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); },
+  _esc(s) { return U.escape(s); },
 
   // Timeout come tutte le altre fetch verso i worker (vedi API.call in
   // api.js) — senza AbortController una rete che cade a metà lascia la
@@ -2413,7 +2437,7 @@ const ScienceUpdates = {
   async _fetchWithTimeout(url, opts, ms = 15000) {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), ms);
-    try { return await fetch(url, { ...(opts || {}), signal: ctrl.signal }); }
+    try { return await AIClient.fetch(url, { ...(opts || {}), signal: ctrl.signal }); }
     finally { clearTimeout(timer); }
   },
 
@@ -2470,13 +2494,13 @@ const ScienceUpdates = {
     const statusClass = p.status === "approved" ? "sci-approved" : p.status === "rejected" ? "sci-rejected" : "";
     const fonteHTML = p.source
       ? (p.sourceUrl
-          ? `<a href="${this._esc(p.sourceUrl)}" target="_blank" rel="noopener">${this._esc(p.source)}</a>${p.year ? ` (${this._esc(p.year)})` : ""}`
+          ? `<a href="${U.url(p.sourceUrl)}" target="_blank" rel="noopener">${this._esc(p.source)}</a>${p.year ? ` (${this._esc(p.year)})` : ""}`
           : `${this._esc(p.source)}${p.year ? ` (${this._esc(p.year)})` : ""}`)
       : "Fonte non specificata";
     const actions = actionable
       ? `<div class="sci-actions">
-          <button class="btn-secondary sci-btn-reject" onclick="ScienceUpdates.decide('${p.id}', false)"><i class="ti ti-x"></i>Rifiuta</button>
-          <button class="btn-primary sci-btn-approve" onclick="ScienceUpdates.decide('${p.id}', true)"><i class="ti ti-check"></i>Approva</button>
+          <button class="btn-secondary sci-btn-reject" onclick="ScienceUpdates.decide(${U.arg(p.id)}, false)"><i class="ti ti-x"></i>Rifiuta</button>
+          <button class="btn-primary sci-btn-approve" onclick="ScienceUpdates.decide(${U.arg(p.id)}, true)"><i class="ti ti-check"></i>Approva</button>
         </div>`
       : `<div class="sci-status-tag">${p.status === "approved" ? '<i class="ti ti-circle-check"></i>Approvata' : '<i class="ti ti-circle-x"></i>Rifiutata'}</div>`;
     return `
@@ -2534,6 +2558,7 @@ const ScienceUpdates = {
 //  reali dell'utente. Sta nella pagina Schede (non una pagina a parte): la
 //  proposta agisce direttamente sulla scheda che l'utente sta già gestendo lì.
 // ═══════════════════════════════════════════════
+
 const PredictiveCoach = {
   LAST_RUN_KEY: "gymos_predictive_last_run",
   RUN_EVERY_DAYS: 28,
@@ -2541,12 +2566,12 @@ const PredictiveCoach = {
   errorMsg: null,
   busy: false,
 
-  _esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); },
+  _esc(s) { return U.escape(s); },
 
   async _fetchWithTimeout(url, opts, ms = 15000) {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), ms);
-    try { return await fetch(url, { ...(opts || {}), signal: ctrl.signal }); }
+    try { return await AIClient.fetch(url, { ...(opts || {}), signal: ctrl.signal }); }
     finally { clearTimeout(timer); }
   },
 
@@ -2720,8 +2745,8 @@ const PredictiveCoach = {
         : "";
     const actions = actionable
       ? `<div class="sci-actions">
-          <button class="btn-secondary" onclick="PredictiveCoach.decide('${p.id}', false)"><i class="ti ti-x"></i>Rifiuta</button>
-          <button class="btn-primary" onclick="PredictiveCoach.decide('${p.id}', true)"><i class="ti ti-check"></i>Approva</button>
+          <button class="btn-secondary" onclick="PredictiveCoach.decide(${U.arg(p.id)}, false)"><i class="ti ti-x"></i>Rifiuta</button>
+          <button class="btn-primary" onclick="PredictiveCoach.decide(${U.arg(p.id)}, true)"><i class="ti ti-check"></i>Approva</button>
         </div>`
       : statusTag;
     return `
@@ -2813,6 +2838,7 @@ const PredictiveCoach = {
 // ═══════════════════════════════════════════════
 //  GymOS — Cardio module
 // ═══════════════════════════════════════════════
+
 const Cardio = {
   sessions: [],
 
@@ -2833,7 +2859,7 @@ const Cardio = {
     // quelli di allenamento per gli stessi giorni a inizio settimana).
     const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     weekStart.setDate(weekStart.getDate() - ((now.getDay() + 6) % 7));
-    const thisWeek = this.sessions.filter(c => c.date && new Date(c.date) >= weekStart);
+    const thisWeek = this.sessions.filter(c => c.fatto && c.date && new Date(c.date + "T12:00:00") >= weekStart);
     const totMin  = thisWeek.reduce((a,c) => a + (c.durata || 0), 0);
     const totKm   = thisWeek.reduce((a,c) => a + (c.dist || 0), 0);
     const totKcal = thisWeek.reduce((a,c) => a + (c.kcal || 0), 0);
@@ -2857,14 +2883,21 @@ const Cardio = {
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td>${U.fmtDate(c.date)}</td>
-        <td style="color:var(--text)">${c.tipo || "—"}</td>
+        <td style="color:var(--text)"><label><input class="cardio-done" type="checkbox" ${c.fatto ? "checked" : ""} aria-label="Cardio completato"> ${U.escape(c.tipo || "—")}</label></td>
         <td class="mono">${c.durata != null ? c.durata + " min" : "—"}</td>
         <td class="mono">${c.dist != null ? U.fmt(c.dist) + " km" : "—"}</td>
         <td class="mono">${c.kcal != null ? c.kcal : "—"}</td>
         <td class="mono">${c.incl != null ? U.fmt(c.incl) + "%" : "—"}</td>
         <td class="mono">${c.vel != null ? U.fmt(c.vel) : "—"}</td>
-        <td class="note-text">${c.note || "—"}</td>
+        <td class="note-text">${U.escape(c.note || "—")}</td>
       `;
+      tr.querySelector(".cardio-done").addEventListener("change", async event => {
+        const input = event.currentTarget, old = c.fatto;
+        input.disabled = true;
+        try { await API.updateCardioDone(c.id, input.checked); c.fatto = input.checked; this.buildStats(); }
+        catch (_) { input.checked = old; U.toast("Stato cardio non salvato: riprova", "err"); }
+        finally { input.disabled = false; }
+      });
       tbody.appendChild(tr);
     });
   },
@@ -2903,6 +2936,7 @@ const Cardio = {
 // ═══════════════════════════════════════════════
 //  GymOS — Diary module (sonno + abitudini)
 // ═══════════════════════════════════════════════
+
 const Diary = {
   qualita: null,
   energia: null,
@@ -3128,7 +3162,7 @@ const Diary = {
       return `<div class="limit-chip">
         <i class="ti ${tagInfo.icon}"></i>
         <div class="limit-chip-body"><span class="limit-chip-tag">${esc(tagInfo.label)}</span><span class="limit-chip-txt">${esc(l.text)}</span></div>
-        <button class="limit-chip-rm" onclick="Diary.removeLimitation('${l.id}')" aria-label="Rimuovi"><i class="ti ti-x"></i></button>
+        <button class="limit-chip-rm" onclick="Diary.removeLimitation(${U.arg(l.id)})" aria-label="Rimuovi"><i class="ti ti-x"></i></button>
       </div>`;
     }).join("");
   },
@@ -3144,6 +3178,7 @@ const Diary = {
 // ═══════════════════════════════════════════════
 //  GymOS — Schede module (gestione schede)
 // ═══════════════════════════════════════════════
+
 const Schede = {
   editing:   null,   // id scheda in modifica, null = nuova
   draftEx:   [],     // esercizi in editing
@@ -3175,40 +3210,40 @@ const Schede = {
       const sedute   = programmi[pg];
       const isActive = pg === App.activeProgram;
       const open     = this._expanded.has(pg);
-      const pgEsc    = this.escq(pg);
+      const pgEsc    = pg;
       const card = document.createElement("div");
       card.className = "prog-card" + (isActive ? " active" : "");
       card.innerHTML = `
-        <div class="prog-head" onclick="Schede.toggleProgram('${pgEsc}')">
+        <div class="prog-head" onclick="Schede.toggleProgram(${U.arg(pgEsc)})">
           <i class="ti ti-chevron-right prog-chev${open ? " open" : ""}"></i>
-          <div class="prog-name">${pg}</div>
-          <button class="prog-rename" onclick="event.stopPropagation();Schede.renameProgram('${pgEsc}')" aria-label="Rinomina programma"><i class="ti ti-pencil"></i></button>
+          <div class="prog-name">${U.escape(pg)}</div>
+          <button class="prog-rename" onclick="event.stopPropagation();Schede.renameProgram(${U.arg(pgEsc)})" aria-label="Rinomina programma"><i class="ti ti-pencil"></i></button>
           ${isActive ? '<span class="prog-active-badge"><i class="ti ti-check"></i>Attiva</span>' : ""}
           <span class="prog-count">${sedute.length} sed.</span>
-          ${isActive ? "" : `<button class="prog-activate" onclick="event.stopPropagation();Schede.setActive('${pgEsc}')">Rendi attiva</button>`}
+          ${isActive ? "" : `<button class="prog-activate" onclick="event.stopPropagation();Schede.setActive(${U.arg(pgEsc)})">Rendi attiva</button>`}
         </div>
         <div class="prog-body${open ? " open" : ""}">
           ${sedute.map(s => `
             <div class="seduta-card">
               <div class="seduta-head">
-                <span class="seduta-dot" style="background:${s.colore}"></span>
-                <span class="seduta-name">${s.nome}</span>
+                <span class="seduta-dot" style="background:${/^#[0-9a-f]{3,8}$/i.test(s.colore) ? s.colore : '#FF3B2F'}"></span>
+                <span class="seduta-name">${U.escape(s.nome)}</span>
                 <span class="seduta-count">${s.exercises.length} es.</span>
-                <button class="seduta-act" onclick="Schede.openEditor('${s.id}')" aria-label="Modifica"><i class="ti ti-pencil"></i></button>
-                <button class="seduta-act del" onclick="Schede.remove('${s.id}','${s.nome.replace(/'/g,"")}')" aria-label="Elimina"><i class="ti ti-trash"></i></button>
+                <button class="seduta-act" onclick="Schede.openEditor(${U.arg(s.id)})" aria-label="Modifica"><i class="ti ti-pencil"></i></button>
+                <button class="seduta-act del" onclick="Schede.remove(${U.arg(s.id)},${U.arg(s.nome)})" aria-label="Elimina"><i class="ti ti-trash"></i></button>
               </div>
               <div class="seduta-list">
                 ${s.exercises.length
                   ? s.exercises.map((e, i) => `
                     <div class="ex-line">
                       <span class="ex-line-num">${i + 1}</span>
-                      <span class="ex-line-name">${U.exName(e)}${(U.exTec(e).length || U.exGrp(e)) ? ` <i class="ti ti-bolt ex-line-tech" title="${[...U.exTec(e), U.exGrp(e) ? "Superset " + U.exGrp(e) : ""].filter(Boolean).join(", ")}"></i>` : ""}</span>
+                      <span class="ex-line-name">${U.escape(U.exName(e))}${(U.exTec(e).length || U.exGrp(e)) ? ` <i class="ti ti-bolt ex-line-tech" title="${U.escape([...U.exTec(e), U.exGrp(e) ? "Superset " + U.exGrp(e) : ""].filter(Boolean).join(", "))}"></i>` : ""}</span>
                       <span class="ex-line-sets">${U.exSets(e)}<small>serie</small></span>
                     </div>`).join("")
                   : '<div class="ex-line empty">Nessun esercizio — tocca la matita per aggiungerli</div>'}
               </div>
             </div>`).join("")}
-          <button class="prog-add-seduta" onclick="Schede.addSeduta('${pgEsc}')"><i class="ti ti-plus"></i> Aggiungi seduta</button>
+          <button class="prog-add-seduta" onclick="Schede.addSeduta(${U.arg(pgEsc)})"><i class="ti ti-plus"></i> Aggiungi seduta</button>
         </div>
       `;
       wrap.appendChild(card);
@@ -3272,7 +3307,7 @@ const Schede = {
       this.draftColor = "Rosso";
       document.getElementById("sc-nome").value = "";
       const pg = this._newProgram || App.activeProgram || "La mia scheda";
-      titleEl.innerHTML = `<i class="ti ti-clipboard-list"></i>Nuova seduta · <span style="color:var(--accent)">${pg}</span>`;
+      titleEl.innerHTML = `<i class="ti ti-clipboard-list"></i>Nuova seduta · <span style="color:var(--accent)">${U.escape(pg)}</span>`;
     }
     document.getElementById("scheda-editor-msg").textContent = "";
     this.buildColorPicker();
@@ -3318,7 +3353,7 @@ const Schede = {
       row.innerHTML = `
         <div class="ex-editor-top" onclick="Schede.toggleExRow(${i})">
           <i class="ti ti-grip-vertical ex-editor-grip" onclick="event.stopPropagation()"></i>
-          <span class="ex-editor-name">${U.exName(ex)}</span>
+          <span class="ex-editor-name">${U.escape(U.exName(ex))}</span>
           <i class="ti ti-chevron-down ex-editor-chev"></i>
           <button class="ex-editor-del" onclick="event.stopPropagation();Schede.removeExercise(${i})"><i class="ti ti-x"></i></button>
         </div>
@@ -3405,17 +3440,17 @@ const Schede = {
   edTechHTML(i, ex) {
     const tec = U.exTec(ex), grp = U.exGrp(ex);
     const partners = this.edPartners(i);
-    const sup = grp ? `<span class="ed-tech-sup"><i class="ti ti-link"></i>Superset${partners.length ? " con " + partners.join(", ") : ""}</span>` : "";
-    const tecLbl = tec.length ? `<span>${tec.join(", ")}</span>` : "";
+    const sup = grp ? `<span class="ed-tech-sup"><i class="ti ti-link"></i>Superset${partners.length ? " con " + U.escape(partners.join(", ")) : ""}</span>` : "";
+    const tecLbl = tec.length ? `<span>${U.escape(tec.join(", "))}</span>` : "";
     const summary = (sup || tecLbl) ? `<span class="ed-tech-sum">${sup}${tecLbl}</span>` : `<span class="ed-tech-sum muted">imposta…</span>`;
     const chips = (CONFIG.TECNICHE || []).map(t => {
       const on = tec.includes(t.name);
-      return `<button type="button" class="tech-chip${on ? " on" : ""}" style="${on ? `--tc:${t.color}` : ""}" onclick="Schede.edToggleTec(${i},'${t.name}')">${t.name}</button>`;
+      return `<button type="button" class="tech-chip${on ? " on" : ""}" style="${on ? `--tc:${t.color}` : ""}" onclick="Schede.edToggleTec(${i},${U.arg(t.name)})">${t.name}</button>`;
     }).join("");
     const corr = this.draftEx.map((e, j) => ({ e, j })).filter(o => o.j !== i).map(o => {
       const og = U.exGrp(o.e);
       const same = grp && og === grp, other = og && og !== grp;
-      return `<label class="tg-ex${other ? " off" : ""}${same ? " on" : ""}"><input type="checkbox" ${same ? "checked" : ""} ${other ? "disabled" : ""} onchange="Schede.edCorrelate(${i},${o.j},this.checked)"><span>${U.exName(o.e)}</span></label>`;
+      return `<label class="tg-ex${other ? " off" : ""}${same ? " on" : ""}"><input type="checkbox" ${same ? "checked" : ""} ${other ? "disabled" : ""} onchange="Schede.edCorrelate(${i},${o.j},this.checked)"><span>${U.escape(U.exName(o.e))}</span></label>`;
     }).join("");
     return `
       <button type="button" class="ed-tech-toggle" onclick="Schede.toggleEdTech(${i}, this)">
@@ -3425,10 +3460,10 @@ const Schede = {
         <div class="tg-lbl">Tecnica</div>
         <div class="tech-chips">${chips}</div>
         <div class="tech-fields">
-          <label class="tech-field"><span>Cadenza</span><input class="tech-in" type="text" placeholder="3-1-1" value="${U.exCad(ex)}" onchange="Schede.edSetText(${i},'cadenza',this.value)"></label>
+          <label class="tech-field"><span>Cadenza</span><input class="tech-in" type="text" placeholder="3-1-1" value="${U.escape(U.exCad(ex))}" onchange="Schede.edSetText(${i},'cadenza',this.value)"></label>
         </div>
         <div class="tg-lbl">Info tecnica</div>
-        <textarea class="tech-in tg-info" rows="2" placeholder="Es. drop al 70%, 2 cali; eccentrica 3s..." onchange="Schede.edSetText(${i},'info',this.value)">${U.exInfo(ex)}</textarea>
+        <textarea class="tech-in tg-info" rows="2" placeholder="Es. drop al 70%, 2 cali; eccentrica 3s..." onchange="Schede.edSetText(${i},'info',this.value)">${U.escape(U.exInfo(ex))}</textarea>
         <div class="tg-lbl">Superset — raggruppa con</div>
         <div class="tg-exs">${corr || '<span class="tech-empty">Nessun altro esercizio</span>'}</div>
       </div>`;
@@ -3521,8 +3556,9 @@ const Schede = {
 //  #G. Nessuna libreria nuova: grafici Chart.js -> PNG, report HTML
 //  self-contained, stampa via iframe (l'utente sceglie "Salva come PDF").
 // ═══════════════════════════════════════════════
+
 const ExportPDF = {
-  _esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); },
+  _esc(s) { return U.escape(s); },
   _setNum(name) { const m = (name || "").split(" – ").pop().match(/S(\d+)/); return m ? +m[1] : 99; },
 
   async open() {
@@ -3654,7 +3690,7 @@ const ExportPDF = {
         `<div class="rp-charts">${chartCards}</div>`
       : "";
     const sessBlocks = [...sessions].reverse().map(s => {
-      let exNotes = {}; try { exNotes = JSON.parse(localStorage.getItem("gymos_exnote_" + s.id) || "{}"); } catch (e) {}
+      let exNotes = { ...s.exerciseNotes }; try { Object.assign(exNotes, JSON.parse(localStorage.getItem("gymos_exnote_" + s.id) || "{}"), Notes.pending(s.id)?.exercises); } catch (e) {}
       const g = {}, order = [];
       s.exercises.forEach(r => { const k = U.exBase(r.name); if (!g[k]) { g[k] = []; order.push(k); } g[k].push(r); });
       const rows = order.map(k => {
@@ -3723,6 +3759,7 @@ const ExportPDF = {
 //  abitudini, volume, segnale-forza). Regole evidence-based, ordinate per
 //  urgenza. Niente falsa precisione: parla solo quando i dati lo giustificano.
 // ═══════════════════════════════════════════════
+
 const DailyRecap = {
   SEV: { alert: 0, warn: 1, info: 2, good: 3 },
 
@@ -3922,6 +3959,7 @@ const DailyRecap = {
 //  anticipo, l'app resta leggera). Matching onesto: se ambiguo, SEMPRE un
 //  selettore per l'utente — mai una scelta indovinata in silenzio.
 // ═══════════════════════════════════════════════
+
 const ExerciseGuide = {
   BASE: "https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main",
   _idx: null,
@@ -3931,7 +3969,7 @@ const ExerciseGuide = {
     return this._idx;
   },
   _norm(s) { return String(s == null ? "" : s).toLowerCase().trim().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " "); },
-  _esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); },
+  _esc(s) { return U.escape(s); },
 
   // Match esatto prima (alta confidenza); altrimenti "contenuto per intero"
   // in entrambe le direzioni, solo se la query ha almeno 5 caratteri (sotto
@@ -3959,7 +3997,7 @@ const ExerciseGuide = {
     overlay.innerHTML = this._shell(`
       <div class="eg-pick-lbl">${candidates.length} varianti trovate — quale intendevi?</div>
       <div class="eg-pick-list">${candidates.slice(0, 14).map(c =>
-        `<button class="eg-pick-item" onclick="ExerciseGuide._showDetailById('${c.id}')">${this._esc(c.n)}${c.m ? `<span>${this._esc(c.m)}</span>` : ""}</button>`).join("")}</div>`);
+        `<button class="eg-pick-item" onclick="ExerciseGuide._showDetailById(${U.arg(c.id)})">${this._esc(c.n)}${c.m ? `<span>${this._esc(c.m)}</span>` : ""}</button>`).join("")}</div>`);
     overlay.style.display = "flex";
   },
 
@@ -4022,6 +4060,7 @@ const ExerciseGuide = {
 //  stesso pattern di ExerciseGuide (overlay creato al volo, niente HTML
 //  statico duplicato per contesto).
 // ═══════════════════════════════════════════════
+
 const Coach = {
   HISTORY_KEY: "gymos_coach_history",
   MAX_STORED: 60,      // storico on-device tenuto (localStorage)
@@ -4034,7 +4073,7 @@ const Coach = {
   // dentro un attributo `href="..."` in _renderList, non solo come testo. Un
   // URI con una `"` romperebbe l'attributo e permetterebbe di iniettare altri
   // attributi (XSS) senza questo escape.
-  _esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); },
+  _esc(s) { return U.escape(s); },
 
   // Markdown-lite → HTML per le risposte del coach (grassetto, corsivo,
   // codice, liste, tabelle semplici). Opera SEMPRE su testo GIÀ escapato
@@ -4102,7 +4141,7 @@ const Coach = {
   },
   async _embed(texts) {
     try {
-      const res = await fetch(`${CONFIG.AI_WORKER_URL}/embed`, {
+      const res = await AIClient.fetch(`${CONFIG.AI_WORKER_URL}/embed`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ texts }),
       });
@@ -4186,7 +4225,7 @@ const Coach = {
     el.innerHTML = entries.map(e => {
       const meta = [this._fmtWhen(e.ts), e.dayContext, e.exercise].filter(Boolean).map(m => this._esc(m)).join(" · ");
       const sources = (e.sources || []).map(s =>
-        `<a class="coach-source" href="${this._esc(s.uri)}" target="_blank" rel="noopener">${this._esc(s.title)}</a>`).join("");
+        `<a class="coach-source" href="${U.url(s.uri)}" target="_blank" rel="noopener">${this._esc(s.title)}</a>`).join("");
       return `<div class="coach-msg">
         <div class="coach-msg-meta">${meta}</div>
         <div class="coach-bubble coach-bubble-q">${this._esc(e.question)}</div>
@@ -4304,7 +4343,7 @@ const Coach = {
 
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 25000);
-      const res = await fetch(`${CONFIG.AI_WORKER_URL}/ask`, {
+      const res = await AIClient.fetch(`${CONFIG.AI_WORKER_URL}/ask`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question, context: Object.keys(context).length ? context : undefined, history }),
         signal: ctrl.signal,

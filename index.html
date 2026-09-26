@@ -15,7 +15,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-<link rel="stylesheet" href="style.css?v=92">
+<link rel="stylesheet" href="style.css?v=103">
 </head>
 <body>
 
@@ -54,6 +54,9 @@
     </a></li>
   </ul>
   <div class="sidebar-footer">
+    <button type="button" onclick="Backup.download()">Scarica backup locale</button>
+    <button type="button" onclick="document.getElementById('backup-file').click()">Ripristina dati mancanti</button>
+    <button type="button" onclick="AIClient.configure()">Collega coach AI</button>
     <div class="conn-status" id="conn-status">
       <span class="conn-dot" id="conn-dot"></span>
       <span id="conn-label">Connessione...</span>
@@ -154,6 +157,12 @@
 
       <!-- Today checklist -->
       <div class="card">
+        <div class="card-title">Planner di oggi</div>
+        <div id="planner-list">Caricamento…</div>
+        <div><span id="planner-done">0</span>/<span id="planner-total">0</span></div>
+        <div class="progress-bar"><div class="progress-fill" id="planner-bar"></div></div>
+      </div>
+      <div class="card">
         <div class="card-title"><i class="ti ti-history"></i>Sessioni recenti</div>
         <div class="checklist" id="today-checklist"></div>
         <div class="checklist-progress">
@@ -174,7 +183,7 @@
         </div>
         <div class="coach-hint">Ricorda le domande passate, la fase, se eri in sessione. Un dubbio? Chiedi.</div>
         <div class="coach-chat-list" id="coach-list-home"></div>
-        <textarea class="field-inp coach-ta" id="coach-q-home" rows="2" placeholder="Es. ha senso allenare le gambe 3 volte a settimana?"></textarea>
+        <textarea class="field-inp coach-ta" id="coach-q-home" rows="2" placeholder="Es. ha senso allenare le gambe 3 volte a settimana?" aria-label="Es. ha senso allenare le gambe 3 volte a settimana?"></textarea>
         <div class="form-actions">
           <button class="btn-primary" id="coach-btn-home" onclick="Coach.ask('home')"><i class="ti ti-send"></i>Chiedi</button>
         </div>
@@ -218,7 +227,7 @@
 
       <div class="sess-controls">
         <div class="sess-select-wrap">
-          <select class="sess-select" id="sess-select" onchange="switchSession(this.value)"></select>
+          <select class="sess-select" id="sess-select" onchange="switchSession(this.value)" aria-label="Sessione di allenamento"></select>
           <i class="ti ti-chevron-down sess-select-icon"></i>
         </div>
         <button class="view-toggle" id="view-toggle" onclick="Session.toggleViewMode()" aria-label="Modalità modifica/visualizzazione" style="display:none">
@@ -278,7 +287,7 @@
       <div class="sess-note-head"><i class="ti ti-note"></i> Note della sessione</div>
       <textarea class="sess-note-input" id="sess-note-input" rows="2"
         placeholder="Sensazioni, energia, cosa migliorare la prossima volta…"
-        oninput="Session.saveSessionNote(this.value)"></textarea>
+        oninput="Session.saveSessionNote(this.value)" aria-label="Sensazioni, energia, cosa migliorare la prossima volta…"></textarea>
     </div>
 
     <!-- Exercises -->
@@ -370,14 +379,14 @@
       <div class="card-title"><i class="ti ti-plus-circle" style="color:var(--accent)"></i>Nuovo check-in</div>
       <div class="fase-row" id="fase-row"></div>
       <div class="form-grid">
-        <div class="field"><label class="field-lbl">Peso (kg)</label><input class="field-inp" type="number" step="0.1" placeholder="78.5" id="inp-peso"></div>
-        <div class="field"><label class="field-lbl">Vita (cm)</label><input class="field-inp" type="number" step="0.5" placeholder="82" id="inp-vita"></div>
-        <div class="field"><label class="field-lbl">Petto (cm)</label><input class="field-inp" type="number" step="0.5" placeholder="98" id="inp-petto"></div>
-        <div class="field"><label class="field-lbl">Fianchi (cm)</label><input class="field-inp" type="number" step="0.5" placeholder="95" id="inp-fianchi"></div>
-        <div class="field"><label class="field-lbl">Coscia (cm)</label><input class="field-inp" type="number" step="0.5" placeholder="56" id="inp-coscia"></div>
-        <div class="field"><label class="field-lbl">Braccio (cm)</label><input class="field-inp" type="number" step="0.5" placeholder="36" id="inp-braccio"></div>
-        <div class="field"><label class="field-lbl">% Grasso</label><input class="field-inp" type="number" step="0.1" placeholder="15" id="inp-bf"></div>
-        <div class="field"><label class="field-lbl">Note</label><input class="field-inp" type="text" placeholder="mattina a digiuno" id="inp-note-body"></div>
+        <div class="field"><label class="field-lbl" for="inp-peso">Peso (kg)</label><input class="field-inp" type="number" step="0.1" placeholder="78.5" id="inp-peso"></div>
+        <div class="field"><label class="field-lbl" for="inp-vita">Vita (cm)</label><input class="field-inp" type="number" step="0.5" placeholder="82" id="inp-vita"></div>
+        <div class="field"><label class="field-lbl" for="inp-petto">Petto (cm)</label><input class="field-inp" type="number" step="0.5" placeholder="98" id="inp-petto"></div>
+        <div class="field"><label class="field-lbl" for="inp-fianchi">Fianchi (cm)</label><input class="field-inp" type="number" step="0.5" placeholder="95" id="inp-fianchi"></div>
+        <div class="field"><label class="field-lbl" for="inp-coscia">Coscia (cm)</label><input class="field-inp" type="number" step="0.5" placeholder="56" id="inp-coscia"></div>
+        <div class="field"><label class="field-lbl" for="inp-braccio">Braccio (cm)</label><input class="field-inp" type="number" step="0.5" placeholder="36" id="inp-braccio"></div>
+        <div class="field"><label class="field-lbl" for="inp-bf">% Grasso</label><input class="field-inp" type="number" step="0.1" placeholder="15" id="inp-bf"></div>
+        <div class="field"><label class="field-lbl" for="inp-note-body">Note</label><input class="field-inp" type="text" placeholder="mattina a digiuno" id="inp-note-body"></div>
       </div>
       <div class="form-actions">
         <button class="btn-primary" onclick="addCheckin()"><i class="ti ti-device-floppy"></i>Salva check-in</button>
@@ -416,13 +425,13 @@
     <div class="card">
       <div class="card-title"><i class="ti ti-plus-circle" style="color:var(--accent)"></i>Nuovo cardio</div>
       <div class="form-grid">
-        <div class="field"><label class="field-lbl">Tipo</label><input class="field-inp" type="text" placeholder="es. Tapis roulant" id="ca-tipo"></div>
-        <div class="field"><label class="field-lbl">Durata (min)</label><input class="field-inp" type="number" step="1" placeholder="30" id="ca-durata"></div>
-        <div class="field"><label class="field-lbl">Distanza (km)</label><input class="field-inp" type="number" step="0.1" placeholder="5" id="ca-dist"></div>
-        <div class="field"><label class="field-lbl">Calorie</label><input class="field-inp" type="number" step="1" placeholder="250" id="ca-kcal"></div>
-        <div class="field"><label class="field-lbl">Inclinazione (%)</label><input class="field-inp" type="number" step="0.5" placeholder="2" id="ca-incl"></div>
-        <div class="field"><label class="field-lbl">Velocità (km/h)</label><input class="field-inp" type="number" step="0.1" placeholder="10" id="ca-vel"></div>
-        <div class="field" style="grid-column:1/-1"><label class="field-lbl">Note</label><input class="field-inp" type="text" placeholder="sensazioni, zona FC..." id="ca-note"></div>
+        <div class="field"><label class="field-lbl" for="ca-tipo">Tipo</label><input class="field-inp" type="text" placeholder="es. Tapis roulant" id="ca-tipo"></div>
+        <div class="field"><label class="field-lbl" for="ca-durata">Durata (min)</label><input class="field-inp" type="number" step="1" placeholder="30" id="ca-durata"></div>
+        <div class="field"><label class="field-lbl" for="ca-dist">Distanza (km)</label><input class="field-inp" type="number" step="0.1" placeholder="5" id="ca-dist"></div>
+        <div class="field"><label class="field-lbl" for="ca-kcal">Calorie</label><input class="field-inp" type="number" step="1" placeholder="250" id="ca-kcal"></div>
+        <div class="field"><label class="field-lbl" for="ca-incl">Inclinazione (%)</label><input class="field-inp" type="number" step="0.5" placeholder="2" id="ca-incl"></div>
+        <div class="field"><label class="field-lbl" for="ca-vel">Velocità (km/h)</label><input class="field-inp" type="number" step="0.1" placeholder="10" id="ca-vel"></div>
+        <div class="field" style="grid-column:1/-1"><label class="field-lbl" for="ca-note">Note</label><input class="field-inp" type="text" placeholder="sensazioni, zona FC..." id="ca-note"></div>
       </div>
       <div class="form-actions">
         <button class="btn-primary" onclick="Cardio.add()"><i class="ti ti-device-floppy"></i>Salva cardio</button>
@@ -462,7 +471,7 @@
       </div>
       <textarea class="field-inp journal-ta" id="journal-ta" rows="4"
         placeholder="Come ti senti oggi? Stress, energia, dolori, imprevisti — qualunque cosa. Si salva da sola mentre scrivi e aiuta l'IA a darti consigli più giusti."
-        oninput="Diary.onJournalInput(this.value)"></textarea>
+        oninput="Diary.onJournalInput(this.value)" aria-label="Come ti senti oggi? Stress, energia, dolori, imprevisti — qualunque cosa. Si salva da sola mentre scrivi e aiuta l'IA a darti consigli più giusti."></textarea>
       <div class="journal-hint"><i class="ti ti-sparkles"></i> Letto dal cervello IA per i consigli di oggi in sessione.</div>
     </div>
 
@@ -473,7 +482,7 @@
       <div class="journal-hint" style="margin-bottom:12px"><i class="ti ti-sparkles"></i> Valgono sempre, non solo oggi — il coach ne tiene conto in ogni consiglio, senza ripeterle ad ogni esercizio.</div>
       <div class="limit-list" id="limitations-list"></div>
       <div class="limit-form">
-        <select class="select-dark limit-sel" id="limit-tag-sel">
+        <select class="select-dark limit-sel" id="limit-tag-sel" aria-label="limit tag sel">
           <option value="ginocchio">Ginocchio</option>
           <option value="spalla">Spalla</option>
           <option value="schiena">Schiena</option>
@@ -482,7 +491,7 @@
           <option value="polso">Polso/gomito</option>
           <option value="altro" selected>Altro</option>
         </select>
-        <textarea class="field-inp limit-ta" id="limit-ta" rows="2" placeholder="Es. ginocchio operato nel 2023, evita affondi profondi"></textarea>
+        <textarea class="field-inp limit-ta" id="limit-ta" rows="2" placeholder="Es. ginocchio operato nel 2023, evita affondi profondi" aria-label="Es. ginocchio operato nel 2023, evita affondi profondi"></textarea>
         <button class="btn-primary" onclick="Diary.addLimitationFromForm()"><i class="ti ti-plus"></i>Aggiungi</button>
       </div>
     </div>
@@ -491,8 +500,8 @@
     <div class="card">
       <div class="card-title"><i class="ti ti-moon"></i>Sonno</div>
       <div class="form-grid">
-        <div class="field"><label class="field-lbl">Ore dormite</label><input class="field-inp" type="number" step="0.5" placeholder="7.5" id="sl-ore"></div>
-        <div class="field"><label class="field-lbl">HRV (ms)</label><input class="field-inp" type="number" step="1" placeholder="55" id="sl-hrv"></div>
+        <div class="field"><label class="field-lbl" for="sl-ore">Ore dormite</label><input class="field-inp" type="number" step="0.5" placeholder="7.5" id="sl-ore"></div>
+        <div class="field"><label class="field-lbl" for="sl-hrv">HRV (ms)</label><input class="field-inp" type="number" step="1" placeholder="55" id="sl-hrv"></div>
       </div>
       <div class="field" style="margin-bottom:12px">
         <label class="field-lbl">Qualità</label>
@@ -502,7 +511,7 @@
         <label class="field-lbl">Energia al risveglio</label>
         <div class="energia-row" id="sl-energia-row"></div>
       </div>
-      <div class="field" style="margin-bottom:14px"><label class="field-lbl">Note</label><input class="field-inp" type="text" placeholder="sogni, risvegli..." id="sl-note"></div>
+      <div class="field" style="margin-bottom:14px"><label class="field-lbl" for="sl-note">Note</label><input class="field-inp" type="text" placeholder="sogni, risvegli..." id="sl-note"></div>
       <div class="form-actions">
         <button class="btn-primary" onclick="Diary.saveSleep()"><i class="ti ti-device-floppy"></i>Salva sonno</button>
         <span class="save-confirm" id="sleep-save-msg"><i class="ti ti-circle-check"></i>Salvato!</span>
@@ -514,8 +523,8 @@
       <div class="card-title"><i class="ti ti-checkbox"></i>Abitudini di oggi <span id="habit-score-badge" class="habit-score-badge"></span></div>
       <div class="habit-checks" id="habit-checks"></div>
       <div class="form-grid" style="margin-top:12px">
-        <div class="field"><label class="field-lbl">Acqua (L)</label><input class="field-inp" type="number" step="0.25" placeholder="2.5" id="dh-acqua"></div>
-        <div class="field"><label class="field-lbl">Passi</label><input class="field-inp" type="number" step="100" placeholder="8000" id="dh-passi"></div>
+        <div class="field"><label class="field-lbl" for="dh-acqua">Acqua (L)</label><input class="field-inp" type="number" step="0.25" placeholder="2.5" id="dh-acqua"></div>
+        <div class="field"><label class="field-lbl" for="dh-passi">Passi</label><input class="field-inp" type="number" step="100" placeholder="8000" id="dh-passi"></div>
       </div>
       <div class="field" style="margin:12px 0">
         <label class="field-lbl">Umore</label>
@@ -553,6 +562,7 @@
     </div>
     <div class="card">
       <div class="card-title"><i class="ti ti-flask"></i>Proposte</div>
+      <button class="btn-primary" type="button" onclick="AIClient.configure()">Collega coach AI</button>
       <div id="sci-list"></div>
     </div>
   </section>
@@ -593,7 +603,7 @@
         <span>Piccola cosa 😊 l'ordine in cui crei le sedute sarà anche l'ordine in cui te le <b>consiglieremo</b> quando inizi una sessione. È giusto un aiuto per orientarti — poi scegli sempre tu quella che ti va! 💪</span>
       </div>
       <div class="field" style="margin-bottom:14px">
-        <label class="field-lbl">Nome scheda</label>
+        <label class="field-lbl" for="sc-nome">Nome scheda</label>
         <input class="field-inp" type="text" id="sc-nome" placeholder="es. Full Body 1">
       </div>
       <div class="field" style="margin-bottom:14px">
@@ -605,7 +615,7 @@
         <div class="ex-editor-list" id="sc-ex-list"></div>
       </div>
       <div class="ex-add-row">
-        <input class="field-inp" type="text" id="sc-new-ex" placeholder="Aggiungi esercizio..." onkeydown="if(event.key==='Enter')Schede.addExercise()">
+        <input class="field-inp" type="text" id="sc-new-ex" placeholder="Aggiungi esercizio..." onkeydown="if(event.key==='Enter')Schede.addExercise()" aria-label="Aggiungi esercizio...">
         <button class="ex-add-btn" onclick="Schede.addExercise()"><i class="ti ti-plus"></i></button>
       </div>
       <div class="modal-actions" style="margin-top:18px">
@@ -627,12 +637,25 @@
     <a href="#" class="bn-link" data-page="cardio"><i class="ti ti-run"></i><span>Cardio</span></a>
     <a href="#" class="bn-link" data-page="progression"><i class="ti ti-chart-line"></i><span>Progr.</span></a>
     <a href="#" class="bn-link" data-page="schede"><i class="ti ti-clipboard-list"></i><span>Schede</span></a>
+    <button type="button" class="bn-more" onclick="document.getElementById('more-menu').showModal()"><i class="ti ti-dots"></i><span>Altro</span></button>
   </div>
   <button class="bn-save" id="bn-save" onclick="saveSession()"><i class="ti ti-device-floppy"></i>Salva</button>
 </nav>
 
 
 <!-- TIMER RECUPERO (FAB + overlay) -->
+<dialog id="more-menu" class="more-menu">
+  <h2>Altre sezioni</h2>
+  <button type="button" onclick="App.navigate('report');this.closest('dialog').close()">Report</button>
+  <button type="button" onclick="App.navigate('science');this.closest('dialog').close()">Scienza</button>
+  <button type="button" onclick="App.navigate('body');this.closest('dialog').close()">Misurazioni</button>
+  <button type="button" onclick="App.navigate('diary');this.closest('dialog').close()">Diario</button>
+  <button type="button" onclick="this.closest('dialog').close();AIClient.configure()">Collega coach AI</button>
+  <button type="button" onclick="this.closest('dialog').close();Backup.download()">Scarica backup locale</button>
+  <button type="button" onclick="document.getElementById('backup-file').click();this.closest('dialog').close()">Ripristina dati mancanti</button>
+  <button type="button" onclick="this.closest('dialog').close()">Chiudi</button>
+</dialog>
+<input type="file" id="backup-file" accept="application/json,.json" aria-label="Backup GymOS da ripristinare" hidden onchange="Backup.choose(this.files[0]);this.value=''">
 <div class="rest-fab" id="rest-fab" style="display:none" onclick="RestTimer.openPicker()">
   <i class="ti ti-stopwatch"></i>
   <span id="rest-fab-label">Recupero</span>
@@ -675,7 +698,7 @@
 </div>
 
 <!-- FOTO PROGRESSI: galleria + confronto (solo su questo dispositivo) -->
-<input type="file" id="photo-file" accept="image/*" style="display:none" onchange="ProgressPhotos.onFile(this.files && this.files[0])">
+<input type="file" id="photo-file" accept="image/*" style="display:none" onchange="ProgressPhotos.onFile(this.files && this.files[0])" aria-label="Scegli foto progressi">
 <div class="photos-overlay" id="photos-overlay" style="display:none" onclick="ProgressPhotos.closeGallery(event)">
   <div class="ph-box">
     <div class="ph-head">
@@ -731,7 +754,7 @@
   <div class="app-modal-box">
     <div class="app-modal-title" id="app-modal-title"></div>
     <div class="app-modal-msg" id="app-modal-msg"></div>
-    <input class="app-modal-input" id="app-modal-input" type="text" style="display:none">
+    <input class="app-modal-input" id="app-modal-input" type="text" style="display:none" aria-label="Valore richiesto">
     <div class="app-modal-actions">
       <button class="btn-cancel" id="app-modal-cancel">Annulla</button>
       <button class="btn-primary" id="app-modal-ok">Conferma</button>
@@ -748,20 +771,25 @@
     </div>
     <div class="archive-search">
       <i class="ti ti-search"></i>
-      <input id="archive-q" type="text" placeholder="Cerca per nome o mese (es. Full Body, Giugno)…" oninput="Dashboard.renderArchive()">
+      <input id="archive-q" type="text" placeholder="Cerca per nome o mese (es. Full Body, Giugno)…" oninput="Dashboard.renderArchive()" aria-label="Cerca per nome o mese (es. Full Body, Giugno)…">
     </div>
     <div class="archive-chips" id="archive-chips"></div>
     <div class="archive-list" id="archive-list"></div>
   </div>
 </div>
 
-<script src="exercise-guide-index.js?v=92"></script>
-<script src="config.js?v=92"></script>
-<script src="api.js?v=92"></script>
-<script src="session.js?v=92"></script>
-<script src="modules.js?v=92"></script>
-<script src="timers.js?v=92"></script>
-<script src="app.js?v=92"></script>
+<script src="exercise-guide-index.js?v=103"></script>
+<script src="config.js?v=103"></script>
+<link rel="stylesheet" href="quality.css?v=103">
+<script src="notes.js?v=103"></script>
+<script src="ai-client.js?v=103"></script>
+<script src="accessibility.js?v=103"></script>
+<script src="backup.js?v=103"></script>
+<script src="api.js?v=103"></script>
+<script src="session.js?v=103"></script>
+<script src="modules.js?v=103"></script>
+<script src="timers.js?v=103"></script>
+<script src="app.js?v=103"></script>
 <script>
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(function(){});

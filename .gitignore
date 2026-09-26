@@ -1,6 +1,5 @@
 node_modules/
-package.json
-package-lock.json
+test-results/
 
 # Artefatti di tool locali (claude-flow, graphify, MCP config) — mai nel repo
 # pubblico dell'app: contengono config/cache/DB locali, non codice GymOS.

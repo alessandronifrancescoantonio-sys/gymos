@@ -58,8 +58,15 @@ const API = {
     const body = { page_size: Math.min(pageSize, 100) };
     if (filter) body.filter = filter;
     if (sorts)  body.sorts  = sorts;
-    const res = await this.call(`/databases/${dbId}/query`, "POST", body);
-    return res.results || [];
+    const results = [];
+    do {
+      const res = await this.call(`/databases/${dbId}/query`, "POST", body);
+      results.push(...(res.results || []));
+      if (!res.has_more || !res.next_cursor || results.length >= pageSize) break;
+      body.start_cursor = res.next_cursor;
+      body.page_size = Math.min(100, pageSize - results.length);
+    } while (true);
+    return results.slice(0, pageSize);
   },
 
   // ─── CREATE PAGE (nuova entry) ───
@@ -84,7 +91,7 @@ const API = {
 
   prop: {
     title: (val) => ({ title: [{ text: { content: String(val) } }] }),
-    rich_text: (val) => ({ rich_text: [{ text: { content: String(val) } }] }),
+    rich_text: (val) => ({ rich_text: (String(val).match(/[\s\S]{1,1900}/g) || [""]).map(content => ({ text: { content } })) }),
     number: (val) => ({ number: val === null ? null : Number(val) }),
     checkbox: (val) => ({ checkbox: Boolean(val) }),
     select: (val) => ({ select: val ? { name: String(val) } : null }),
@@ -102,7 +109,7 @@ const API = {
     },
     rich_text: (page, prop) => {
       const p = page.properties[prop];
-      return p?.rich_text?.[0]?.plain_text || "";
+      return (p?.rich_text || []).map(t => t.plain_text ?? t.text?.content ?? "").join("");
     },
     number: (page, prop) => {
       const p = page.properties[prop];
@@ -152,15 +159,36 @@ const API = {
       [{ property: CONFIG.PROPS.WL_DATE, direction: "descending" }],
       n
     );
-    return pages.map(p => ({
+    return pages.map(p => this.workoutFromPage(p));
+  },
+  workoutFromPage(p) {
+    return {
       id: p.id,
+      createdAt: p.created_time,
       name: this.read.title(p, CONFIG.PROPS.WL_NAME),
       date: this.read.date(p, CONFIG.PROPS.WL_DATE),
       type: this.read.select(p, CONFIG.PROPS.WL_TYPE),
       done: this.read.checkbox(p, CONFIG.PROPS.WL_DONE),
       split: this.read.select(p, CONFIG.PROPS.WL_SPLIT),
-      note: this.read.rich_text(p, CONFIG.PROPS.WL_NOTE),
-    }));
+      note: Notes.decode(this.read.rich_text(p, CONFIG.PROPS.WL_NOTE)).note,
+      exerciseNotes: Notes.decode(this.read.rich_text(p, CONFIG.PROPS.WL_NOTE)).exercises,
+    };
+  },
+  async getPreviousWorkoutSession(current) {
+    const filters = [{ property: CONFIG.PROPS.WL_DONE, checkbox: { equals: true } }];
+    if (current.type) filters.push({ property: CONFIG.PROPS.WL_TYPE, select: { equals: current.type } });
+    else filters.push({ property: CONFIG.PROPS.WL_NAME, rich_text: { equals: current.name } });
+    if (current.createdAt) {
+      const sameDay = await this.query(CONFIG.DB.WORKOUT_LOG, { and: [...filters,
+        { property: CONFIG.PROPS.WL_DATE, date: { equals: current.date } },
+        { timestamp: "created_time", created_time: { before: current.createdAt } },
+      ] }, [{ timestamp: "created_time", direction: "descending" }], 1);
+      if (sameDay.length) return this.workoutFromPage(sameDay[0]);
+    }
+    const previous = await this.query(CONFIG.DB.WORKOUT_LOG, { and: [...filters,
+      { property: CONFIG.PROPS.WL_DATE, date: { before: current.date } },
+    ] }, [{ property: CONFIG.PROPS.WL_DATE, direction: "descending" }, { timestamp: "created_time", direction: "descending" }], 1);
+    return previous.length ? this.workoutFromPage(previous[0]) : null;
   },
 
   // Esercizi log di una sessione (per session page)

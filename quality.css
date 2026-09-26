@@ -1,0 +1,30 @@
+/* Layout and keyboard accessibility shared across feature modules. */
+.week-split { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:4px; }
+.week-split > * { min-width:0; }
+.split-pip { max-width:100%; }
+.split-status { overflow-wrap:anywhere; }
+.split-status, .split-day-name, .stat-sub, .bn-link span { font-size:11px; }
+.check-item { width:100%; color:var(--text); text-align:left; min-height:44px; }
+.prev-ex-note { padding:12px; color:var(--text2); background:var(--ink3); border-radius:8px; margin-bottom:12px; white-space:pre-wrap; overflow-wrap:anywhere; }
+:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+.coach-clear, .prog-rename, .seduta-act, .ph-vbtn, .rm-set-btn { min-width:44px; min-height:44px; }
+.bn-links { min-width:0; }
+.bn-link, .bn-more { min-width:0; min-height:48px; flex:1; }
+.bn-more { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; color:var(--muted); }
+.bn-more span { font-size:10px; }
+.bn-more i { font-size:20px; }
+.more-menu { margin:auto; width:min(90vw,360px); padding:20px; background:var(--ink2); color:var(--text); border:1px solid var(--ink4); border-radius:16px; }
+.more-menu::backdrop { background:#000a; }
+.more-menu button { display:block; width:100%; min-height:48px; color:var(--text); text-align:left; }
+@media(max-width:760px) {
+  .bottom-nav { flex-wrap:wrap; }
+  .bn-links { flex-basis:100%; }
+  .bn-save.show { width:100%; justify-content:center; padding:8px; min-height:44px; }
+  body:has(.bn-save.show) .main { padding-bottom:160px; }
+  body:has(.bn-save.show) .rest-fab { bottom:145px; }
+}
+@media(max-width:360px) {
+  .week-split { gap:2px; }
+  .split-pip { width:28px; height:28px; }
+  .card { min-width:0; }
+}

@@ -280,10 +280,6 @@ const RestTimer = {
   // Senza audio → non mette in pausa la musica. Si aggiorna ogni secondo quando
   // l'app è attiva; a telefono bloccato può "congelarsi" ma mostra comunque
   // l'orario di fine, e il suono di fine parte lo stesso.
-  _fmtRemain() {
-    const m = Math.floor(this.remaining / 60), s = this.remaining % 60;
-    return m > 0 ? `${m}:${s.toString().padStart(2, "0")}` : `${this.remaining}s`;
-  },
   _endClock() {
     const e = new Date(this.endAt);
     return `${e.getHours()}:${e.getMinutes().toString().padStart(2, "0")}:${e.getSeconds().toString().padStart(2, "0")}`;
