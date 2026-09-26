@@ -3,8 +3,8 @@
   color-scheme:dark;
   --ink:#070708; --ink2:rgba(20,20,22,.86); --ink3:#1b1b1e; --ink4:#343438;
   --muted:#8e8e93; --dim:#aaaab0; --ghost:#d0d0d5; --text:#f7f7f8; --text2:#d1d1d6;
-  --accent:#ff7a1a; --green:#32d46b; --amber:#ffb020; --blue:#49a8ff; --red:#ff4f55;
-  --purple:#b779ff; --pink:#ff5d9e; --cyan:#43d7e8;
+  --accent:#ff6a00; --green:#32d46b; --amber:#ffb020; --blue:#ff6a00; --red:#ff4f55;
+  --purple:#b779ff; --pink:#ff5d9e; --cyan:#ff9d3d;
   --radius:18px; --radius-sm:12px; --radius-lg:22px; --bottombar-h:82px;
   --surface:rgba(24,24,27,.82); --surface-solid:#1b1b1e; --surface-raised:rgba(34,34,38,.94);
   --fill:rgba(255,255,255,.065); --fill-strong:rgba(255,255,255,.115);
@@ -30,6 +30,12 @@ body {
   color:var(--text); font-size:15px; line-height:1.45; letter-spacing:-.008em;
   text-rendering:optimizeLegibility;
 }
+body::before {
+  background:
+    radial-gradient(110% 62% at 70% -12%,rgba(255,106,0,.20),rgba(255,106,0,.055) 34%,transparent 62%),
+    radial-gradient(70% 50% at -10% 20%,rgba(255,157,61,.075),transparent 55%);
+}
+.loading-overlay::before { background:radial-gradient(circle at center,rgba(255,106,0,.19),transparent 62%); }
 button,input,select,textarea { font:inherit; }
 button { color:inherit; }
 ::selection { background:rgba(255,122,26,.30); color:var(--text); }
@@ -199,8 +205,9 @@ textarea.field-inp { min-height:88px; }
 
 /* Semantic colour: one meaning per hue, shared by desktop and mobile. */
 #page-dashboard,#page-session,#page-schede { --section:var(--accent); }
-#page-progression { --section:var(--blue); }
-#page-cardio,#page-report { --section:var(--cyan); }
+#page-progression { --section:var(--accent); }
+#page-cardio { --section:var(--green); }
+#page-report { --section:var(--purple); }
 #page-body { --section:var(--pink); }
 #page-diary { --section:var(--amber); }
 #page-science { --section:var(--purple); }
@@ -212,9 +219,9 @@ textarea.field-inp { min-height:88px; }
 }
 .sess-title-main .page-title::after { display:none; }
 
-:is(.nav-link,.bn-link)[data-page="progression"] i { color:var(--blue); }
-:is(.nav-link,.bn-link)[data-page="cardio"] i,
-:is(.nav-link,.bn-link)[data-page="report"] i { color:var(--cyan); }
+:is(.nav-link,.bn-link)[data-page="progression"] i { color:var(--accent); }
+:is(.nav-link,.bn-link)[data-page="cardio"] i { color:var(--green); }
+:is(.nav-link,.bn-link)[data-page="report"] i { color:var(--purple); }
 :is(.nav-link,.bn-link)[data-page="body"] i { color:var(--pink); }
 :is(.nav-link,.bn-link)[data-page="diary"] i { color:var(--amber); }
 :is(.nav-link,.bn-link)[data-page="science"] i { color:var(--purple); }
@@ -241,6 +248,16 @@ textarea.field-inp { min-height:88px; }
 .progress-fill { background:linear-gradient(90deg,var(--accent),#ffb15f); }
 .set-done-btn { background:linear-gradient(135deg,#20b95a,#38df73); }
 .rm-set-btn,.del-ex-btn,.scheda-del-btn { --control-tint:var(--red); }
+
+/* No blue UI: informative and editable states return to the GymOS orange. */
+.rr-in-sm,.rr-in-sm:focus { color:var(--accent); border-color:rgba(255,106,0,.34); background:rgba(255,106,0,.12); }
+.editor-hint,.rec-banner,.ex-info-banner,.today-goal.tg-hold {
+  background:rgba(255,106,0,.075); border-color:rgba(255,106,0,.23);
+}
+.editor-hint i,.rec-ic,.rec-lbl,.ex-info-banner > i,.today-goal.tg-hold > i,
+.today-goal.tg-hold .tg-lbl,.set-hint i.sh-ok,.ai-advice-box.ai-rule > i.sh-ok,
+.rc-info > i,.toast.info i { color:var(--accent); }
+.rc-info { border-left-color:var(--accent); }
 
 /* Premium depth: quiet black layers, fine highlights and controlled glow. */
 .card,.stat-card,.semaforo-card,.quick-link,.ex-block,.prog-card,.scheda-card {
