@@ -7,14 +7,17 @@ const Dashboard = {
       new Date().toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" });
 
     try {
-      const week = typeof Planning !== "undefined" ? Planning.bounds(new Date()) : null;
+      // Planning.bounds() restituisce già start/end in formato YYYY-MM-DD.
+      // Passargli un Date (o ripassare start/end a Planning.iso) produceva
+      // NaN-NaN-NaN / TypeError e interrompeva tutta la Home prima del render.
+      const week = typeof Planning !== "undefined" ? Planning.bounds(0) : null;
       const [sessions, checkins, sleepData, habits, todayHabit, plannerTasks] = await Promise.all([
         API.getWorkoutSessions(14).catch(() => []),
         API.getBodyMetrics(12).catch(() => []),   // 12 (non 5): serve storia sufficiente per stimare da quanto si è nella fase attuale (diet-break)
         API.getRecentSleep(7).catch(() => []),
         API.getRecentHabits(7).catch(() => []),
         API.getTodayHabit().catch(() => null),
-        week ? API.getPlannerTasks(Planning.iso(week.start), Planning.iso(week.end)).catch(() => []) : Promise.resolve([]),
+        week ? API.getPlannerTasks(week.start, week.end).catch(() => []) : Promise.resolve([]),
       ]);
 
       this.buildStats(sessions, checkins, sleepData, habits, todayHabit, plannerTasks);

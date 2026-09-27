@@ -24,6 +24,7 @@ const server=http.createServer((req,res)=>{
  await page.goto(base);
  await page.evaluate(()=>{
   document.getElementById('loading').style.display='none';App.setupNav();Accessibility.init();
+  window.realDashboardLoad=Dashboard.load.bind(Dashboard);
   for(const obj of [Dashboard,Session,Cardio,Progression,Body,Diary,Schede,ScienceUpdates,PredictiveCoach])obj.load=async()=>{};
   WeeklyReport.loadHistory=async()=>{};
   Dashboard.buildWeekSplit([]);
@@ -48,6 +49,19 @@ const server=http.createServer((req,res)=>{
   SyncCenter.init();if(!document.querySelector('[data-sync-label]').textContent)throw Error('Sync status missing');
  });
  console.log('PASS weekly planning, planned-vs-actual and sync status');
+ await page.evaluate(async()=>{
+  const today=U.today();
+  API.getWorkoutSessions=async()=>[{id:'home-s1',name:'Full Body 1',date:today,done:true}];
+  API.getBodyMetrics=async()=>[];API.getRecentSleep=async()=>[{ore:7.5}];API.getRecentHabits=async()=>[];API.getTodayHabit=async()=>null;
+  API.getPlannerTasks=async(start,end)=>{if(!/^\d{4}-\d{2}-\d{2}$/.test(start)||!/^\d{4}-\d{2}-\d{2}$/.test(end))throw Error('Invalid planner range');return [{id:'home-p1',name:'Full Body 1',date:today,type:'Allenamento',done:false}]};
+  API.getTodayTasks=async()=>[];
+  Volume.renderCard=()=>{};Volume.loadActual=()=>{};Recovery.renderCard=()=>{};JointLog.renderCard=()=>{};PatternBalance.renderCard=()=>{};Coach.renderAll=()=>{};WeeklyReport.checkAndGenerate=()=>{};
+  await window.realDashboardLoad();
+  if(document.getElementById('home-focus').innerText.includes('Preparazione'))throw Error('Home remained in loading state');
+  if(!document.getElementById('home-focus').innerText.includes('completato'))throw Error('Home focus was not rendered');
+  if(document.getElementById('planner-list').innerText.includes('Caricamento'))throw Error('Home planner remained in loading state');
+ });
+ console.log('PASS full Home load renders valid weekly dates and leaves no loading placeholders');
  await page.evaluate(()=>{
   App.navigate('session');document.getElementById('page-session').classList.remove('session-empty');document.body.classList.remove('sess-landing');
   Session.activeId='test';Session.sessions=[{id:'test',date:'2026-09-26',name:'Test',type:'Test'}];Session.viewMode=false;Session.sessionDone=false;
