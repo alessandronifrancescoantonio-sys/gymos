@@ -1525,7 +1525,15 @@ const Recovery = {
       wrap.innerHTML = `${title}<div class="empty-state">Nessun muscolo allenato questa settimana.</div>`;
       return;
     }
-    const items = rows.map(m => {
+    // Se non è mai stato registrato un feedback recente, non mostrare dieci
+    // righe identiche "Nessun dato": sembravano un errore di caricamento e
+    // rendevano la Home enorme soprattutto su telefono.
+    const rowsWithFeedback = rows.filter(m => this.latestFresh(m));
+    if (!rowsWithFeedback.length) {
+      wrap.innerHTML = `${title}<div class="recovery-empty"><i class="ti ti-message-circle-question"></i><div><strong>In attesa del primo feedback</strong><span>Alla prossima sessione indica se sei ancora indolenzito: da quel momento qui vedrai soltanto indicazioni reali.</span></div></div>`;
+      return;
+    }
+    const items = rowsWithFeedback.map(m => {
       const st = this.status(m);
       const adv = Volume.nextVolume(m, st.dir, st.doms, perfDropped, sleepBad, phase, diaryFatigue);
       const advTxt = adv
@@ -1550,10 +1558,7 @@ const Recovery = {
            <i class="ti ${tr.worsening ? "ti-trending-down" : "ti-trending-up"}"></i>
            <span>${this._esc(tr.msg)}</span>
          </div>`
-      : `<div class="rtrend rt-none">
-           <i class="ti ti-hourglass"></i>
-           <span>Per dirti se la fatica si sta accumulando mi servono ancora un po' di risposte (${tr.have || 0}/${tr.need}, su almeno 4 settimane). Finché non ne ho abbastanza preferisco tacere che inventarmi una tendenza.</span>
-         </div>`;
+      : `<div class="rtrend rt-none"><i class="ti ti-hourglass"></i><span>Storico recupero: ${tr.have || 0}/${tr.need} feedback utili.</span></div>`;
 
     wrap.innerHTML = `${title}
       ${trend}
@@ -1742,17 +1747,19 @@ const Dashboard = {
       new Date().toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" });
 
     try {
+      const failed = new Set();
+      const safe = (key, promise, fallback) => promise.catch(() => { failed.add(key); return fallback; });
       // Planning.bounds() restituisce già start/end in formato YYYY-MM-DD.
       // Passargli un Date (o ripassare start/end a Planning.iso) produceva
       // NaN-NaN-NaN / TypeError e interrompeva tutta la Home prima del render.
       const week = typeof Planning !== "undefined" ? Planning.bounds(0) : null;
       const [sessions, checkins, sleepData, habits, todayHabit, plannerTasks] = await Promise.all([
-        API.getWorkoutSessions(14).catch(() => []),
+        safe("sessioni", API.getWorkoutSessions(14), []),
         API.getBodyMetrics(12).catch(() => []),   // 12 (non 5): serve storia sufficiente per stimare da quanto si è nella fase attuale (diet-break)
-        API.getRecentSleep(7).catch(() => []),
-        API.getRecentHabits(7).catch(() => []),
-        API.getTodayHabit().catch(() => null),
-        week ? API.getPlannerTasks(week.start, week.end).catch(() => []) : Promise.resolve([]),
+        safe("sonno", API.getRecentSleep(7), []),
+        safe("abitudini", API.getRecentHabits(7), []),
+        safe("abitudini", API.getTodayHabit(), null),
+        week ? safe("planner", API.getPlannerTasks(week.start, week.end), []) : Promise.resolve([]),
       ]);
 
       this.buildStats(sessions, checkins, sleepData, habits, todayHabit, plannerTasks);
@@ -1763,13 +1770,14 @@ const Dashboard = {
       if (typeof JointLog !== "undefined") JointLog.renderCard();
       if (typeof PatternBalance !== "undefined") PatternBalance.renderCard();
       this.buildRecentSessions(sessions);
-      this.buildChecklist(plannerTasks.filter(t => t.date === U.today()));
+      let todayTasks = plannerTasks.filter(t => t.date === U.today());
+      if (!plannerTasks.length) {
+        try { todayTasks = await API.getTodayTasks(); failed.delete("planner"); }
+        catch (_) { failed.add("planner"); }
+      }
+      this.buildChecklist(todayTasks, failed.has("planner") ? "error" : "ready");
+      this.renderDataHealth(failed);
       if (typeof Planning !== "undefined") Planning.state = { ...Planning.state, tasks: plannerTasks, sessions };
-      /* fallback only when the weekly endpoint is unavailable */
-      if (!plannerTasks.length) API.getTodayTasks().then(tasks => this.buildChecklist(tasks)).catch(() => {
-        const host = document.getElementById("planner-list");
-        if (host) host.textContent = "Planner non disponibile: riprova dalla Home.";
-      });
       this.buildSemaforo(sleepData);
       try { Coach.renderAll(); } catch (e) { console.error("Coach.renderAll:", e); }
       // Riepilogo settimanale: silenzioso se non ci sono le condizioni (>=7gg
@@ -1843,6 +1851,16 @@ const Dashboard = {
     } else {
       hEl.textContent = "—";
     }
+  },
+
+  renderDataHealth(failed) {
+    const host = document.getElementById("home-data-warning");
+    if (!host) return;
+    const names = [...failed];
+    if (!names.length) { host.hidden = true; host.innerHTML = ""; return; }
+    host.hidden = false;
+    host.innerHTML = `<div><i class="ti ti-cloud-off"></i><span><strong>Dati caricati solo in parte</strong><small>Non disponibili: ${U.escape(names.join(", "))}. I valori mancanti non vengono interpretati come zero.</small></span></div><button type="button" class="btn-secondary" data-retry-home>Riprova</button>`;
+    host.querySelector("[data-retry-home]")?.addEventListener("click", () => this.load());
   },
 
   buildFocus(sessions, sleepData, plannerTasks) {
@@ -2034,7 +2052,7 @@ const Dashboard = {
     }
   },
 
-  buildChecklist(tasks) {
+  buildChecklist(tasks, state = "ready") {
     const list  = document.getElementById("planner-list");
     const doneN = document.getElementById("planner-done");
     const totN  = document.getElementById("planner-total");
@@ -2045,8 +2063,14 @@ const Dashboard = {
     bar.style.width = tasks.length ? Math.round(tasks.filter(t => t.done).length / tasks.length * 100) + "%" : "0%";
     list.innerHTML = "";
 
+    if (state === "error") {
+      list.innerHTML = '<div class="planner-empty planner-error"><div><strong>Planner non disponibile</strong><span>I dati non sono stati cancellati: controlla la sincronizzazione e riprova.</span></div><button type="button" class="btn-secondary" data-retry-planner><i class="ti ti-refresh"></i>Riprova</button></div>';
+      list.querySelector("[data-retry-planner]")?.addEventListener("click", () => Dashboard.load());
+      return;
+    }
     if (!tasks.length) {
-      list.innerHTML = '<div class="empty-state">Nessun task pianificato per oggi</div>';
+      list.innerHTML = '<div class="planner-empty"><div><strong>Giornata non pianificata</strong><span>Aggiungi un allenamento, cardio, mobilità o recupero.</span></div><button type="button" class="btn-secondary" data-plan-today><i class="ti ti-calendar-plus"></i>Pianifica</button></div>';
+      list.querySelector("[data-plan-today]")?.addEventListener("click", () => App.navigate("calendar"));
       return;
     }
 

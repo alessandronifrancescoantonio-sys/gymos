@@ -161,7 +161,15 @@ const Recovery = {
       wrap.innerHTML = `${title}<div class="empty-state">Nessun muscolo allenato questa settimana.</div>`;
       return;
     }
-    const items = rows.map(m => {
+    // Se non è mai stato registrato un feedback recente, non mostrare dieci
+    // righe identiche "Nessun dato": sembravano un errore di caricamento e
+    // rendevano la Home enorme soprattutto su telefono.
+    const rowsWithFeedback = rows.filter(m => this.latestFresh(m));
+    if (!rowsWithFeedback.length) {
+      wrap.innerHTML = `${title}<div class="recovery-empty"><i class="ti ti-message-circle-question"></i><div><strong>In attesa del primo feedback</strong><span>Alla prossima sessione indica se sei ancora indolenzito: da quel momento qui vedrai soltanto indicazioni reali.</span></div></div>`;
+      return;
+    }
+    const items = rowsWithFeedback.map(m => {
       const st = this.status(m);
       const adv = Volume.nextVolume(m, st.dir, st.doms, perfDropped, sleepBad, phase, diaryFatigue);
       const advTxt = adv
@@ -186,10 +194,7 @@ const Recovery = {
            <i class="ti ${tr.worsening ? "ti-trending-down" : "ti-trending-up"}"></i>
            <span>${this._esc(tr.msg)}</span>
          </div>`
-      : `<div class="rtrend rt-none">
-           <i class="ti ti-hourglass"></i>
-           <span>Per dirti se la fatica si sta accumulando mi servono ancora un po' di risposte (${tr.have || 0}/${tr.need}, su almeno 4 settimane). Finché non ne ho abbastanza preferisco tacere che inventarmi una tendenza.</span>
-         </div>`;
+      : `<div class="rtrend rt-none"><i class="ti ti-hourglass"></i><span>Storico recupero: ${tr.have || 0}/${tr.need} feedback utili.</span></div>`;
 
     wrap.innerHTML = `${title}
       ${trend}

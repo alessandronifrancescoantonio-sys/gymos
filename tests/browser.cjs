@@ -25,6 +25,7 @@ const server=http.createServer((req,res)=>{
  await page.evaluate(()=>{
   document.getElementById('loading').style.display='none';App.setupNav();Accessibility.init();
   window.realDashboardLoad=Dashboard.load.bind(Dashboard);
+  window.realRecoveryRender=Recovery.renderCard.bind(Recovery);
   for(const obj of [Dashboard,Session,Cardio,Progression,Body,Diary,Schede,ScienceUpdates,PredictiveCoach])obj.load=async()=>{};
   WeeklyReport.loadHistory=async()=>{};
   Dashboard.buildWeekSplit([]);
@@ -62,6 +63,24 @@ const server=http.createServer((req,res)=>{
   if(document.getElementById('planner-list').innerText.includes('Caricamento'))throw Error('Home planner remained in loading state');
  });
  console.log('PASS full Home load renders valid weekly dates and leaves no loading placeholders');
+ await page.evaluate(()=>{
+  Dashboard.buildChecklist([]);
+  const empty=document.querySelector('#planner-list .planner-empty');
+  if(!empty||!empty.innerText.includes('Pianifica'))throw Error('Planner empty state has no recovery action');
+  Dashboard.buildChecklist([], 'error');
+  if(!document.getElementById('planner-list').innerText.includes('non disponibile'))throw Error('Planner network failure looks like empty data');
+  Dashboard.renderDataHealth(new Set(['planner']));
+  if(document.getElementById('home-data-warning').hidden)throw Error('Partial data warning is hidden');
+  Dashboard.renderDataHealth(new Set());
+  localStorage.removeItem(Recovery.KEY);
+  const muscles=Volume.MUSCLES;Volume.MUSCLES=['Spalle'];Volume._actualDir={Spalle:8};
+  const latestFresh=Recovery.latestFresh;Recovery.latestFresh=()=>null;
+  window.realRecoveryRender([],[],[]);
+  Recovery.latestFresh=latestFresh;Volume.MUSCLES=muscles;
+  const recovery=document.getElementById('dash-recovery');
+  if(!recovery.querySelector('.recovery-empty')||recovery.querySelectorAll('.rmap-row').length)throw Error('Recovery renders misleading no-data rows');
+ });
+ console.log('PASS compact actionable empty states for Planner and Recovery');
  await page.evaluate(()=>{
   App.navigate('session');document.getElementById('page-session').classList.remove('session-empty');document.body.classList.remove('sess-landing');
   Session.activeId='test';Session.sessions=[{id:'test',date:'2026-09-26',name:'Test',type:'Test'}];Session.viewMode=false;Session.sessionDone=false;
