@@ -81,6 +81,18 @@ const server=http.createServer((req,res)=>{
   if(!recovery.querySelector('.recovery-empty')||recovery.querySelectorAll('.rmap-row').length)throw Error('Recovery renders misleading no-data rows');
  });
  console.log('PASS compact actionable empty states for Planner and Recovery');
+ await page.setViewportSize({width:390,height:844});
+ await page.evaluate(()=>{
+  App.navigate('session');document.body.classList.remove('sess-landing','session-view');
+  document.getElementById('bn-save').classList.add('show');
+  App.syncBottomBarHeight();
+  document.getElementById('rest-running').style.display='flex';
+ });
+ const timerLayout=await page.evaluate(()=>{const rect=e=>e.getBoundingClientRect();const t=rect(document.getElementById('rest-running')),n=rect(document.getElementById('bottom-nav'));return {timerBottom:t.bottom,navTop:n.top,timerZ:+getComputedStyle(document.getElementById('rest-running')).zIndex,navZ:+getComputedStyle(document.getElementById('bottom-nav')).zIndex}});
+ assert.ok(timerLayout.timerBottom<=timerLayout.navTop,'active timer overlaps mobile navigation');
+ assert.ok(timerLayout.timerZ>timerLayout.navZ,'active timer is behind mobile navigation');
+ await page.evaluate(()=>{document.getElementById('rest-running').style.display='none';document.getElementById('bn-save').classList.remove('show');App.navigate('dashboard')});
+ console.log('PASS active rest timer stays visible above session navigation');
  await page.evaluate(()=>{
   App.navigate('session');document.getElementById('page-session').classList.remove('session-empty');document.body.classList.remove('sess-landing');
   Session.activeId='test';Session.sessions=[{id:'test',date:'2026-09-26',name:'Test',type:'Test'}];Session.viewMode=false;Session.sessionDone=false;

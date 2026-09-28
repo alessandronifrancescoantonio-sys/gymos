@@ -130,6 +130,7 @@ const RestTimer = {
 
   start(seconds) {
     this.closePicker();
+    if (typeof App !== "undefined" && App.syncBottomBarHeight) App.syncBottomBarHeight();
     this.total = seconds;
     this.endAt = Date.now() + seconds * 1000;
     this.remaining = seconds;

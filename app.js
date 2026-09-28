@@ -23,6 +23,23 @@ const App = {
         this.navigate(link.dataset.page);
       });
     });
+    this.syncBottomBarHeight();
+    if (!this._bottomBarBound && typeof ResizeObserver !== "undefined") {
+      this._bottomBarBound = true;
+      const nav = document.getElementById("bottom-nav");
+      if (nav) new ResizeObserver(() => this.syncBottomBarHeight()).observe(nav);
+      window.addEventListener("resize", () => this.syncBottomBarHeight());
+    }
+  },
+
+  // La barra mobile cambia altezza quando compare il pulsante Salva in
+  // sessione. Timer, toast e contenuti devono usare l'altezza REALE, non una
+  // costante: altrimenti la barra copre il timer proprio durante l'allenamento.
+  syncBottomBarHeight() {
+    const nav = document.getElementById("bottom-nav");
+    if (!nav || window.innerWidth > 760) return;
+    const h = Math.ceil(nav.getBoundingClientRect().height);
+    if (h > 0) document.documentElement.style.setProperty("--bottombar-h", `${h}px`);
   },
 
   navigate(page) {
@@ -41,6 +58,7 @@ const App = {
     // Mostra il bottone Salva mobile solo sulla pagina Sessione
     const bnSave = document.getElementById("bn-save");
     if (bnSave) bnSave.classList.toggle("show", page === "session");
+    this.syncBottomBarHeight();
 
     // Mostra il timer recupero (FAB) solo nella pagina Sessione
     const restFab = document.getElementById("rest-fab");

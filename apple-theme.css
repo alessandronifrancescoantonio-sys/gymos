@@ -334,3 +334,9 @@ textarea.field-inp { min-height:88px; }
 @media(max-width:700px){.bn-more.active{background:rgba(255,59,47,.13);color:var(--accent)}}
 .planner-empty,.recovery-empty{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px;border:1px dashed var(--border);border-radius:14px;background:rgba(255,255,255,.025)}.planner-empty>div,.recovery-empty>div{display:grid;gap:4px}.planner-empty span,.recovery-empty span{font-size:12px;color:var(--muted);line-height:1.45}.recovery-empty{justify-content:flex-start}.recovery-empty>i{font-size:25px;color:var(--accent);flex:none}@media(max-width:520px){.planner-empty{align-items:stretch;flex-direction:column}.planner-empty button{width:100%}}
 .home-data-warning{margin:0 0 14px;padding:12px 14px;border:1px solid rgba(239,184,79,.38);border-radius:15px;background:rgba(239,184,79,.07);display:flex;align-items:center;justify-content:space-between;gap:12px}.home-data-warning[hidden]{display:none}.home-data-warning>div{display:flex;align-items:center;gap:10px}.home-data-warning i{color:#efb84f;font-size:20px}.home-data-warning span{display:grid;gap:2px}.home-data-warning small{color:var(--muted)}.planner-error{border-color:rgba(255,91,85,.35)}@media(max-width:520px){.home-data-warning{align-items:stretch;flex-direction:column}.home-data-warning button{width:100%}}
+
+/* Gerarchia cromatica unica: arancione solo per l'azione primaria, superficie
+   scura per le secondarie, rosso esclusivamente per azioni distruttive. */
+.duration-btn,.vol-edit-btn,.recent-more-btn,.prog-add-seduta,.prog-rename,.sess-new-btn,.coach-fab-inline{background:var(--fill)!important;background-image:none!important;border-color:transparent!important;color:var(--accent)!important;box-shadow:none!important}
+.seduta-act.del,.scheda-del-btn,.coach-clear-btn{background:rgba(255,91,85,.08)!important;color:var(--red)!important}
+button:disabled{opacity:.46;filter:saturate(.55);cursor:not-allowed;box-shadow:none!important}
