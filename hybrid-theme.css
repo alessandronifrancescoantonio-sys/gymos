@@ -1,0 +1,123 @@
+/* GymOS Hybrid — precisione minimal + carattere training. Caricato dopo apple-theme.css. */
+:root {
+  --radius:14px; --radius-sm:9px; --radius-lg:17px;
+  --surface:rgba(20,20,23,.94); --surface-solid:#18181b; --surface-raised:#222226;
+  --fill:rgba(255,255,255,.075); --fill-strong:rgba(255,255,255,.135);
+  --hairline:rgba(255,255,255,.105); --separator:rgba(255,255,255,.17);
+  --sh-1:0 1px 0 rgba(255,255,255,.045) inset,0 5px 16px rgba(0,0,0,.25);
+  --sh-2:0 12px 34px rgba(0,0,0,.38); --sh-3:0 26px 70px rgba(0,0,0,.60);
+}
+
+body {
+  background:
+    radial-gradient(70rem 34rem at 82% -12%,rgba(255,59,47,.13),transparent 54%),
+    linear-gradient(180deg,#09090a 0%,#070708 42%,#050506 100%);
+  letter-spacing:0;
+}
+body::before { opacity:.72; }
+
+/* Navigazione: più compatta e riconoscibile della variante Apple pura. */
+.sidebar { width:232px; background:rgba(15,15,17,.97); border-right-color:var(--separator); box-shadow:12px 0 35px rgba(0,0,0,.18); }
+.main { margin-left:232px; }
+.sidebar-logo { padding:24px 18px 18px; border-bottom:1px solid var(--hairline); }
+.logo-text { font-size:24px; font-weight:850; letter-spacing:.035em; text-transform:uppercase; }
+.nav-links { padding:10px 9px; gap:4px; }
+.nav-link { min-height:43px; border-radius:9px; font-size:13px; font-weight:620; }
+.nav-link.active { border-left:3px solid var(--accent); padding-left:11px; background:linear-gradient(90deg,rgba(255,59,47,.18),rgba(255,59,47,.07)); box-shadow:inset 0 0 0 1px rgba(255,59,47,.12); }
+.sidebar-footer { border:1px solid var(--hairline); border-radius:12px; background:#17171a; }
+
+/* Titoli più energici, contenuti ancora ariosi. */
+.page { max-width:1160px; padding:30px 32px 58px; }
+.page-header { margin-bottom:22px; }
+.eyebrow { font-size:10px; font-weight:800; letter-spacing:.13em; text-transform:uppercase; }
+.page-title,.modal-title,.sum-title,.rest-picker-title {
+  font-weight:850; letter-spacing:-.025em; text-transform:uppercase;
+}
+.page-title { font-size:clamp(31px,3.5vw,42px); line-height:1; }
+.page-title::after { width:44px; height:3px; margin-top:9px; }
+.page-meta { font-size:12px; }
+
+/* Superfici: meno vetro, più profondità e separazione tra le funzioni. */
+.card,.stat-card,.semaforo-card,.ex-block,.sess-note-card,.scheda-card,.prog-card,
+.quick-link,.sess-timer-bar,.today-goal,.body-stats,.sess-stats {
+  background-color:var(--surface); border-color:var(--hairline); border-radius:var(--radius-lg);
+  -webkit-backdrop-filter:blur(10px) saturate(125%); backdrop-filter:blur(10px) saturate(125%);
+  box-shadow:var(--sh-1);
+}
+.card { padding:18px 20px; margin-bottom:14px; }
+.card-title { color:var(--ghost); font-size:12px; font-weight:800; letter-spacing:.065em; text-transform:uppercase; }
+.card-title i { width:28px; height:28px; display:inline-grid; place-items:center; border-radius:8px; background:rgba(255,59,47,.11); }
+.stat-card { padding:16px; border-top:2px solid color-mix(in srgb,var(--section,var(--accent)) 68%,transparent); }
+.stat-label,.ss-l,.bstat-l { font-size:10px; font-weight:720; letter-spacing:.055em; text-transform:uppercase; }
+.stat-val { font-size:29px; }
+.semaforo-card { border-left:3px solid var(--green); }
+.quick-link,.recent-sess-item,.check-item,.rec-tile,.misura-card,.seduta-card,.ex-editor-item,.vol-sed,.vol-ex {
+  background-color:#202024; border-color:rgba(255,255,255,.09); border-radius:12px;
+}
+
+/* Controlli: rettangoli premium, non capsule ovunque. */
+.btn-primary,.btn-secondary,.duration-btn,.sess-save-desktop,.prog-activate {
+  min-height:42px; border-radius:11px; font-weight:760; letter-spacing:.015em;
+}
+.btn-primary,.sess-save-desktop { box-shadow:0 7px 20px rgba(255,59,47,.25),inset 0 1px rgba(255,255,255,.16); }
+.btn-secondary { border:1px solid var(--hairline); background:#202024; }
+.pill-btn,.scheda-pill { border-radius:999px; border:1px solid var(--hairline); }
+.field-inp,.select-dark,.sess-select,.app-modal-input,.vol-ex-sel,.tg-info {
+  min-height:44px; border-radius:10px; border-color:var(--hairline); background:#202024;
+}
+
+/* Allenamento: blocchi più leggibili e sensazione di strumento, non di pannello piatto. */
+.ex-block { border-radius:16px; margin-bottom:12px; }
+.ex-block.ex-focused { border-color:rgba(255,59,47,.62); box-shadow:0 0 0 2px rgba(255,59,47,.12),0 16px 38px rgba(0,0,0,.34); }
+.ex-hd { min-height:60px; padding:13px 15px; }
+.ex-num { min-width:28px; height:28px; border-radius:7px; border:1px solid rgba(255,59,47,.25); background:rgba(255,59,47,.11); }
+.ex-name { font-size:15px; font-weight:760; }
+.set-hd { min-height:50px; padding:11px 15px; }
+.set-num { border-radius:7px; border:1px solid var(--hairline); }
+.adj { border-radius:11px; border:1px solid rgba(255,59,47,.22); }
+.set-done-btn { border-radius:11px; }
+.add-set-btn { border-radius:10px; }
+
+/* Finestre e feedback più solidi, conservando la semplicità attuale. */
+.modal-box,.app-modal-box,.vol-box,.summary-box,.ph-box,.archive-box,.rest-picker-box,.more-menu {
+  background:#202024; border-color:var(--separator); border-radius:18px;
+  -webkit-backdrop-filter:blur(16px) saturate(135%); backdrop-filter:blur(16px) saturate(135%);
+}
+.toast { border-radius:12px; background:#242428; }
+.bottom-nav { background:rgba(20,20,23,.97); }
+.rest-running { background:#202024; border-color:rgba(255,59,47,.25); }
+
+@media (max-width:760px) {
+  .main { margin-left:0; }
+  .page { padding:0 13px calc(var(--bottombar-h) + 30px); }
+  .page-header,.sess-header {
+    margin:0 -13px 14px; padding:calc(11px + env(safe-area-inset-top)) 16px 13px;
+    background:rgba(13,13,15,.97); border-bottom-color:var(--separator);
+  }
+  .page-title { font-size:29px; }
+  .card { padding:16px; border-radius:15px; }
+  .bottom-nav {
+    left:7px; right:7px; bottom:7px; border-radius:17px; border-color:var(--separator);
+    box-shadow:0 12px 34px rgba(0,0,0,.48);
+  }
+  .bn-link,.bn-more,.bn-save { border-radius:11px; }
+  .bn-link.active { background:linear-gradient(180deg,rgba(255,59,47,.18),rgba(255,59,47,.08)); box-shadow:inset 0 0 0 1px rgba(255,59,47,.12); }
+  .modal-box,.app-modal-box,.vol-box,.summary-box,.ph-box,.archive-box,.more-menu { border-radius:20px 20px 14px 14px; }
+}
+
+@media (max-width:520px) {
+  .seduta-head {
+    display:grid; grid-template-columns:24px 8px minmax(58px,1fr) 29px 35px 35px;
+    gap:5px; padding:10px 8px;
+  }
+  .seduta-head .seduta-name { min-width:0; display:block; }
+  .seduta-order-actions { width:29px; flex-direction:column; gap:1px; align-items:center; }
+  .seduta-act.order { min-width:28px; width:28px; min-height:19px; height:19px; border-radius:6px; }
+  .seduta-head > .seduta-act { min-width:34px; width:34px; min-height:36px; height:36px; }
+}
+
+@media (min-width:761px) and (max-width:1000px) {
+  .sidebar { width:78px; }
+  .main { margin-left:78px; }
+  .page { padding:28px 24px 52px; }
+}

@@ -162,6 +162,8 @@ const server=http.createServer((req,res)=>{
  await page.emulateMedia({colorScheme:'dark'});
  assert.equal(await page.evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--ink').trim()),'#070708');
  assert.equal(await page.evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--blue').trim()),'#FF3B2F');
+ assert.equal(await page.evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--radius-lg').trim()),'17px');
+ assert.equal(await page.locator('.add-set-btn').evaluate(el=>getComputedStyle(el).borderRadius),'10px');
  assert.equal(await page.locator('.rr-in-sm').first().evaluate(el=>getComputedStyle(el).color),'rgb(255, 59, 47)');
  await page.waitForTimeout(350);
  await page.screenshot({path:path.join(root,'test-results','session-320-dark.png'),fullPage:true});
@@ -169,7 +171,7 @@ const server=http.createServer((req,res)=>{
  assert.equal(await page.evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--ink').trim()),'#070708');
  await page.setViewportSize({width:1280,height:900});
  await page.screenshot({path:path.join(root,'test-results','session-1280.png'),fullPage:false});
- console.log('PASS consistent black and orange appearance across device themes');
+ console.log('PASS hybrid premium theme stays black/orange and consistent across device themes');
  const sid=await page.evaluate(()=>[Session.sanitize('Leg curl'),Session.sanitize('Leg-curl')]);assert.notEqual(sid[0],sid[1]);
  await page.evaluate(()=>{
    const name=`Esercizio "dell'atleta" <img src=x onerror=alert(1)>`;
@@ -217,6 +219,9 @@ const server=http.createServer((req,res)=>{
  await page.setViewportSize({width:320,height:800});
  assert.deepEqual(await page.locator('#schede-list .seduta-name').allTextContents(),['Seduta B','Seduta A','Seduta C']);
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>document.documentElement.clientWidth),false,'session order controls overflow on mobile');
+ fs.mkdirSync(path.join(root,'test-results'),{recursive:true});
+ await page.evaluate(()=>{document.getElementById('workout-summary').style.display='none';document.getElementById('toast-wrap').innerHTML='';App.navigate('schede');Schede.render()});
+ await page.screenshot({path:path.join(root,'test-results','schede-320-hybrid.png'),fullPage:true});
  console.log('PASS workout sequence reorders, persists, rolls back on failure and fits mobile');
  await page.evaluate(async()=>{
    App.navigate('dashboard');Dashboard.buildChecklist([{id:'task',name:'Mobilità',done:false}]);
