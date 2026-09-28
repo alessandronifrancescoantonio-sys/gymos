@@ -10,6 +10,7 @@ const App = {
     Accessibility.init();
     SyncCenter.init();
     this.setupNav();
+    if (typeof RestTimer !== "undefined") RestTimer.restore();
     window.addEventListener("online", () => Notes.retry().catch(() => U.toast("Alcune note attendono ancora il salvataggio", "err")));
     await this.boot();
     Notes.retry().catch(() => U.toast("Note conservate sul dispositivo: riproverò quando torna la connessione", "info"));

@@ -13,9 +13,9 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-<link rel="stylesheet" href="style.css?v=112">
-<link rel="stylesheet" href="quality.css?v=112">
-<link rel="stylesheet" href="apple-theme.css?v=112">
+<link rel="stylesheet" href="style.css?v=113">
+<link rel="stylesheet" href="quality.css?v=113">
+<link rel="stylesheet" href="apple-theme.css?v=113">
 </head>
 <body>
 
@@ -672,7 +672,7 @@
   <div class="rest-count" id="rest-count">90</div>
   <div class="rest-actions">
     <button onclick="RestTimer.addTime(15)">+15s</button>
-    <button class="rest-stop" onclick="RestTimer.stop()">Stop</button>
+    <button class="rest-stop" onclick="RestTimer.requestStop(this)">Stop</button>
   </div>
 </div>
 
@@ -770,18 +770,18 @@
 
 <dialog class="sync-center" id="sync-center"><div class="sync-head"><div><div class="eyebrow">DATI E CONNESSIONI</div><h2>Sincronizzazione</h2></div><button class="archive-close" type="button" onclick="SyncCenter.close()" aria-label="Chiudi"><i class="ti ti-x"></i></button></div><div id="sync-details"></div><div class="form-actions"><button class="btn-secondary" type="button" onclick="SyncCenter.retry()"><i class="ti ti-refresh"></i>Ricontrolla</button></div></dialog>
 
-<script src="exercise-guide-index.js?v=112"></script>
-<script src="config.js?v=112"></script>
-<script src="notes.js?v=112"></script>
-<script src="ai-client.js?v=112"></script>
-<script src="accessibility.js?v=112"></script>
-<script src="backup.js?v=112"></script>
-<script src="sync-center.js?v=112"></script>
-<script src="api.js?v=112"></script>
-<script src="session.js?v=112"></script>
-<script src="modules.js?v=112"></script>
-<script src="timers.js?v=112"></script>
-<script src="app.js?v=112"></script>
+<script src="exercise-guide-index.js?v=113"></script>
+<script src="config.js?v=113"></script>
+<script src="notes.js?v=113"></script>
+<script src="ai-client.js?v=113"></script>
+<script src="accessibility.js?v=113"></script>
+<script src="backup.js?v=113"></script>
+<script src="sync-center.js?v=113"></script>
+<script src="api.js?v=113"></script>
+<script src="session.js?v=113"></script>
+<script src="modules.js?v=113"></script>
+<script src="timers.js?v=113"></script>
+<script src="app.js?v=113"></script>
 <script>
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(function(){});

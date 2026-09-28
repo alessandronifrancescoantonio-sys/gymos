@@ -111,6 +111,7 @@ function startDurationTimer() { DurationTimer.start(); }
 
 // ─── TIMER RECUPERO ───
 const RestTimer = {
+  STORAGE_KEY: "gymos_rest_timer_v1",
   total:     0,
   remaining: 0,
   interval:  null,
@@ -120,6 +121,80 @@ const RestTimer = {
   _notifAsked: false,
   _scheduled: [],
   _audioScheduled: false,
+
+  _readSaved() {
+    try {
+      const value = JSON.parse(localStorage.getItem(this.STORAGE_KEY) || "null");
+      return value && value.v === 1 ? value : null;
+    } catch (_) { return null; }
+  },
+  _saveRunning() {
+    try {
+      localStorage.setItem(this.STORAGE_KEY, JSON.stringify({
+        v: 1, state: "running", total: this.total, endAt: this.endAt,
+        sessionId: (typeof Session !== "undefined" && Session.activeId) || null,
+      }));
+    } catch (_) {}
+  },
+  _saveFinished() {
+    try { localStorage.setItem(this.STORAGE_KEY, JSON.stringify({ v: 1, state: "finished", finishedAt: Date.now() })); } catch (_) {}
+  },
+  _clearSaved() {
+    try { localStorage.removeItem(this.STORAGE_KEY); } catch (_) {}
+  },
+
+  // Ripristina il recupero dopo reload, chiusura accidentale, cambio pagina o
+  // sospensione del browser. La sorgente di verità è l'orario assoluto di fine,
+  // non il setInterval (che telefono e browser possono congelare).
+  restore() {
+    const saved = this._readSaved();
+    if (!saved) return false;
+    if (saved.state === "finished") {
+      this._showIdleUI();
+      this.showFinished();
+      return true;
+    }
+    const endAt = Number(saved.endAt), total = Number(saved.total);
+    if (saved.state !== "running" || !Number.isFinite(endAt) || !Number.isFinite(total) || total <= 0) {
+      this._clearSaved();
+      return false;
+    }
+    this.endAt = endAt;
+    this.total = total;
+    this.remaining = Math.max(0, Math.ceil((endAt - Date.now()) / 1000));
+    if (this.remaining <= 0) {
+      this.finish();
+      return true;
+    }
+    this._showRunningUI();
+    this.updateDisplay();
+    if (document.visibilityState === "visible") this.requestWake();
+    this._mediaStart();
+    this._startTicking();
+    return true;
+  },
+
+  _showRunningUI() {
+    const running = document.getElementById("rest-running");
+    if (running) running.style.display = "flex";
+    const fab = document.getElementById("rest-fab");
+    if (fab) fab.style.visibility = "hidden";
+    if (typeof App !== "undefined" && App.syncBottomBarHeight) App.syncBottomBarHeight();
+  },
+  _showIdleUI() {
+    const running = document.getElementById("rest-running");
+    if (running) running.style.display = "none";
+    const fab = document.getElementById("rest-fab");
+    if (fab) fab.style.visibility = "";
+  },
+  _startTicking() {
+    clearInterval(this.interval);
+    this.interval = setInterval(() => {
+      this.remaining = Math.max(0, Math.ceil((this.endAt - Date.now()) / 1000));
+      this.updateDisplay();
+      if (Date.now() >= this.endAt) this.finish();
+    }, 250);
+  },
 
   openPicker() {
     document.getElementById("rest-picker").style.display = "flex";
@@ -134,9 +209,8 @@ const RestTimer = {
     this.total = seconds;
     this.endAt = Date.now() + seconds * 1000;
     this.remaining = seconds;
-    document.getElementById("rest-running").style.display = "flex";
-    const fab = document.getElementById("rest-fab");
-    if (fab) fab.style.visibility = "hidden";   // evita sovrapposizione con la barretta
+    this._showRunningUI();
+    this._saveRunning();
 
     // Tieni lo schermo acceso durante il recupero (niente standby, timer preciso)
     this.requestWake();
@@ -150,18 +224,14 @@ const RestTimer = {
 
     this.updateDisplay();
     this._mediaStart();   // mostra il countdown sul lock screen (Android)
-    clearInterval(this.interval);
-    this.interval = setInterval(() => {
-      this.remaining = Math.max(0, Math.round((this.endAt - Date.now()) / 1000));
-      this.updateDisplay();
-      if (Date.now() >= this.endAt) this.finish();
-    }, 250);
+    this._startTicking();
   },
 
   addTime(s) {
     this.endAt += s * 1000;
     this.total = Math.max(this.total, Math.round((this.endAt - Date.now()) / 1000));
     this.remaining = Math.round((this.endAt - Date.now()) / 1000);
+    this._saveRunning();
     this.updateDisplay();
     this._mediaTick(true);
     // riprogramma il suono in base al nuovo istante di fine
@@ -218,13 +288,14 @@ const RestTimer = {
   },
 
   finish() {
+    if (this._finishing) return;
+    this._finishing = true;
     clearInterval(this.interval);
     this.interval = null;
     this.releaseWake();
+    this._saveFinished();
     // la notifica "Recupero finito" (notify) sostituisce quella in corso (stesso tag)
-    document.getElementById("rest-running").style.display = "none";
-    const fab = document.getElementById("rest-fab");
-    if (fab) fab.style.visibility = "";
+    this._showIdleUI();
 
     // Avvisi: vibrazione forte + notifica + flash rosso a tutto schermo
     if (navigator.vibrate) navigator.vibrate([300, 120, 300, 120, 500]);
@@ -234,15 +305,15 @@ const RestTimer = {
     if (!this._audioScheduled) this.beep();
     this.notify();
     this.showFinished();
+    this._finishing = false;
   },
 
-  // Flash rosso a tutto schermo finché non lo tocchi (auto-chiude dopo 20s)
+  // Flash rosso a tutto schermo finché non lo tocchi: non scompare da solo,
+  // così un'occhiata tardiva dopo lo sblocco non perde l'avviso.
   showFinished() {
     const o = document.getElementById("rest-finished");
     if (!o) return;
     o.style.display = "flex";
-    clearTimeout(this._finTo);
-    this._finTo = setTimeout(() => this.dismissFinished(), 20000);
   },
   dismissFinished() {
     const o = document.getElementById("rest-finished");
@@ -250,18 +321,38 @@ const RestTimer = {
     clearTimeout(this._finTo);
     this.stopAlarm();        // zittisce l'allarme dal vivo
     this.stopScheduled();    // e ferma gli eventi sonori programmati rimasti
+    this._clearSaved();
+  },
+
+  // Due tocchi per fermare: il primo arma la conferma per 3 secondi. Evita
+  // che un tocco involontario vicino a +15s cancelli l'intero recupero.
+  requestStop(button) {
+    if (this._stopArmed) {
+      this.stop();
+      return;
+    }
+    this._stopArmed = true;
+    if (button) button.textContent = "Conferma stop";
+    clearTimeout(this._stopConfirmTimer);
+    this._stopConfirmTimer = setTimeout(() => {
+      this._stopArmed = false;
+      if (button) button.textContent = "Stop";
+    }, 3000);
   },
 
   stop() {
+    this._stopArmed = false;
+    clearTimeout(this._stopConfirmTimer);
+    const stopBtn = document.querySelector("#rest-running .rest-stop");
+    if (stopBtn) stopBtn.textContent = "Stop";
     clearInterval(this.interval);
     this.interval = null;
     this.stopAlarm();
     this.stopScheduled();
     this.releaseWake();
     this._mediaStop();
-    document.getElementById("rest-running").style.display = "none";
-    const fab = document.getElementById("rest-fab");
-    if (fab) fab.style.visibility = "";
+    this._clearSaved();
+    this._showIdleUI();
   },
 
   // ── Wake Lock: schermo acceso durante il recupero ──
@@ -396,10 +487,12 @@ const RestTimer = {
 
 // Riprendi lo schermo acceso se torni sull'app mentre il recupero è in corso
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible" && RestTimer.interval) {
-    RestTimer.requestWake();
-    RestTimer.remaining = Math.max(0, Math.round((RestTimer.endAt - Date.now()) / 1000));
-    RestTimer.updateDisplay();
-    if (Date.now() >= RestTimer.endAt) RestTimer.finish();
+  if (document.visibilityState === "visible") {
+    // Non fidarti di interval: può essere stato eliminato dal browser mentre
+    // l'app era sospesa. Ripristina sempre dallo stato persistente.
+    RestTimer.restore();
   }
+});
+window.addEventListener("pagehide", () => {
+  if (RestTimer.endAt > Date.now()) RestTimer._saveRunning();
 });

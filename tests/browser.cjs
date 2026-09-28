@@ -91,8 +91,36 @@ const server=http.createServer((req,res)=>{
  const timerLayout=await page.evaluate(()=>{const rect=e=>e.getBoundingClientRect();const t=rect(document.getElementById('rest-running')),n=rect(document.getElementById('bottom-nav'));return {timerBottom:t.bottom,navTop:n.top,timerZ:+getComputedStyle(document.getElementById('rest-running')).zIndex,navZ:+getComputedStyle(document.getElementById('bottom-nav')).zIndex}});
  assert.ok(timerLayout.timerBottom<=timerLayout.navTop,'active timer overlaps mobile navigation');
  assert.ok(timerLayout.timerZ>timerLayout.navZ,'active timer is behind mobile navigation');
- await page.evaluate(()=>{document.getElementById('rest-running').style.display='none';document.getElementById('bn-save').classList.remove('show');App.navigate('dashboard')});
+ await page.evaluate(()=>{
+  document.getElementById('rest-running').style.display='none';
+  RestTimer.requestWake=async()=>{};RestTimer.releaseWake=()=>{};RestTimer.primeAudio=()=>{};
+  RestTimer.scheduleAlarm=()=>{};RestTimer.ensureNotif=()=>{};RestTimer._mediaStart=()=>{};RestTimer.notify=()=>{};
+  RestTimer.start(90);
+ });
+ assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem(RestTimer.STORAGE_KEY)).state),'running','rest timer was not persisted');
+ await page.locator('#rest-running .rest-stop').click();
+ assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem(RestTimer.STORAGE_KEY)).state),'running','one accidental stop tap cancelled the timer');
+ assert.match(await page.locator('#rest-running .rest-stop').innerText(),/Conferma/,'stop confirmation was not armed');
+ await page.evaluate(()=>App.navigate('dashboard'));
+ assert.equal(await page.locator('#rest-running').isVisible(),true,'rest timer disappeared after page navigation');
+ await page.evaluate(()=>{
+  RestTimer.endAt=Date.now()+42000;RestTimer.total=90;RestTimer._saveRunning();
+  clearInterval(RestTimer.interval);RestTimer.interval=null;RestTimer.endAt=0;RestTimer.total=0;RestTimer.remaining=0;
+  document.getElementById('rest-running').style.display='none';RestTimer.restore();
+ });
+ const restored=await page.evaluate(()=>({visible:getComputedStyle(document.getElementById('rest-running')).display!=='none',remaining:RestTimer.remaining,running:!!RestTimer.interval}));
+ assert.ok(restored.visible&&restored.running&&restored.remaining>=40&&restored.remaining<=42,'rest timer did not resume after reload/suspension');
+ await page.evaluate(()=>{
+  clearInterval(RestTimer.interval);RestTimer.interval=null;
+  localStorage.setItem(RestTimer.STORAGE_KEY,JSON.stringify({v:1,state:'running',total:90,endAt:Date.now()-1000}));
+  RestTimer.endAt=0;RestTimer.total=0;RestTimer.remaining=0;RestTimer.restore();
+ });
+ assert.equal(await page.locator('#rest-finished').isVisible(),true,'expired timer was silently discarded');
+ assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem(RestTimer.STORAGE_KEY)).state),'finished','finished state was not retained');
+ await page.evaluate(()=>{RestTimer.dismissFinished();document.getElementById('bn-save').classList.remove('show');App.navigate('dashboard')});
+ assert.equal(await page.evaluate(()=>localStorage.getItem(RestTimer.STORAGE_KEY)),null,'dismissed timer state was not cleared');
  console.log('PASS active rest timer stays visible above session navigation');
+ console.log('PASS rest timer survives navigation, reload, suspension and expired-state recovery');
  await page.evaluate(()=>{
   App.navigate('session');document.getElementById('page-session').classList.remove('session-empty');document.body.classList.remove('sess-landing');
   Session.activeId='test';Session.sessions=[{id:'test',date:'2026-09-26',name:'Test',type:'Test'}];Session.viewMode=false;Session.sessionDone=false;
@@ -120,6 +148,7 @@ const server=http.createServer((req,res)=>{
  assert.equal(await page.locator('.ex-block').evaluate(el=>el.classList.contains('collapsed')),false,'exercise closed after re-render');
  assert.equal(await page.locator('#setrow-set2').evaluate(el=>el.classList.contains('set-collapsed')),false,'open set disappeared after re-render');
  for(let i=0;i<6;i++){await page.locator('.ex-name').click();await page.locator('.ex-name').click()}
+ if(await page.locator('.ex-block').evaluate(el=>el.classList.contains('collapsed')))await page.locator('.ex-name').click();
  assert.equal(await page.locator('.ex-block').evaluate(el=>el.classList.contains('collapsed')),false,'exercise toggle became unresponsive');
  await page.locator('.ex-note-in').fill('Ricorda la presa');
  assert.equal(await page.evaluate(()=>Notes.pending('test').exercises[`Farmer's walk`]),'Ricorda la presa');
