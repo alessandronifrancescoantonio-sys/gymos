@@ -144,7 +144,12 @@ const Session = {
   },
 
   async loadSession(id, opts) {
+    const changingSession = this.activeId !== id;
     this.activeId = id;
+    if (changingSession) {
+      this._openExercise = null;
+      this._openSetByExercise = {};
+    }
     // esci dalla schermata iniziale: mostra il contenuto della sessione
     const _pg = document.getElementById("page-session");
     if (_pg) _pg.classList.remove("session-empty");
@@ -617,6 +622,16 @@ const Session = {
 
   renderExercises() {
     const container = document.getElementById("exercises-container");
+    // Conserva la tendina e la serie aperte quando un salvataggio o un
+    // aggiornamento ridisegna la lista. Prima il render richiudeva tutto e,
+    // soprattutto su telefono, dava l'impressione che le serie sparissero.
+    const domOpenExercise = container.querySelector(".ex-block:not(.collapsed)")?.dataset.ex;
+    if (domOpenExercise) this._openExercise = domOpenExercise;
+    this._openSetByExercise = this._openSetByExercise || {};
+    container.querySelectorAll(".ex-block").forEach(oldBlock => {
+      const openSet = oldBlock.querySelector(".set-card:not(.set-collapsed)");
+      if (openSet) this._openSetByExercise[oldBlock.dataset.ex] = openSet.id.replace(/^setrow-/, "");
+    });
     container.innerHTML = "";
     const grouped     = this.groupByExercise(this.exercises);
     const prevGrouped = this.groupByExercise(this.prevExercises);
@@ -633,7 +648,9 @@ const Session = {
       const ex      = sets[0] || {};   // i campi tecnica vivono a livello esercizio (su tutte le serie)
 
       const block = document.createElement("div");
-      block.className  = "ex-block collapsed";
+      const exerciseOpen = this._openExercise === exName;
+      block.className  = "ex-block" + (exerciseOpen ? " ex-focused" : " collapsed") +
+        (this._openExercise && !exerciseOpen ? " ex-dimmed" : "");
       block.dataset.ex = exName;
 
       block.innerHTML = `
@@ -713,9 +730,12 @@ const Session = {
       // apri di default la prima serie non ancora completata; se sono tutte
       // fatte, restano tutte chiuse
       let firstTodo = sets.findIndex(s => !this._done.has(s.id));
+      const rememberedSet = this._openSetByExercise[exName];
+      const rememberedExists = sets.some(s => String(s.id) === String(rememberedSet));
       sets.forEach((set, si) => {
         const prevSet = prevSets[si] || null;
-        setsContainer.appendChild(this.buildSetRow(set, si, prevSet, exName, rrMin, rrMax, prevMax, sets.length, si === firstTodo));
+        const expanded = rememberedExists ? String(set.id) === String(rememberedSet) : si === firstTodo;
+        setsContainer.appendChild(this.buildSetRow(set, si, prevSet, exName, rrMin, rrMax, prevMax, sets.length, expanded));
       });
     });
     this.refreshAllDone();
@@ -918,6 +938,7 @@ const Session = {
       // aprendo, non per tutti e otto in anticipo (la quota è ~20/giorno).
       // Il cooldown dentro loadAIAdvice evita raffiche se apri/chiudi.
       const exName = block.dataset.ex;
+      this._openExercise = exName || null;
       if (exName && !this.viewMode && !this.sessionDone) this.loadAIAdvice([exName]);
     } else {
       // chiudo l'esercizio aperto → niente più focus, tutti tornano normali
@@ -925,6 +946,7 @@ const Session = {
         b.classList.remove("ex-focused", "ex-dimmed");
       });
       block.classList.add("collapsed");
+      this._openExercise = null;
     }
   },
 
@@ -1003,6 +1025,7 @@ const Session = {
         b.classList.toggle("ex-dimmed", b !== nextBlock);
       });
       nextBlock.classList.remove("collapsed");
+      this._openExercise = nextName;
       this.scrollToBlock(nextBlock);
       // Ri-analizza col cervello IA per l'esercizio in cui stai entrando: ora
       // include quello appena finito nel "fatto oggi" — consiglio aggiornato
@@ -1012,6 +1035,7 @@ const Session = {
       // ultimo esercizio della scheda: chiudi e torna alla vista normale
       blocks.forEach(b => b.classList.remove("ex-focused", "ex-dimmed"));
       block.classList.add("collapsed");
+      this._openExercise = null;
     }
   },
 
@@ -1194,16 +1218,11 @@ const Session = {
       document.removeEventListener("touchcancel", end);
     }
 
-    // Verifica se il punto toccato è un controllo interattivo (allora NON parte il drag)
-    function isInteractive(target) {
-      return target.closest("button, input, textarea, select, a, .adj, .rm-set-btn, .add-set-btn, .note-inp, .rr-in-sm, .ex-tech, .stepper-val, .set-card");
-    }
-
     let touchStartX = 0;
 
-    // TOUCH — long press 200ms su QUALSIASI punto della card (tranne controlli)
-    block.addEventListener("touchstart", e => {
-      if (isInteractive(e.target)) return; // lascia funzionare bottoni/input
+    // TOUCH — il riordino parte soltanto dalla maniglia. Un long-press sulla
+    // card intercettava tocchi normali e faceva ignorare l'apertura.
+    handle.addEventListener("touchstart", e => {
       startY = getEvY(e);
       touchStartX = e.touches[0].clientX;
       lastClientY = startY;
@@ -1212,11 +1231,11 @@ const Session = {
         document.addEventListener("touchmove", move, { passive: false });
         document.addEventListener("touchend", end);
         document.addEventListener("touchcancel", end);
-      }, 200);
+      }, 300);
     }, { passive: true });
 
-    block.addEventListener("touchend", () => clearTimeout(pressTimer));
-    block.addEventListener("touchmove", e => {
+    handle.addEventListener("touchend", () => clearTimeout(pressTimer));
+    handle.addEventListener("touchmove", e => {
       if (active) return;
       // Se muove il dito prima del long-press → sta scrollando, annulla
       const dx = Math.abs(e.touches[0].clientX - touchStartX);
@@ -1224,7 +1243,7 @@ const Session = {
       if (dx > 10 || dy > 10) clearTimeout(pressTimer);
     }, { passive: true });
 
-    // MOUSE (desktop) — sulla manina parte subito; sul resto della card serve long-press 200ms
+    // MOUSE (desktop) — il drag parte esclusivamente dalla maniglia.
     handle.addEventListener("mousedown", e => {
       e.preventDefault();
       e.stopPropagation();
@@ -1235,18 +1254,6 @@ const Session = {
       document.addEventListener("mouseup", end);
     });
 
-    block.addEventListener("mousedown", e => {
-      if (isInteractive(e.target) || e.target.closest(".drag-handle")) return;
-      startY = getEvY(e);
-      lastClientY = startY;
-      pressTimer = setTimeout(() => {
-        begin(e);
-        document.addEventListener("mousemove", move);
-        document.addEventListener("mouseup", end);
-      }, 200);
-      const cancelPress = () => { clearTimeout(pressTimer); document.removeEventListener("mouseup", cancelPress); };
-      document.addEventListener("mouseup", cancelPress);
-    });
   },
 
   // ═══ SUGGERIMENTO DI PROGRESSIONE (doppia progressione) ═══════════════════
@@ -2805,7 +2812,13 @@ const Session = {
     const willOpen = card.classList.contains("set-collapsed");
     const container = card.parentElement;
     if (container) container.querySelectorAll(".set-card").forEach(c => c.classList.add("set-collapsed"));
-    if (willOpen) card.classList.remove("set-collapsed");
+    this._openSetByExercise = this._openSetByExercise || {};
+    if (willOpen) {
+      card.classList.remove("set-collapsed");
+      this._openSetByExercise[exName] = id;
+    } else {
+      delete this._openSetByExercise[exName];
+    }
   },
 
   _done: new Set(),
@@ -2849,7 +2862,13 @@ const Session = {
       // chiudi questa serie e apri la successiva dello stesso esercizio
       card.classList.add("set-collapsed");
       const next = card.nextElementSibling;
-      if (next && next.classList.contains("set-card")) next.classList.remove("set-collapsed");
+      this._openSetByExercise = this._openSetByExercise || {};
+      if (next && next.classList.contains("set-card")) {
+        next.classList.remove("set-collapsed");
+        this._openSetByExercise[exName] = next.id.replace(/^setrow-/, "");
+      } else {
+        delete this._openSetByExercise[exName];
+      }
       // avvia il recupero automatico
       const set = this.exercises.find(e => e.id === id);
       const secs = (set && set.recupero) ? set.recupero : 90;

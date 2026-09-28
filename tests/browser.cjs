@@ -96,7 +96,10 @@ const server=http.createServer((req,res)=>{
  await page.evaluate(()=>{
   App.navigate('session');document.getElementById('page-session').classList.remove('session-empty');document.body.classList.remove('sess-landing');
   Session.activeId='test';Session.sessions=[{id:'test',date:'2026-09-26',name:'Test',type:'Test'}];Session.viewMode=false;Session.sessionDone=false;
-  Session.exercises=[{id:'set1',name:`Farmer's walk – Test – S1`,kg:20,reps:8,rrMin:8,rrMax:12}];Session.exOrder=[`Farmer's walk`];Session.prevExercises=[];Session._done=new Set();Session._prSets=new Set();
+  Session.exercises=[
+   {id:'set1',name:`Farmer's walk – Test – S1`,kg:20,reps:8,rrMin:8,rrMax:12},
+   {id:'set2',name:`Farmer's walk – Test – S2`,kg:20,reps:0,rrMin:8,rrMax:12}
+  ];Session.exOrder=[`Farmer's walk`];Session.prevExercises=[];Session._done=new Set();Session._prSets=new Set();
   Session._prevExerciseNotes={[`Farmer's walk`]:'Presa stretta'};Session.renderExercises();
   document.getElementById('sess-title').textContent='Seduta di prova';
   Session.addSet=name=>{window.clickedExercise=name};
@@ -105,10 +108,24 @@ const server=http.createServer((req,res)=>{
  // Click the exercise label: the header also contains editable inputs, so its
  // geometric centre changes across responsive themes and isn't a stable target.
  await page.locator('.ex-name').click();
+ assert.equal(await page.locator('.ex-block').evaluate(el=>el.classList.contains('collapsed')),false,'exercise did not open');
+ // Una pressione lenta sull'header non deve più essere scambiata per drag.
+ const headerBox=await page.locator('.ex-name').boundingBox();
+ await page.mouse.move(headerBox.x+8,headerBox.y+8);await page.mouse.down();await page.waitForTimeout(350);await page.mouse.up();
+ assert.equal(await page.evaluate(()=>!!Session._justDragged),false,'slow header press triggered drag');
+ if(await page.locator('.ex-block').evaluate(el=>el.classList.contains('collapsed')))await page.locator('.ex-name').click();
+ await page.locator('#setrow-set2 .set-hd').click();
+ assert.equal(await page.locator('#setrow-set2').evaluate(el=>el.classList.contains('set-collapsed')),false,'second set did not open');
+ await page.evaluate(()=>Session.renderExercises());
+ assert.equal(await page.locator('.ex-block').evaluate(el=>el.classList.contains('collapsed')),false,'exercise closed after re-render');
+ assert.equal(await page.locator('#setrow-set2').evaluate(el=>el.classList.contains('set-collapsed')),false,'open set disappeared after re-render');
+ for(let i=0;i<6;i++){await page.locator('.ex-name').click();await page.locator('.ex-name').click()}
+ assert.equal(await page.locator('.ex-block').evaluate(el=>el.classList.contains('collapsed')),false,'exercise toggle became unresponsive');
  await page.locator('.ex-note-in').fill('Ricorda la presa');
  assert.equal(await page.evaluate(()=>Notes.pending('test').exercises[`Farmer's walk`]),'Ricorda la presa');
  await page.locator('.add-set-btn').click();assert.equal(await page.evaluate(()=>window.clickedExercise),"Farmer's walk");
  assert.match(await page.locator('.prev-ex-note').innerText(),/Presa stretta/);
+ console.log('PASS exercise and sets reliably open, survive re-render, and ignore slow-press drag');
  console.log('PASS exercise note and button with apostrophe');
  fs.mkdirSync(path.join(root,'test-results'),{recursive:true});
  await page.evaluate(()=>window.scrollTo({top:0,behavior:'instant'}));
