@@ -203,6 +203,22 @@ const server=http.createServer((req,res)=>{
  });
  console.log('PASS HTML injection inert in cardio, planner and programs');
  await page.evaluate(async()=>{
+  const made=(id,nome,ordine)=>({id,nome,ordine,colore:'#FF3B2F',exercises:[{nome:'Test',serie:3}],programma:'Programma A'});
+  const rows=[made('sa','Seduta A',1),made('sb','Seduta B',2),made('sc','Seduta C',3)];
+  App.schede=rows;App.programmi={'Programma A':rows};App.activeProgram='Programma A';Schede._expanded=new Set(['Programma A']);
+  const writes=[];API.updateScheda=async(id,fields)=>{writes.push([id,fields.ordine]);return {}};
+  Schede.render();await Schede.moveSeduta('Programma A','sa',1);
+  if(Object.keys(CONFIG.SCHEDE).join('|')!=='Seduta B|Seduta A|Seduta C')throw Error('Active program order not updated');
+  if(writes.map(x=>x.join(':')).join('|')!=='sb:1|sa:2|sc:3')throw Error('Session order not persisted');
+  API.updateScheda=async()=>{throw Error('offline')};
+  await Schede.moveSeduta('Programma A','sa',-1);
+  if(App.programmi['Programma A'].map(s=>s.nome).join('|')!=='Seduta B|Seduta A|Seduta C')throw Error('Failed reorder did not roll back');
+ });
+ await page.setViewportSize({width:320,height:800});
+ assert.deepEqual(await page.locator('#schede-list .seduta-name').allTextContents(),['Seduta B','Seduta A','Seduta C']);
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>document.documentElement.clientWidth),false,'session order controls overflow on mobile');
+ console.log('PASS workout sequence reorders, persists, rolls back on failure and fits mobile');
+ await page.evaluate(async()=>{
    App.navigate('dashboard');Dashboard.buildChecklist([{id:'task',name:'Mobilità',done:false}]);
    API.completeTask=async()=>{throw Error('offline')};
    await document.querySelector('#planner-list button').onclick();

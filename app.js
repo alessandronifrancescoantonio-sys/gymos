@@ -157,6 +157,9 @@ const App = {
         const pg = s.programma || "La mia scheda";
         (programmi[pg] = programmi[pg] || []).push(s);
       });
+      // Notion ordina globalmente il database, ma programmi diversi possono
+      // avere gli stessi numeri. Normalizza esplicitamente ogni programma.
+      Object.values(programmi).forEach(list => list.sort((a, b) => (a.ordine || 0) - (b.ordine || 0)));
       App.programmi = programmi;
 
       // Programma attivo = quello con almeno una seduta progAttivo; fallback al primo

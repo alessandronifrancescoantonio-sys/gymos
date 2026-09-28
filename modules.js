@@ -3280,7 +3280,7 @@ const Schede = {
     if (!this._expanded) this._expanded = new Set();   // di base tutti i programmi chiusi
 
     names.forEach(pg => {
-      const sedute   = programmi[pg];
+      const sedute   = programmi[pg].slice().sort((a, b) => (a.ordine || 0) - (b.ordine || 0));
       const isActive = pg === App.activeProgram;
       const open     = this._expanded.has(pg);
       const pgEsc    = pg;
@@ -3296,12 +3296,17 @@ const Schede = {
           ${isActive ? "" : `<button class="prog-activate" onclick="event.stopPropagation();Schede.setActive(${U.arg(pgEsc)})">Rendi attiva</button>`}
         </div>
         <div class="prog-body${open ? " open" : ""}">
-          ${sedute.map(s => `
+          ${sedute.map((s, si) => `
             <div class="seduta-card">
               <div class="seduta-head">
+                <span class="seduta-seq" title="Posizione nella sequenza">${si + 1}</span>
                 <span class="seduta-dot" style="background:${/^#[0-9a-f]{3,8}$/i.test(s.colore) ? s.colore : '#FF3B2F'}"></span>
                 <span class="seduta-name">${U.escape(s.nome)}</span>
                 <span class="seduta-count">${s.exercises.length} es.</span>
+                <span class="seduta-order-actions">
+                  <button class="seduta-act order" onclick="Schede.moveSeduta(${U.arg(pgEsc)},${U.arg(s.id)},-1)" aria-label="Sposta ${U.escape(s.nome)} prima" ${si === 0 ? "disabled" : ""}><i class="ti ti-chevron-up"></i></button>
+                  <button class="seduta-act order" onclick="Schede.moveSeduta(${U.arg(pgEsc)},${U.arg(s.id)},1)" aria-label="Sposta ${U.escape(s.nome)} dopo" ${si === sedute.length - 1 ? "disabled" : ""}><i class="ti ti-chevron-down"></i></button>
+                </span>
                 <button class="seduta-act" onclick="Schede.openEditor(${U.arg(s.id)})" aria-label="Modifica"><i class="ti ti-pencil"></i></button>
                 <button class="seduta-act del" onclick="Schede.remove(${U.arg(s.id)},${U.arg(s.nome)})" aria-label="Elimina"><i class="ti ti-trash"></i></button>
               </div>
@@ -3363,6 +3368,47 @@ const Schede = {
   addSeduta(pg) {
     this._newProgram = pg;
     this.openEditor();
+  },
+
+  async moveSeduta(pg, id, delta) {
+    if (this._reordering) return;
+    const current = ((App.programmi && App.programmi[pg]) || []).slice()
+      .sort((a, b) => (a.ordine || 0) - (b.ordine || 0));
+    const from = current.findIndex(s => s.id === id);
+    const to = from + Number(delta || 0);
+    if (from < 0 || to < 0 || to >= current.length) return;
+    const oldOrders = new Map(current.map(s => [s.id, s.ordine]));
+    const moved = current.splice(from, 1)[0];
+    current.splice(to, 0, moved);
+    current.forEach((s, i) => { s.ordine = i + 1; });
+    App.programmi[pg] = current;
+    if (pg === App.activeProgram) {
+      const map = {};
+      current.forEach(s => { map[s.nome] = { color: s.colore, exercises: s.exercises, _id: s.id }; });
+      CONFIG.SCHEDE = map;
+    }
+    this._expanded = this._expanded || new Set();
+    this._expanded.add(pg);
+    this.render();
+    this._reordering = true;
+    try {
+      await Promise.all(current.map((s, i) => API.updateScheda(s.id, { ordine: i + 1 })));
+      U.toast("Sequenza sedute aggiornata", "ok");
+    } catch (e) {
+      console.error(e);
+      current.forEach(s => { s.ordine = oldOrders.get(s.id); });
+      current.sort((a, b) => (a.ordine || 0) - (b.ordine || 0));
+      App.programmi[pg] = current;
+      if (pg === App.activeProgram) {
+        const map = {};
+        current.forEach(s => { map[s.nome] = { color: s.colore, exercises: s.exercises, _id: s.id }; });
+        CONFIG.SCHEDE = map;
+      }
+      this.render();
+      U.toast("Ordine non salvato — riprova", "err");
+    } finally {
+      this._reordering = false;
+    }
   },
 
   openEditor(id) {
@@ -3600,7 +3646,7 @@ const Schede = {
         const programma = this._newProgram || App.activeProgram || "La mia scheda";
         // se non esiste ancora un programma attivo, il primo creato diventa attivo
         const progAttivo = (programma === App.activeProgram) || !App.activeProgram;
-        const ordine = App.schede.length + 1;
+        const ordine = (((App.programmi && App.programmi[programma]) || []).length) + 1;
         await API.createScheda(nome, this.draftColor, this.draftEx, ordine, programma, progAttivo);
       }
       this._newProgram = null;

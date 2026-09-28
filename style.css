@@ -696,8 +696,17 @@ body.session-view .rest-fab { display:none !important; }
 /* Seduta in stile lista Apple: header pulito + lista esercizi su righe allineate */
 .seduta-card { background:var(--ink3); border:1px solid var(--ink4); border-radius:12px; overflow:hidden; }
 .seduta-head { display:flex; align-items:center; gap:10px; padding:12px 14px; border-bottom:1px solid var(--ink4); }
+.seduta-seq { width:24px; height:24px; display:inline-flex; align-items:center; justify-content:center; flex:0 0 24px; border-radius:8px; background:rgba(255,59,47,.13); color:var(--accent); font-size:12px; font-weight:800; }
+.seduta-order-actions { display:inline-flex; gap:4px; }
+.seduta-act.order { width:30px; height:30px; }
+.seduta-act.order:disabled { opacity:.22; cursor:default; transform:none; }
 .seduta-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
 .seduta-head .seduta-name { flex:1; min-width:0; font-size:15px; font-weight:600; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+@media(max-width:520px) {
+  .seduta-head { gap:6px; padding:11px 9px; }
+  .seduta-count { display:none; }
+  .seduta-act.order { width:28px; height:28px; }
+}
 .seduta-count { font-size:11px; color:var(--dim); background:var(--ink2); padding:3px 9px; border-radius:100px; flex-shrink:0; }
 .seduta-act { width:32px; height:32px; border-radius:8px; background:var(--ink2); border:1px solid var(--ink4); color:var(--ghost); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
 .seduta-act:active { transform:scale(.94); border-color:var(--accent); color:var(--accent); }
