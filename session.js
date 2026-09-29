@@ -187,7 +187,14 @@ const Session = {
     this.exercises = (opts && opts.freshExercises) ? opts.freshExercises : await API.getSessionExercises(id);
 
     // Stato "serie completata" (locale per sessione)
-    this._done = new Set(JSON.parse(localStorage.getItem(`gymos_done_${id}`) || "[]"));
+    // Mantieni soltanto gli ID delle serie realmente presenti nella sessione:
+    // dopo una ricreazione/riallineamento una vecchia lista locale non deve
+    // influenzare l'avanzamento delle serie nuove.
+    let savedDone = [];
+    try { savedDone = JSON.parse(localStorage.getItem(`gymos_done_${id}`) || "[]"); } catch (_) { savedDone = []; }
+    const validSetIds = new Set(this.exercises.map(e => e.id));
+    this._done = new Set((Array.isArray(savedDone) ? savedDone : []).filter(setId => validSetIds.has(setId)));
+    if (this._done.size !== (Array.isArray(savedDone) ? savedDone.length : 0)) this.saveDone();
     // Serie che hanno segnato un record in questa sessione (per tenere il badge PR)
     this._prSets = new Set(JSON.parse(localStorage.getItem(`gymos_pr_${id}`) || "[]"));
     // Snapshot pre-merge per il rollback PR (vedi completeSet) — PERSISTITI,
@@ -2456,13 +2463,27 @@ const Session = {
       props[CONFIG.PROPS.EL_SETS]    = API.prop.number(1);
       props[CONFIG.PROPS.EL_REPS]    = API.prop.number(0);
       props[CONFIG.PROPS.EL_KG]      = API.prop.number(0);
-      props[CONFIG.PROPS.EL_RR_MIN]  = API.prop.number(base?.rrMin || 8);
-      props[CONFIG.PROPS.EL_RR_MAX]  = API.prop.number(base?.rrMax || 12);
+      const rrMin = base?.rrMin != null ? base.rrMin : 8;
+      const rrMax = base?.rrMax != null ? base.rrMax : 12;
+      const recupero = base?.recupero != null ? base.recupero : null;
+      const rir = base?.rir != null ? base.rir : null;
+      const tecnica = Array.isArray(base?.tecnica) ? base.tecnica : [];
+      const cadenza = base?.cadenza || "";
+      const gruppo = base?.gruppo || "";
+      const info = base?.info || "";
+      props[CONFIG.PROPS.EL_RR_MIN]  = API.prop.number(rrMin);
+      props[CONFIG.PROPS.EL_RR_MAX]  = API.prop.number(rrMax);
+      props[CONFIG.PROPS.EL_RECUPERO]= API.prop.number(recupero);
+      props[CONFIG.PROPS.EL_RIR]     = API.prop.number(rir);
+      props[CONFIG.PROPS.EL_TECNICA] = API.prop.multi_select(tecnica);
+      props[CONFIG.PROPS.EL_CADENZA] = API.prop.rich_text(cadenza);
+      props[CONFIG.PROPS.EL_GRUPPO]  = API.prop.select(gruppo);
+      props[CONFIG.PROPS.EL_INFO]    = API.prop.rich_text(info);
       props[CONFIG.PROPS.EL_DATE]    = API.prop.date(date);
       const page = await API.create(CONFIG.DB.ESERCIZI_LOG, props);
       made.push({ id: page.id, name: `${exName} – ${sess?.name || ""} – S${i}`, sets: 1, reps: 0, kg: 0,
-        rrMin: base?.rrMin || 8, rrMax: base?.rrMax || 12, note: "", date,
-        tecnica: [], cadenza: "", gruppo: "", recupero: null, info: "" });
+        rrMin, rrMax, note: "", date,
+        tecnica, cadenza, gruppo, recupero, rir, info });
     }
     return made;
   },
@@ -2851,19 +2872,19 @@ const Session = {
     const justDone = this.exercises.find(e => e.id === id);
     if (nowDone && justDone && (justDone.note || "").trim()) this.loadAIAdvice([exName]);
 
-    // #batch2 — ultima serie di questo esercizio completata → avanza alla tendina successiva
-    const setsOfEx = this.groupByExercise(this.exercises)[exName] || [];
-    if (nowDone && setsOfEx.length > 0 && setsOfEx.every(s => this._done.has(s.id))) {
-      this.autoAdvanceExercise(exName);
-    }
-
     if (nowDone) {
       if (navigator.vibrate) navigator.vibrate(20);
-      // chiudi questa serie e apri la successiva dello stesso esercizio
+      // Chiudi questa serie e apri sempre la prossima INCOMPLETA dello stesso
+      // esercizio. Non cambiare esercizio automaticamente: la progressione
+      // deve restare sotto il controllo dell'utente.
       card.classList.add("set-collapsed");
-      const next = card.nextElementSibling;
+      const cards = [...(card.parentElement?.querySelectorAll(".set-card") || [])];
+      const cardIndex = cards.indexOf(card);
+      const next = cards.slice(cardIndex + 1).find(nextCard =>
+        !this._done.has(nextCard.id.replace(/^setrow-/, ""))
+      );
       this._openSetByExercise = this._openSetByExercise || {};
-      if (next && next.classList.contains("set-card")) {
+      if (next) {
         next.classList.remove("set-collapsed");
         this._openSetByExercise[exName] = next.id.replace(/^setrow-/, "");
       } else {
@@ -3567,6 +3588,8 @@ Session._doCreateSession = async function(name) {
     exercises.forEach(function(item) {
       var exNm  = U.exName(item);
       var nSets = U.exSets(item);   // quante serie creare per questo esercizio
+      var rrMin = U.exRrMin(item);
+      var rrMax = U.exRrMax(item);
       var rec   = U.exRest(item);
       var rir   = U.exRir(item);
       var tec   = U.exTec(item);
@@ -3580,8 +3603,8 @@ Session._doCreateSession = async function(name) {
         props[CONFIG.PROPS.EL_SETS]    = API.prop.number(1);
         props[CONFIG.PROPS.EL_REPS]    = API.prop.number(0);
         props[CONFIG.PROPS.EL_KG]      = API.prop.number(0);
-        props[CONFIG.PROPS.EL_RR_MIN]  = API.prop.number(8);
-        props[CONFIG.PROPS.EL_RR_MAX]  = API.prop.number(12);
+        props[CONFIG.PROPS.EL_RR_MIN]  = API.prop.number(rrMin);
+        props[CONFIG.PROPS.EL_RR_MAX]  = API.prop.number(rrMax);
         props[CONFIG.PROPS.EL_RECUPERO]= API.prop.number(rec);
         props[CONFIG.PROPS.EL_RIR]     = API.prop.number(rir);
         props[CONFIG.PROPS.EL_TECNICA] = API.prop.multi_select(tec);
@@ -3597,7 +3620,7 @@ Session._doCreateSession = async function(name) {
         // comparivano lente dopo "Crea e inizia".
         var record = {
           name: exNm + " – " + name + " – S" + i, sets: 1, reps: 0, kg: 0,
-          rrMin: 8, rrMax: 12, note: "", date: today,
+          rrMin: rrMin, rrMax: rrMax, note: "", date: today,
           tecnica: tec, cadenza: cad, gruppo: grp, recupero: rec, rir: rir, info: inf,
         };
         creates.push(API.create(CONFIG.DB.ESERCIZI_LOG, props).then(function(page) { record.id = page.id; return record; }));

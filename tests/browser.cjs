@@ -156,6 +156,71 @@ const server=http.createServer((req,res)=>{
  assert.match(await page.locator('.prev-ex-note').innerText(),/Presa stretta/);
  console.log('PASS exercise and sets reliably open, survive re-render, and ignore slow-press drag');
  console.log('PASS exercise note and button with apostrophe');
+ await page.evaluate(async()=>{
+  // Regressione reale: una nuova sessione deve ricevere tutti i valori della
+  // scheda, non il vecchio default 8-12 e non valori vuoti per recupero/RIR.
+  const oldCreate=API.create,oldLoadSession=Session.loadSession;
+  const writes=[];let exerciseNo=0,created=null;
+  CONFIG.SCHEDE['Meta test']={exercises:[{
+    nome:'Panca prova',serie:3,rrMin:5,rrMax:7,recupero:150,rir:2,
+    tecnica:['Pausa'],cadenza:'3-1-1',gruppo:'Petto',info:'Controlla il fermo'
+  }]};
+  Session.sessions=[];
+  API.create=async(db,props)=>{
+    writes.push({db,props});
+    return {id:db===CONFIG.DB.WORKOUT_LOG?'meta-session':`meta-set-${++exerciseNo}`,created_time:'2026-09-29T10:00:00.000Z'};
+  };
+  Session.loadSession=async(id,opts)=>{created={id,opts};};
+  await Session._doCreateSession('Meta test');
+  const made=created?.opts?.freshExercises;
+  if(!made||made.length!==3)throw Error('New session did not create the planned sets');
+  if(made.some(s=>s.rrMin!==5||s.rrMax!==7||s.recupero!==150||s.rir!==2||s.cadenza!=='3-1-1'))throw Error('Session metadata was not copied from Scheda');
+  const setWrites=writes.filter(w=>w.db===CONFIG.DB.ESERCIZI_LOG);
+  if(setWrites.some(w=>w.props[CONFIG.PROPS.EL_RR_MIN].number!==5||w.props[CONFIG.PROPS.EL_RR_MAX].number!==7||w.props[CONFIG.PROPS.EL_RECUPERO].number!==150||w.props[CONFIG.PROPS.EL_RIR].number!==2))throw Error('Saved Notion exercise metadata differs from Scheda');
+  Session.loadSession=oldLoadSession;API.create=oldCreate;
+
+  // Anche i set creati in seguito dal riallineamento della scheda devono
+  // portare gli stessi metadati.
+  const oldCreate2=API.create;const laterWrites=[];
+  Session.activeId='meta-reconcile';Session.sessions=[{id:'meta-reconcile',name:'Meta test',date:'2026-09-29'}];Session.exercises=[];
+  API.create=async(db,props)=>{laterWrites.push(props);return {id:`later-${laterWrites.length}`}};
+  const later=await Session._createExerciseSets('Panca prova',2,{rrMin:5,rrMax:7,recupero:150,rir:2,tecnica:['Pausa'],cadenza:'3-1-1',gruppo:'Petto',info:'Controlla il fermo'});
+  if(later.some(s=>s.rrMin!==5||s.rrMax!==7||s.recupero!==150||s.rir!==2||s.tecnica[0]!=='Pausa'))throw Error('Reconciled sets lost planned metadata');
+  if(laterWrites.some(p=>p[CONFIG.PROPS.EL_RECUPERO].number!==150||p[CONFIG.PROPS.EL_RIR].number!==2))throw Error('Reconciled set metadata was not persisted');
+  API.create=oldCreate2;
+ });
+ console.log('PASS new session and reconciled sets retain Scheda rep range, rest, RIR and technique metadata');
+ await page.evaluate(()=>{
+  // Completare S1/S2 deve aprire S2/S3 della stessa tendina; l'esercizio
+  // seguente rimane chiuso anche dopo l'ultima serie.
+  App.navigate('session');Session.activeId='flow';Session.sessions=[{id:'flow',date:'2026-09-29',name:'Flow',type:'Test'}];Session.viewMode=false;Session.sessionDone=false;
+  Session.exercises=[
+   {id:'p1',name:'Panca prova – Flow – S1',kg:0,reps:0,rrMin:5,rrMax:7,recupero:150},
+   {id:'p2',name:'Panca prova – Flow – S2',kg:0,reps:0,rrMin:5,rrMax:7,recupero:150},
+   {id:'p3',name:'Panca prova – Flow – S3',kg:0,reps:0,rrMin:5,rrMax:7,recupero:150},
+   {id:'r1',name:'Rematore prova – Flow – S1',kg:0,reps:0,rrMin:8,rrMax:10,recupero:90}
+  ];
+  Session.exOrder=['Panca prova','Rematore prova'];Session.prevExercises=[];Session._done=new Set();Session._prSets=new Set();Session._openExercise='Panca prova';Session._openSetByExercise={'Panca prova':'p1'};
+  RestTimer.start=secs=>{window.flowRest=secs};Session.renderExercises();
+ });
+ await page.evaluate(()=>Session.completeSet('p1','Panca prova'));
+ assert.equal(await page.locator('#setrow-p2').evaluate(el=>el.classList.contains('set-collapsed')),false,'S1 did not open S2 of the current exercise');
+ assert.equal(await page.locator('.ex-block[data-ex="Rematore prova"]').evaluate(el=>el.classList.contains('collapsed')),true,'S1 wrongly opened another exercise');
+ await page.evaluate(()=>Session.completeSet('p2','Panca prova'));
+ assert.equal(await page.locator('#setrow-p3').evaluate(el=>el.classList.contains('set-collapsed')),false,'S2 did not open S3 of the current exercise');
+ await page.evaluate(()=>Session.completeSet('p3','Panca prova'));
+ assert.equal(await page.locator('.ex-block[data-ex="Rematore prova"]').evaluate(el=>el.classList.contains('collapsed')),true,'Last set automatically opened another exercise');
+ assert.equal(await page.evaluate(()=>window.flowRest),150,'rest timer ignored planned recovery');
+ console.log('PASS completing sets advances only inside the current exercise and uses planned recovery');
+ // Ripristina il fixture a un solo esercizio per le verifiche visuali e note
+ // già presenti nella suite sotto.
+ await page.evaluate(()=>{
+  Session.activeId='test';Session.sessions=[{id:'test',date:'2026-09-26',name:'Test',type:'Test'}];Session.viewMode=false;Session.sessionDone=false;
+  Session.exercises=[
+   {id:'set1',name:`Farmer's walk – Test – S1`,kg:20,reps:8,rrMin:8,rrMax:12},
+   {id:'set2',name:`Farmer's walk – Test – S2`,kg:20,reps:0,rrMin:8,rrMax:12}
+  ];Session.exOrder=[`Farmer's walk`];Session.prevExercises=[];Session._done=new Set();Session._prSets=new Set();Session._openExercise=`Farmer's walk`;Session._openSetByExercise={[`Farmer's walk`]:'set1'};Session.renderExercises();
+ });
  fs.mkdirSync(path.join(root,'test-results'),{recursive:true});
  await page.evaluate(()=>window.scrollTo({top:0,behavior:'instant'}));
  await page.screenshot({path:path.join(root,'test-results','session-320.png'),fullPage:true});
