@@ -339,13 +339,13 @@ const server=http.createServer((req,res)=>{
    if(localStorage.getItem('gymos_active')!=='keep-active')throw Error('Transient load error erased active workout');
    API.getWorkoutSessions=async()=>[
      {id:'older',name:'A',type:'A',date:'2026-09-29',createdAt:'2026-09-29T09:00:00Z',done:true},
-     {id:'newer',name:'B',type:'B',date:'2026-09-29',createdAt:'2026-09-29T18:00:00Z',done:true}
+     {id:'newer',name:' B ',type:'',date:'2026-09-29',createdAt:'2026-09-29T18:00:00Z',done:true}
    ];
    CONFIG.SCHEDE={A:{color:'#f60',exercises:[]},B:{color:'#f60',exercises:[]},C:{color:'#f60',exercises:[]}};
    App.loadSchede=async()=>{};Session.sessions=[{id:'stale',type:'A',date:'2026-09-01',done:true}];
    await Session.openNewModal();
    const suggested=document.querySelector('.scheda-pill.is-next');
-   if(!suggested||suggested.dataset.name!=='C')throw Error('Next workout suggestion did not use newest completed session');
+   if(!suggested||suggested.dataset.name!=='C')throw Error('Next workout suggestion did not resolve legacy session name');
  });
  console.log('PASS active workout survives transient loading failure and next session suggestion is fresh');
  assert.deepEqual(errors,[]);console.log('PASS no browser JS errors');

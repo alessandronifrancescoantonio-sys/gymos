@@ -3575,9 +3575,22 @@ document.addEventListener("visibilitychange", () => {
     try { const fresh = await API.getWorkoutSessions(50); if (fresh && fresh.length) sessList = fresh; } catch (e) {}
     var doneSorted = sessList.filter(function(s){ return s.done; })
       .sort(function(a,b){ return (String(b.date) + "|" + (b.createdAt || "")).localeCompare(String(a.date) + "|" + (a.createdAt || "")); });
-    var lastDone = doneSorted[0] || null;
-    var lastType = lastDone ? lastDone.type : null;
     var names    = Object.keys(CONFIG.SCHEDE);
+    var lastDone = doneSorted[0] || null;
+    // Le sessioni create dalle versioni precedenti possono avere "Tipo
+    // sessione" vuoto: il loro nome e' comunque il nome della scheda. Risolvi
+    // entrambi e normalizza spazi/maiuscole, altrimenti spariva il suggerimento.
+    var key = function(v) { return String(v || "").trim().replace(/\s+/g, " ").toLocaleLowerCase("it-IT"); };
+    var resolveSchedaName = function(sess) {
+      if (!sess) return null;
+      var candidates = [sess.type, sess.name];
+      for (var c = 0; c < candidates.length; c++) {
+        var found = names.find(function(name) { return key(name) === key(candidates[c]); });
+        if (found) return found;
+      }
+      return null;
+    };
+    var lastType = resolveSchedaName(lastDone);
     var nextName = null;
     if (lastType && names.indexOf(lastType) !== -1) {
       nextName = names[(names.indexOf(lastType) + 1) % names.length];
