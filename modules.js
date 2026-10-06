@@ -3497,6 +3497,9 @@ const Schede = {
           <button class="ex-editor-del" onclick="event.stopPropagation();Schede.removeExercise(${i})"><i class="ti ti-x"></i></button>
         </div>
         <div class="ex-editor-body">
+          <label class="ex-editor-rename"><span>Nome esercizio</span>
+            <input type="text" maxlength="120" value="${U.escape(U.exName(ex))}" onchange="Schede.renameExercise(${i},this.value)" aria-label="Nome esercizio">
+          </label>
           <div class="ex-editor-fields">
             <div class="ex-editor-sets">
               <button type="button" onclick="Schede.bumpSets(${i},-1)">−</button>
@@ -3545,6 +3548,27 @@ const Schede = {
     this._openIdx.add(this.draftEx.length - 1);
     inp.value = "";
     inp.focus();
+    this.buildExList();
+  },
+
+  // Rinomina senza ricreare l'esercizio: conserva tutte le impostazioni già
+  // presenti nella scheda (serie, range, recupero, RIR e tecnica).
+  renameExercise(i, value) {
+    const exercise = this.draftEx[i];
+    if (!exercise) return;
+    const nome = String(value || "").trim().replace(/\s+/g, " ");
+    if (!nome) {
+      U.toast("Il nome dell'esercizio non può essere vuoto", "err");
+      this.buildExList();
+      return;
+    }
+    const key = name => String(name || "").trim().replace(/\s+/g, " ").toLocaleLowerCase("it-IT");
+    if (this.draftEx.some((other, index) => index !== i && key(U.exName(other)) === key(nome))) {
+      U.toast("Usa nomi diversi per gli esercizi della stessa seduta", "err");
+      this.buildExList();
+      return;
+    }
+    exercise.nome = nome;
     this.buildExList();
   },
 

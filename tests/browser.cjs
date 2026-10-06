@@ -325,6 +325,18 @@ const server=http.createServer((req,res)=>{
  await page.evaluate(()=>{document.getElementById('workout-summary').style.display='none';document.getElementById('toast-wrap').innerHTML='';App.navigate('schede');Schede.render()});
  await page.screenshot({path:path.join(root,'test-results','schede-320-hybrid.png'),fullPage:true});
  console.log('PASS workout sequence reorders, persists, rolls back on failure and fits mobile');
+ await page.evaluate(()=>{
+  Schede.draftEx=[
+   {nome:'Panca piana',serie:3,rrMin:6,rrMax:8,recupero:150,rir:2,tecnica:['Pausa'],cadenza:'3-1-1',info:'Fermo',gruppo:'A'},
+   {nome:'Rematore',serie:4,rrMin:8,rrMax:12,recupero:120,rir:1,tecnica:[],cadenza:'',info:'',gruppo:''}
+  ];Schede._openIdx=new Set([0]);
+  Schede.renameExercise(0,'  Panca inclinata  ');
+  const renamed=Schede.draftEx[0];
+  if(renamed.nome!=='Panca inclinata'||renamed.serie!==3||renamed.rrMin!==6||renamed.recupero!==150||renamed.rir!==2||renamed.tecnica[0]!=='Pausa')throw Error('Renaming exercise lost its planned metadata');
+  Schede.renameExercise(1,'Panca inclinata');
+  if(Schede.draftEx[1].nome!=='Rematore')throw Error('Duplicate exercise name was accepted in one workout');
+ });
+ console.log('PASS exercise rename preserves metadata and rejects duplicates');
  await page.evaluate(async()=>{
    App.navigate('dashboard');Dashboard.buildChecklist([{id:'task',name:'Mobilità',done:false}]);
    API.completeTask=async()=>{throw Error('offline')};

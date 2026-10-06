@@ -762,6 +762,9 @@ body.session-view .rest-fab { display:none !important; }
 .ex-editor-chev { color:var(--muted); font-size:15px; transition:transform .2s; }
 .ex-editor-item.collapsed .ex-editor-chev { transform:rotate(-90deg); }
 .ex-editor-item.collapsed .ex-editor-body { display:none; }
+.ex-editor-rename { display:grid; gap:5px; padding:0 1px; color:var(--dim); font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; }
+.ex-editor-rename input { min-height:38px; width:100%; padding:8px 10px; border-radius:9px; background:var(--ink); border:1px solid var(--ink4); color:var(--text); font-family:inherit; font-size:13px; font-weight:600; line-height:1.2; letter-spacing:normal; text-transform:none; outline:none; }
+.ex-editor-rename input:focus { border-color:var(--accent); box-shadow:0 0 0 2px rgba(255,59,47,.18); }
 .ex-editor-fields { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding-left:26px; }
 .ex-editor-f { display:inline-flex; align-items:center; gap:6px; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.3px; color:var(--muted); }
 .ex-editor-f input { width:54px; min-height:34px; padding:5px 8px; border-radius:8px; background:var(--ink2); border:1px solid var(--ink4); color:var(--text); font-family:'DM Mono',monospace; font-size:13px; text-align:center; }
