@@ -2,6 +2,7 @@
 // Plain legacy text remains readable; no database schema migration is needed.
 const Notes = {
   prefix: "GYMOS_NOTES_V1\n",
+  setPrefix: "GYMOS_SET_V1\n",
   decode(raw) {
     if (String(raw).startsWith(this.prefix)) {
       try {
@@ -14,6 +15,24 @@ const Notes = {
   },
   encode(note, exercises) {
     return Object.keys(exercises || {}).length ? this.prefix + JSON.stringify({ note: note || "", exercises }) : note || "";
+  },
+  // Il feedback di una serie vive nello stesso campo Nota gia' presente nel
+  // database: nessuna migrazione Notion, nessuna perdita della nota libera.
+  // Le vecchie note restano testo normale e vengono lette senza conversioni.
+  decodeSet(raw) {
+    if (String(raw).startsWith(this.setPrefix)) {
+      try {
+        const value = JSON.parse(String(raw).slice(this.setPrefix.length));
+        const score = value => Number.isInteger(value) && value >= 1 && value <= 5 ? value : null;
+        if (value && typeof value.note === "string") return { note: value.note, effort: score(value.effort), form: score(value.form) };
+      } catch (_) {}
+    }
+    return { note: String(raw || ""), effort: null, form: null };
+  },
+  encodeSet(note, feedback) {
+    const effort = Number(feedback?.effort), form = Number(feedback?.form);
+    if (!(Number.isInteger(effort) && effort >= 1 && effort <= 5) && !(Number.isInteger(form) && form >= 1 && form <= 5)) return note || "";
+    return this.setPrefix + JSON.stringify({ note: note || "", effort: Number.isInteger(effort) && effort >= 1 && effort <= 5 ? effort : null, form: Number.isInteger(form) && form >= 1 && form <= 5 ? form : null });
   },
   key(id) { return "gymos_notes_pending_" + id; },
   pending(id) { try { return JSON.parse(localStorage.getItem(this.key(id)) || "null"); } catch (_) { return null; } },

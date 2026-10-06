@@ -13,6 +13,7 @@ const Session = {
   selectedScheda: null,
 
   _pendingId: null,
+  _loadToken: 0,             // invalida caricamenti vecchi che arrivano fuori ordine
   _pendingHistory: false,   // la prossima loadSession arriva dallo storico?
   _fromHistory: false,      // la sessione corrente è stata aperta dallo storico
   viewMode: false,          // sola lettura: nessuna modifica accidentale a kg/rep/serie
@@ -55,6 +56,7 @@ const Session = {
   },
 
   async load() {
+    const loadToken = ++this._loadToken;
     const target = this._pendingId;
     this._pendingId = null;
 
@@ -69,8 +71,10 @@ const Session = {
 
     try {
       this.sessions = await API.getWorkoutSessions(20);
+      if (loadToken !== this._loadToken) return;
       if (target && !this.sessions.find(s => s.id === target)) {
         this.sessions = await API.getWorkoutSessions(50);   // allarga per una sessione specifica
+        if (loadToken !== this._loadToken) return;
       }
       this.buildSelect();
 
@@ -92,7 +96,7 @@ const Session = {
         // di considerarla "non più valida" — altrimenti un allenamento in corso
         // sparisce e riparte da zero senza motivo.
         if (!this.sessions.find(x => x.id === resume)) {
-          try { this.sessions = await API.getWorkoutSessions(50); this.buildSelect(); } catch (e) {}
+          try { this.sessions = await API.getWorkoutSessions(50); this.buildSelect(); } catch (e) { return this.keepResumeAfterLoadError(resume, e); }
         }
         const s = this.sessions.find(x => x.id === resume);
         if (s && s.done === false) {
@@ -102,12 +106,29 @@ const Session = {
           await this.loadSession(resume);
           return;
         }
-        localStorage.removeItem("gymos_active");   // riferimento non più valido
+        localStorage.removeItem("gymos_active");   // riferimento confermato non piu' valido
       }
 
       // navigazione normale → schermata iniziale (solo il pulsante "nuovo allenamento")
       this.showLanding();
-    } catch(e) { console.error("Session.load:", e); this.showLanding(); }
+    } catch(e) {
+      if (loadToken !== this._loadToken) return;
+      const resume = localStorage.getItem("gymos_active");
+      if (resume) return this.keepResumeAfterLoadError(resume, e);
+      console.error("Session.load:", e); this.showLanding();
+    }
+  },
+
+  // Un errore transitorio non e' la prova che la sessione non esista: conserva
+  // il riferimento, mostra un errore esplicito e lascia che il prossimo rientro
+  // riprovi invece di cancellare l'allenamento dell'utente.
+  keepResumeAfterLoadError(id, error) {
+    console.error("Session resume deferred:", error);
+    this.activeId = null;
+    const page = document.getElementById("page-session");
+    if (page) page.classList.add("session-empty");
+    document.body.classList.add("sess-landing");
+    U.toast("Allenamento in corso conservato: connessione assente, riprova quando torna la rete.", "err", 4200);
   },
 
   // Mostra la schermata iniziale (nessuna sessione caricata)
@@ -185,6 +206,7 @@ const Session = {
     // di getSessionExercises) — evita un query Notion in più proprio sulle
     // righe scritte un istante fa (niente attesa di replica).
     this.exercises = (opts && opts.freshExercises) ? opts.freshExercises : await API.getSessionExercises(id);
+    const restoredPlanMeta = this.restorePendingPlanMeta();
 
     // Stato "serie completata" (locale per sessione)
     // Mantieni soltanto gli ID delle serie realmente presenti nella sessione:
@@ -214,7 +236,10 @@ const Session = {
     // Skip se APPENA creata da "Crea e inizia": è già 1:1 con la scheda per
     // costruzione (l'abbiamo creata noi riga per riga qui sopra), un
     // round-trip Notion in meno prima di iniziare ad allenarsi.
-    if (sess.done === false && !(opts && opts.freshlyCreated)) await this.reconcileWithScheda(sess).catch(console.error);
+    // Se c'e' una modifica recente non ancora confermata, prima riprovala e
+    // non lasciare che la riconciliazione la sovrascriva con la vecchia scheda.
+    const planMetaSaved = restoredPlanMeta ? await this.flushPendingPlanMeta().catch(() => false) : true;
+    if (sess.done === false && !(opts && opts.freshlyCreated) && planMetaSaved) await this.reconcileWithScheda(sess).catch(console.error);
 
     // Ordine esercizi. Priorità:
     //  1) ordine che TU hai dato a questa sessione (gymos_order_<id>);
@@ -234,15 +259,20 @@ const Session = {
 
     // Sessione precedente stesso tipo
     let sameType = this.sessions.filter(s => s.id !== id && s.type === sess.type && s.done && (s.date < sess.date || (s.date === sess.date && s.createdAt && s.createdAt < sess.createdAt)))
-      .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+      .sort((a, b) => `${b.date}|${b.createdAt || ""}`.localeCompare(`${a.date}|${a.createdAt || ""}`));
     try {
       const previous = await API.getPreviousWorkoutSession(sess);
-      sameType = previous ? [previous] : [];
+      if (previous) sameType = [previous];
     } catch (_) { /* Cached recent sessions remain usable during a network fault. */ }
     this._prevExerciseNotes = sameType[0]?.exerciseNotes || {};
-    this.prevExercises = sameType.length > 0
-      ? await API.getSessionExercises(sameType[0].id)
-      : [];
+    try {
+      this.prevExercises = sameType.length > 0 ? await API.getSessionExercises(sameType[0].id) : [];
+    } catch (_) {
+      // La seduta corrente deve comunque aprirsi: il confronto con la volta
+      // scorsa puo' essere ritentato in seguito, non bloccare tutto il flusso.
+      this.prevExercises = [];
+      this.setSyncState("error");
+    }
     // Ordine esercizi della sessione precedente (una volta sola per sessione,
     // non ad ogni esercizio): usato da _orderShift per il #3.
     this._prevOrder = [];
@@ -929,7 +959,8 @@ const Session = {
   toggleEx(hd, event) {
     if (event && (event.target.closest(".drag-handle") || event.target.closest("input"))) return;
     // Se è appena avvenuto un drag, non fare il toggle
-    if (this._justDragged) { this._justDragged = false; return; }
+    if (this._justDragged && Date.now() - (this._justDraggedAt || 0) < 120) { this._justDragged = false; return; }
+    this._justDragged = false;
     const block = hd.parentElement;
     const willOpen = block.classList.contains("collapsed");
     if (willOpen) {
@@ -1212,6 +1243,7 @@ const Session = {
       self.saveOrder();
       self.renumberBlocks();
       self._justDragged = true;
+      self._justDraggedAt = Date.now();
       setTimeout(() => { self._justDragged = false; }, 50);
       if (navigator.vibrate) navigator.vibrate(12);
       cleanupListeners();
@@ -1450,6 +1482,8 @@ const Session = {
     const setsArr    = last.sets || [];
     const atTopCount = setsArr.filter(s => s.reps >= rrMax).length;
     const allAtTop   = setsArr.length > 0 && atTopCount === setsArr.length;
+    const weakForm = setsArr.some(s => Number(s.form) > 0 && Number(s.form) <= 2);
+    const hardEffort = setsArr.some(s => Number(s.effort) >= 4);
     const prevSetsArr = (prev && prev.sets) || [];
     const twoForTwo  = allAtTop && prevSetsArr.length > 0 && prevSetsArr.every(s => s.reps >= rrMax);
     const gapDays = Math.round((Date.now() - new Date(last.date).getTime()) / 86400000);
@@ -1706,6 +1740,14 @@ const Session = {
 
     // 4) TUTTE le serie al top del range → si sale di peso (doppia progressione,
     // incremento ACSM: 2-10%, meno per i muscoli piccoli)
+    if (allAtTop && weakForm) {
+      return goal(`Mantieni <b>${U.fmt(last.topKg)} kg</b> e cura la forma${rirStr}`,
+        "Hai chiuso il range, ma hai valutato la forma bassa: prima rendi tutte le ripetizioni pulite, poi si aumenta.", "hold", dataLine);
+    }
+    if (allAtTop && hardEffort) {
+      return goal(`Mantieni <b>${U.fmt(last.topKg)} kg</b> ancora una volta${rirStr}`,
+        "Hai chiuso il range ma lo sforzo era alto: consolida con margine e poi aumenta il carico.", "hold", dataLine);
+    }
     if (allAtTop) {
       const conf = twoForTwo ? " Confermato per 2 sedute di fila." : "";
       return isBW
@@ -1765,7 +1807,7 @@ const Session = {
       if ((r.reps || 0) <= 0) return;
       const d = String(r.date);
       if (!byDate[d]) byDate[d] = { date: r.date, sets: [], notes: [] };
-      byDate[d].sets.push({ kg: r.kg || 0, reps: r.reps });
+      byDate[d].sets.push({ kg: r.kg || 0, reps: r.reps, effort: r.effort ?? null, form: r.form ?? null });
       if (r.note && String(r.note).trim()) byDate[d].notes.push(String(r.note).trim());
     });
     const e1 = (kg, reps) => (kg > 0 ? kg * (1 + reps / 30) : reps);
@@ -2127,12 +2169,14 @@ const Session = {
     const note = (prev.note || "").toLowerCase();
     // Stessi pattern del motore principale, per coerenza dell'analisi
     const pain = /(dolor|fastidi|infortun|pizzic|contrattur|strapp|tendinit|acciacc|infiamm)\w*|\bfitt[ae]\b|\bmale\b|\bmal\s+di\b|\btirone\b/.test(note);
-    const hard = /(cediment|difficil|duriss|pesant|faticos|soffert|sudat|fallit|grind|tost)\w*|\bdur[ae]\b|\bmort[oa]\b|non ce la|al massimo|al limite/.test(note);
-    const easy = /(facil|comod)\w*|\blegger[oa]\b|\bscaric\w*|troppo poco/.test(note);
+    const formUnsafe = Number(prev.form) > 0 && Number(prev.form) <= 2;
+    const hard = Number(prev.effort) >= 4 || /(cediment|difficil|duriss|pesant|faticos|soffert|sudat|fallit|grind|tost)\w*|\bdur[ae]\b|\bmort[oa]\b|non ce la|al massimo|al limite/.test(note);
+    const easy = (Number(prev.effort) > 0 && Number(prev.effort) <= 2) || /(facil|comod)\w*|\blegger[oa]\b|\bscaric\w*|troppo poco/.test(note);
     if (pain) {
       const snip = prev.note.trim().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
       return { ic: "ti-alert-triangle", cls: "sh-dn", txt: `Nella serie prima hai scritto «${snip}»: <b>vai piano</b>, non forzare` };
     }
+    if (formUnsafe) return { ic: "ti-alert-triangle", cls: "sh-ok", txt: "Forma da sistemare nella serie prima: <b>mantieni</b> il carico e rendi l'esecuzione pulita" };
 
     const r = prev.reps, kg = prev.kg || 0, bw = kg === 0;
     // #C — FATICA ACCUMULATA tra le serie. Se la serie prima era vicina al
@@ -2284,6 +2328,7 @@ const Session = {
         <input class="note-inp" type="text" aria-label="Nota della serie" value="${U.escape(set.note || "")}"
           placeholder="Note: forma, sensazione..."
           onchange="Session.saveNote(${U.arg(set.id)},this.value)">
+        ${this.feedbackHTML(set)}
         <button class="set-done-btn" onclick="Session.completeSet(${U.arg(set.id)},${U.arg(exName)})">
           ${done ? '<i class="ti ti-rotate-2"></i> Annulla' : '<i class="ti ti-check"></i> Serie fatta'}
         </button>
@@ -2292,6 +2337,11 @@ const Session = {
     // tieni premuto +/− per ripetere
     row.querySelectorAll(".adj").forEach(btn => this.bindHold(btn));
     return row;
+  },
+
+  feedbackHTML(set) {
+    const scale = (field, label, value) => `<div class="set-score" data-score="${field}"><span>${label}</span><div class="score-pills" role="group" aria-label="${label} della serie">${[1,2,3,4,5].map(n => `<button type="button" class="score-pill${value === n ? " on" : ""}" aria-label="${label} ${n} su 5" aria-pressed="${value === n}" onclick="Session.saveFeedback(${U.arg(set.id)},${U.arg(field)},${n})">${n}</button>`).join("")}</div></div>`;
+    return `<div class="set-feedback">${scale("effort", "Sforzo", set.effort)}${scale("form", "Forma", set.form)}</div>`;
   },
 
   // ─── AGGIUNGI SERIE ───
@@ -2553,9 +2603,9 @@ const Session = {
   syncSedutaMeta(exName) {
     const sess  = this.sessions.find(s => s.id === this.activeId);
     const sched = sess && CONFIG.SCHEDE[sess.type];
-    if (!sched || !sched._id) return;
+    if (!sched || !sched._id) return Promise.resolve();
     const sets = this.groupByExercise(this.exercises)[exName] || [];
-    if (!sets.length) return;   // se non resta nessuna serie, ci pensa la rimozione esercizio
+    if (!sets.length) return Promise.resolve();   // se non resta nessuna serie, ci pensa la rimozione esercizio
     const ex = sets[0];
     const next = {
       nome: exName, serie: sets.length,
@@ -2571,7 +2621,7 @@ const Session = {
     }));
     const item = list.find(e => e.nome === exName);
     if (item) {
-      if (same(item, next)) return;
+      if (same(item, next)) return Promise.resolve();
       Object.assign(item, next);
     } else {
       list.push(next);
@@ -2579,7 +2629,48 @@ const Session = {
     sched.exercises = list;
     const sd = App.schede.find(x => x.id === sched._id);
     if (sd) sd.exercises = list;
-    API.updateScheda(sched._id, { exercises: list }).catch(console.error);
+    return API.updateScheda(sched._id, { exercises: list });
+  },
+
+  planMetaKey() { return this.activeId ? `gymos_planmeta_${this.activeId}` : ""; },
+  stagePlanMeta(exName) {
+    const sets = this.groupByExercise(this.exercises)[exName] || [];
+    if (!sets.length || !this.activeId) return;
+    let staged = {};
+    try { staged = JSON.parse(localStorage.getItem(this.planMetaKey()) || "{}"); } catch (_) {}
+    const s = sets[0];
+    staged[exName] = { rrMin: s.rrMin ?? 8, rrMax: s.rrMax ?? 12, recupero: s.recupero ?? null, rir: s.rir ?? null };
+    localStorage.setItem(this.planMetaKey(), JSON.stringify(staged));
+  },
+  restorePendingPlanMeta() {
+    if (!this.activeId) return false;
+    let staged = {};
+    try { staged = JSON.parse(localStorage.getItem(this.planMetaKey()) || "{}"); } catch (_) { return false; }
+    Object.entries(staged).forEach(([exName, meta]) => (this.groupByExercise(this.exercises)[exName] || []).forEach(s => Object.assign(s, meta)));
+    return Object.keys(staged).length > 0;
+  },
+  async persistPlanMeta(exName) {
+    const sets = this.groupByExercise(this.exercises)[exName] || [];
+    if (!sets.length) return;
+    this.setSyncState("saving");
+    const s = sets[0];
+    const meta = { rrMin: s.rrMin ?? 8, rrMax: s.rrMax ?? 12, recupero: s.recupero ?? null, rir: s.rir ?? null };
+    await Promise.all(sets.map(set => API.updateExerciseTech(set.id, meta)));
+    await this.syncSedutaMeta(exName);
+    this.setSyncState("saved");
+  },
+  async flushPendingPlanMeta() {
+    if (!this.activeId) return true;
+    let staged = {};
+    try { staged = JSON.parse(localStorage.getItem(this.planMetaKey()) || "{}"); } catch (_) {}
+    const names = Object.keys(staged);
+    if (!names.length) return true;
+    names.forEach(exName => clearTimeout(this._saveTimers[`plan_${exName}`]));
+    try {
+      await Promise.all(names.map(exName => this.persistPlanMeta(exName)));
+      localStorage.removeItem(this.planMetaKey());
+      return true;
+    } catch (e) { this.setSyncState("error"); throw e; }
   },
 
   // Riallinea la sessione in corso alla sua seduta (chiamato in loadSession)
@@ -3107,7 +3198,7 @@ const Session = {
     clearTimeout(this._saveTimers[set.id]);
     this._saveTimers[set.id] = setTimeout(async () => {
       try {
-        await API.updateExerciseEntry(set.id, set.sets || 1, set.reps, set.kg, set.note);
+        await API.updateExerciseEntry(set.id, set.sets || 1, set.reps, set.kg, Notes.encodeSet(set.note, set));
         this.setSyncState("saved");
       } catch(e) {
         console.error("autosave fail:", e);
@@ -3144,20 +3235,7 @@ const Session = {
     this.refreshGoals();
     this.refreshSetHints(exName, true);
     // Salva il range su tutte le serie dell'esercizio
-    if (sets[0]) {
-      clearTimeout(this._saveTimers["rr_" + exName]);
-      this._saveTimers["rr_" + exName] = setTimeout(async () => {
-        this.setSyncState("saving");
-        try {
-          await Promise.all(sets.map(s => API.update(s.id, {
-            [CONFIG.PROPS.EL_RR_MIN]: API.prop.number(s.rrMin),
-            [CONFIG.PROPS.EL_RR_MAX]: API.prop.number(s.rrMax),
-          })));
-          this.setSyncState("saved");
-          this.syncSedutaMeta(exName);   // propaga il rep range anche sulla scheda
-        } catch(e) { this.setSyncState("error"); }
-      }, 800);
-    }
+    if (sets[0]) { this.stagePlanMeta(exName); clearTimeout(this._saveTimers[`plan_${exName}`]); this._saveTimers[`plan_${exName}`] = setTimeout(() => this.flushPendingPlanMeta().catch(() => {}), 800); }
   },
 
   // Recupero tra le serie (in header, come il rep range): salvato su tutte le serie
@@ -3166,17 +3244,7 @@ const Session = {
     const sets = this.groupByExercise(this.exercises)[exName] || [];
     const v = (val === "" ? null : Number(val));
     sets.forEach(s => { s.recupero = v; });
-    if (sets[0]) {
-      clearTimeout(this._saveTimers["rest_" + exName]);
-      this._saveTimers["rest_" + exName] = setTimeout(async () => {
-        this.setSyncState("saving");
-        try {
-          await Promise.all(sets.map(s => API.update(s.id, { [CONFIG.PROPS.EL_RECUPERO]: API.prop.number(v) })));
-          this.setSyncState("saved");
-          this.syncSedutaMeta(exName);
-        } catch(e) { this.setSyncState("error"); }
-      }, 800);
-    }
+    if (sets[0]) { this.stagePlanMeta(exName); clearTimeout(this._saveTimers[`plan_${exName}`]); this._saveTimers[`plan_${exName}`] = setTimeout(() => this.flushPendingPlanMeta().catch(() => {}), 800); }
   },
 
   // RIR (reps in reserve) per esercizio, in header come il rep range
@@ -3186,17 +3254,7 @@ const Session = {
     const v = (val === "" ? null : Number(val));
     sets.forEach(s => { s.rir = v; });
     this.refreshGoals();   // il banner cita il RIR: aggiornalo subito
-    if (sets[0]) {
-      clearTimeout(this._saveTimers["rir_" + exName]);
-      this._saveTimers["rir_" + exName] = setTimeout(async () => {
-        this.setSyncState("saving");
-        try {
-          await Promise.all(sets.map(s => API.update(s.id, { [CONFIG.PROPS.EL_RIR]: API.prop.number(v) })));
-          this.setSyncState("saved");
-          this.syncSedutaMeta(exName);
-        } catch(e) { this.setSyncState("error"); }
-      }, 800);
-    }
+    if (sets[0]) { this.stagePlanMeta(exName); clearTimeout(this._saveTimers[`plan_${exName}`]); this._saveTimers[`plan_${exName}`] = setTimeout(() => this.flushPendingPlanMeta().catch(() => {}), 800); }
   },
 
   updateStats() {
@@ -3246,12 +3304,30 @@ const Session = {
     }
     this.setSyncState("saving");
     try {
-      await API.update(id, { [CONFIG.PROPS.EL_NOTE]: API.prop.rich_text(note) });
+      await API.update(id, { [CONFIG.PROPS.EL_NOTE]: API.prop.rich_text(Notes.encodeSet(note, set)) });
       this.setSyncState("saved");
     } catch(e) {
       console.error(e);
       this.setSyncState("error");
     }
+  },
+
+  async saveFeedback(id, field, value) {
+    if (this.viewMode || !["effort", "form"].includes(field)) return;
+    const set = this.exercises.find(e => e.id === id);
+    if (!set) return;
+    set[field] = Number(value);
+    const row = document.getElementById(`setrow-${id}`);
+    if (row) row.querySelectorAll(`[data-score="${field}"] .score-pill`).forEach(b => {
+      const on = Number(b.textContent) === set[field];
+      b.classList.toggle("on", on); b.setAttribute("aria-pressed", String(on));
+    });
+    this.refreshSetHints(U.exBase(set.name), true);
+    this.setSyncState("saving");
+    try {
+      await API.update(id, { [CONFIG.PROPS.EL_NOTE]: API.prop.rich_text(Notes.encodeSet(set.note, set)) });
+      this.setSyncState("saved");
+    } catch (_) { this.setSyncState("error"); }
   },
 
   // ─── NOTE DELLA SESSIONE (intera) ───
@@ -3392,7 +3468,7 @@ const Session = {
       }
       const updates = this.exercises
         .filter(s => s.reps > 0)
-        .map(s => API.updateExerciseEntry(s.id, s.sets || 1, s.reps, s.kg, s.note));
+        .map(s => API.updateExerciseEntry(s.id, s.sets || 1, s.reps, s.kg, Notes.encodeSet(s.note, s)));
       await Promise.all(updates);
       let savedMins = 0;
       if (this.activeId) {
@@ -3454,6 +3530,7 @@ document.addEventListener("visibilitychange", () => {
     // il display restava fermo. Ricalcola subito dal timestamp reale.
     if (typeof DurationTimer !== "undefined" && DurationTimer.startTime) DurationTimer.tick();
   }
+  if (document.visibilityState === "hidden" && Session.activeId && !Session.sessionDone) Session.flushPendingPlanMeta().catch(() => {});
 });
 
 // ─── MODAL NUOVA SESSIONE ───
@@ -3479,16 +3556,20 @@ document.addEventListener("visibilitychange", () => {
     document.getElementById("modal-msg").textContent = "";
     modal.style.display = "flex";
 
-    // Ricarica le schede da Notion così riflette le modifiche
-    if (typeof App !== "undefined" && App.loadSchede) {
-      await App.loadSchede();
-    }
+    // Prima svuota gli aggiornamenti di range/recupero/RIR: ricaricare subito
+    // la scheda remota avrebbe potuto rimettere i vecchi valori nella sessione
+    // appena successiva.
+    let canReloadSchede = true;
+    try { await Session.flushPendingPlanMeta(); } catch (_) { canReloadSchede = false; U.toast("Uso i parametri locali: il salvataggio remoto verra' ritentato.", "err", 3600); }
+    if (canReloadSchede && typeof App !== "undefined" && App.loadSchede) await App.loadSchede();
 
     // Trova l'ultimo allenamento COMPLETATO e suggerisci il prossimo in rotazione
-    var sessList = (Session.sessions && Session.sessions.length) ? Session.sessions : [];
-    if (!sessList.length) { try { sessList = await API.getWorkoutSessions(20); } catch (e) { sessList = []; } }
+    // Aggiorna sempre: la cache della pagina Sessione puo' essere vecchia e non
+    // deve decidere quale seduta suggerire dopo un allenamento appena concluso.
+    var sessList = (Session.sessions && Session.sessions.length) ? Session.sessions.slice() : [];
+    try { const fresh = await API.getWorkoutSessions(50); if (fresh && fresh.length) sessList = fresh; } catch (e) {}
     var doneSorted = sessList.filter(function(s){ return s.done; })
-      .sort(function(a,b){ return new Date(b.date) - new Date(a.date); });
+      .sort(function(a,b){ return (String(b.date) + "|" + (b.createdAt || "")).localeCompare(String(a.date) + "|" + (a.createdAt || "")); });
     var lastDone = doneSorted[0] || null;
     var lastType = lastDone ? lastDone.type : null;
     var names    = Object.keys(CONFIG.SCHEDE);
@@ -3571,6 +3652,9 @@ Session._doCreateSession = async function(name) {
   btn.textContent = "Creazione...";
 
   try {
+    // Cancella un eventuale load avviato dalla navigazione Home -> Sessione:
+    // se finisse dopo questa creazione non deve riportare la pagina al landing.
+    Session._loadToken++;
     const today = U.today();   // data locale, non UTC (sessione creata dopo mezzanotte = giorno giusto)
     const sessProps = {};
     sessProps[CONFIG.PROPS.WL_NAME]  = API.prop.title(name);
@@ -3581,6 +3665,10 @@ Session._doCreateSession = async function(name) {
 
     const newSess = await API.create(CONFIG.DB.WORKOUT_LOG, sessProps);
     const sessId  = newSess.id;
+    // Scrivi subito il riferimento di ripresa: se il telefono sospende l'app
+    // mentre Notion crea le serie, al ritorno il reconcile ricostruisce quelle
+    // mancanti anziche' far sparire l'intera sessione.
+    localStorage.setItem("gymos_active", sessId);
     localStorage.setItem(`gymos_created_${sessId}`, Date.now());   // per l'auto-avvio del timer durata
 
     const exercises = CONFIG.SCHEDE[name].exercises || [];

@@ -313,6 +313,38 @@ const server=http.createServer((req,res)=>{
  console.log('PASS local backup includes photos, preserves existing data and rejects secrets');
  const unlabeled=await page.evaluate(()=>[...document.querySelectorAll('input,select,textarea')].filter(e=>e.type!=='hidden'&&!e.labels?.length&&!e.getAttribute('aria-label')&&!e.getAttribute('aria-labelledby')).length);
  assert.equal(unlabeled,0);console.log('PASS accessible names on static and rendered fields');
+ await page.evaluate(async()=>{
+   const raw=Notes.encodeSet('Controllo lento',{effort:4,form:2});
+   const decoded=Notes.decodeSet(raw);
+   if(decoded.note!=='Controllo lento'||decoded.effort!==4||decoded.form!==2)throw Error('Set feedback does not round trip');
+   Session.activeId='feedback';Session.sessions=[{id:'feedback',name:'Test',type:'Test',date:'2026-09-29',done:false}];
+   Session.exercises=[{id:'fb1',name:'Panca – Test – S1',kg:60,reps:10,rrMin:8,rrMax:10,recupero:120,rir:2,note:'',effort:4,form:2},{id:'fb2',name:'Panca – Test – S2',kg:60,reps:0,rrMin:8,rrMax:10,recupero:120,rir:2,note:''}];Session.exOrder=['Panca'];
+   let setWrites=0,schedaWrites=0;API.updateExerciseTech=async()=>{setWrites++};API.updateScheda=async()=>{schedaWrites++};
+   CONFIG.SCHEDE.Test={_id:'scheda-test',exercises:[{nome:'Panca',serie:1,rrMin:8,rrMax:10,recupero:120,rir:2}]};App.schede=[{id:'scheda-test',exercises:CONFIG.SCHEDE.Test.exercises}];
+   Session.updateRR('Panca','min','6');Session.updateRest('Panca','150');Session.updateRIR('Panca','3');
+   if(!localStorage.getItem('gymos_planmeta_feedback'))throw Error('Pending plan metadata was not staged');
+   await Session.flushPendingPlanMeta();
+   if(setWrites!==2||schedaWrites!==1||localStorage.getItem('gymos_planmeta_feedback'))throw Error('Plan metadata was not durably flushed');
+   const advice=Session._setAdvice('Panca',1,6,10);
+   if(!advice||!advice.txt.includes('Forma da sistemare'))throw Error('Low form feedback did not hold the next recommendation');
+ });
+ console.log('PASS effort/form feedback is retained and plan metadata flushes before background loss');
+ await page.evaluate(async()=>{
+   localStorage.setItem('gymos_active','keep-active');Session.activeId=null;Session._loadToken=0;
+   API.getWorkoutSessions=async()=>{throw Error('temporary network')};
+   await Session.load();
+   if(localStorage.getItem('gymos_active')!=='keep-active')throw Error('Transient load error erased active workout');
+   API.getWorkoutSessions=async()=>[
+     {id:'older',name:'A',type:'A',date:'2026-09-29',createdAt:'2026-09-29T09:00:00Z',done:true},
+     {id:'newer',name:'B',type:'B',date:'2026-09-29',createdAt:'2026-09-29T18:00:00Z',done:true}
+   ];
+   CONFIG.SCHEDE={A:{color:'#f60',exercises:[]},B:{color:'#f60',exercises:[]},C:{color:'#f60',exercises:[]}};
+   App.loadSchede=async()=>{};Session.sessions=[{id:'stale',type:'A',date:'2026-09-01',done:true}];
+   await Session.openNewModal();
+   const suggested=document.querySelector('.scheda-pill.is-next');
+   if(!suggested||suggested.dataset.name!=='C')throw Error('Next workout suggestion did not use newest completed session');
+ });
+ console.log('PASS active workout survives transient loading failure and next session suggestion is fresh');
  assert.deepEqual(errors,[]);console.log('PASS no browser JS errors');
  const offlineContext=await browser.newContext();
  await offlineContext.route('**/*',r=>r.request().url().startsWith(base)?r.continue():r.abort());

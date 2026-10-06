@@ -181,7 +181,7 @@ const API = {
   async getPreviousWorkoutSession(current) {
     const filters = [{ property: CONFIG.PROPS.WL_DONE, checkbox: { equals: true } }];
     if (current.type) filters.push({ property: CONFIG.PROPS.WL_TYPE, select: { equals: current.type } });
-    else filters.push({ property: CONFIG.PROPS.WL_NAME, rich_text: { equals: current.name } });
+    else filters.push({ property: CONFIG.PROPS.WL_NAME, title: { equals: current.name } });
     if (current.createdAt) {
       const sameDay = await this.query(CONFIG.DB.WORKOUT_LOG, { and: [...filters,
         { property: CONFIG.PROPS.WL_DATE, date: { equals: current.date } },
@@ -204,23 +204,26 @@ const API = {
         relation: { contains: workoutLogId }
       }
     );
-    return pages.map(p => ({
-      id: p.id,
-      name: this.read.title(p, CONFIG.PROPS.EL_NAME),
-      sets: this.read.number(p, CONFIG.PROPS.EL_SETS),
-      reps: this.read.number(p, CONFIG.PROPS.EL_REPS),
-      kg:   this.read.number(p, CONFIG.PROPS.EL_KG),
-      rrMin:this.read.number(p, CONFIG.PROPS.EL_RR_MIN),
-      rrMax:this.read.number(p, CONFIG.PROPS.EL_RR_MAX),
-      note: this.read.rich_text(p, CONFIG.PROPS.EL_NOTE),
-      date: this.read.date(p, CONFIG.PROPS.EL_DATE),
-      tecnica:  this.read.multi_select(p, CONFIG.PROPS.EL_TECNICA),
-      cadenza:  this.read.rich_text(p, CONFIG.PROPS.EL_CADENZA),
-      gruppo:   this.read.select(p, CONFIG.PROPS.EL_GRUPPO),
-      recupero: this.read.number(p, CONFIG.PROPS.EL_RECUPERO),
-      rir:      this.read.number(p, CONFIG.PROPS.EL_RIR),
-      info:     this.read.rich_text(p, CONFIG.PROPS.EL_INFO),
-    }))
+    return pages.map(p => {
+      const feedback = Notes.decodeSet(this.read.rich_text(p, CONFIG.PROPS.EL_NOTE));
+      return {
+        id: p.id,
+        name: this.read.title(p, CONFIG.PROPS.EL_NAME),
+        sets: this.read.number(p, CONFIG.PROPS.EL_SETS),
+        reps: this.read.number(p, CONFIG.PROPS.EL_REPS),
+        kg:   this.read.number(p, CONFIG.PROPS.EL_KG),
+        rrMin:this.read.number(p, CONFIG.PROPS.EL_RR_MIN),
+        rrMax:this.read.number(p, CONFIG.PROPS.EL_RR_MAX),
+        note: feedback.note, effort: feedback.effort, form: feedback.form,
+        date: this.read.date(p, CONFIG.PROPS.EL_DATE),
+        tecnica:  this.read.multi_select(p, CONFIG.PROPS.EL_TECNICA),
+        cadenza:  this.read.rich_text(p, CONFIG.PROPS.EL_CADENZA),
+        gruppo:   this.read.select(p, CONFIG.PROPS.EL_GRUPPO),
+        recupero: this.read.number(p, CONFIG.PROPS.EL_RECUPERO),
+        rir:      this.read.number(p, CONFIG.PROPS.EL_RIR),
+        info:     this.read.rich_text(p, CONFIG.PROPS.EL_INFO),
+      };
+    })
       // Notion non garantisce l'ordine dei risultati: ordina per numero di serie
       // (S<n> nel titolo) così S1/S2/S3 restano stabili e il confronto con la
       // sessione precedente avviene serie-per-serie corretta.
@@ -272,15 +275,10 @@ const API = {
       [{ property: CONFIG.PROPS.EL_DATE, direction: "descending" }],
       100
     );
-    return pages.map(p => ({
-      id:   p.id,
-      name: this.read.title(p, CONFIG.PROPS.EL_NAME),
-      date: this.read.date(p, CONFIG.PROPS.EL_DATE),
-      sets: this.read.number(p, CONFIG.PROPS.EL_SETS),
-      reps: this.read.number(p, CONFIG.PROPS.EL_REPS),
-      kg:   this.read.number(p, CONFIG.PROPS.EL_KG),
-      note: this.read.rich_text(p, CONFIG.PROPS.EL_NOTE),
-    })).filter(e => e.date)
+    return pages.map(p => {
+      const feedback = Notes.decodeSet(this.read.rich_text(p, CONFIG.PROPS.EL_NOTE));
+      return { id: p.id, name: this.read.title(p, CONFIG.PROPS.EL_NAME), date: this.read.date(p, CONFIG.PROPS.EL_DATE), sets: this.read.number(p, CONFIG.PROPS.EL_SETS), reps: this.read.number(p, CONFIG.PROPS.EL_REPS), kg: this.read.number(p, CONFIG.PROPS.EL_KG), note: feedback.note, effort: feedback.effort, form: feedback.form };
+    }).filter(e => e.date)
       // "contains" di Notion è un match per sottostringa: "Leg Curl" pescherebbe
       // anche "Leg Curl Seduto". Filtra sul nome-base NORMALIZZATO (robusto al drift).
       .filter(e => norm(e.name) === target);
