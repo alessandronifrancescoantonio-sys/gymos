@@ -327,6 +327,9 @@ const server=http.createServer((req,res)=>{
    if(setWrites!==2||schedaWrites!==1||localStorage.getItem('gymos_planmeta_feedback'))throw Error('Plan metadata was not durably flushed');
    const advice=Session._setAdvice('Panca',1,6,10);
    if(!advice||!advice.txt.includes('Forma da sistemare'))throw Error('Low form feedback did not hold the next recommendation');
+   Session.exercises[0].form=5;Session.exercises[0].effort=1;
+   const rirAdvice=Session._setAdvice('Panca',1,6,10);
+   if(!rirAdvice||!rirAdvice.txt.includes('RIR scelto'))throw Error('RIR coherence feedback did not guide the next load');
  });
  console.log('PASS effort/form feedback is retained and plan metadata flushes before background loss');
  await page.evaluate(async()=>{

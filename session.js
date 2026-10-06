@@ -1483,7 +1483,9 @@ const Session = {
     const atTopCount = setsArr.filter(s => s.reps >= rrMax).length;
     const allAtTop   = setsArr.length > 0 && atTopCount === setsArr.length;
     const weakForm = setsArr.some(s => Number(s.form) > 0 && Number(s.form) <= 2);
-    const hardEffort = setsArr.some(s => Number(s.effort) >= 4);
+    // 1-2 = eri piu' lontano dal cedimento del RIR scelto; non e' un voto di
+    // fatica. Se il range e' chiuso, quel margine e' un segnale per salire.
+    const rirTooEasy = setsArr.some(s => Number(s.effort) > 0 && Number(s.effort) <= 2);
     const prevSetsArr = (prev && prev.sets) || [];
     const twoForTwo  = allAtTop && prevSetsArr.length > 0 && prevSetsArr.every(s => s.reps >= rrMax);
     const gapDays = Math.round((Date.now() - new Date(last.date).getTime()) / 86400000);
@@ -1744,9 +1746,10 @@ const Session = {
       return goal(`Mantieni <b>${U.fmt(last.topKg)} kg</b> e cura la forma${rirStr}`,
         "Hai chiuso il range, ma hai valutato la forma bassa: prima rendi tutte le ripetizioni pulite, poi si aumenta.", "hold", dataLine);
     }
-    if (allAtTop && hardEffort) {
-      return goal(`Mantieni <b>${U.fmt(last.topKg)} kg</b> ancora una volta${rirStr}`,
-        "Hai chiuso il range ma lo sforzo era alto: consolida con margine e poi aumenta il carico.", "hold", dataLine);
+    if (allAtTop && rirTooEasy) {
+      return isBW
+        ? goal(`Rendi l'esercizio piu' difficile`, "Hai indicato che eri molto piu' lontano dal cedimento del RIR scelto: aumenta la difficolta' per rientrare nel target.", "go", dataLine)
+        : goal(`Aumenta il peso di <b>~${incr}</b> · riparti da <b>${rrMin}</b> rep${rirStr}`, "Hai chiuso il range con molto piu' margine del RIR scelto: aumenta per tornare nel target.", "go", dataLine);
     }
     if (allAtTop) {
       const conf = twoForTwo ? " Confermato per 2 sedute di fila." : "";
@@ -2170,13 +2173,15 @@ const Session = {
     // Stessi pattern del motore principale, per coerenza dell'analisi
     const pain = /(dolor|fastidi|infortun|pizzic|contrattur|strapp|tendinit|acciacc|infiamm)\w*|\bfitt[ae]\b|\bmale\b|\bmal\s+di\b|\btirone\b/.test(note);
     const formUnsafe = Number(prev.form) > 0 && Number(prev.form) <= 2;
-    const hard = Number(prev.effort) >= 4 || /(cediment|difficil|duriss|pesant|faticos|soffert|sudat|fallit|grind|tost)\w*|\bdur[ae]\b|\bmort[oa]\b|non ce la|al massimo|al limite/.test(note);
-    const easy = (Number(prev.effort) > 0 && Number(prev.effort) <= 2) || /(facil|comod)\w*|\blegger[oa]\b|\bscaric\w*|troppo poco/.test(note);
+    const rirTooEasy = Number(prev.effort) > 0 && Number(prev.effort) <= 2;
+    const hard = /(cediment|difficil|duriss|pesant|faticos|soffert|sudat|fallit|grind|tost)\w*|\bdur[ae]\b|\bmort[oa]\b|non ce la|al massimo|al limite/.test(note);
+    const easy = /(facil|comod)\w*|\blegger[oa]\b|\bscaric\w*|troppo poco/.test(note);
     if (pain) {
       const snip = prev.note.trim().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
       return { ic: "ti-alert-triangle", cls: "sh-dn", txt: `Nella serie prima hai scritto «${snip}»: <b>vai piano</b>, non forzare` };
     }
     if (formUnsafe) return { ic: "ti-alert-triangle", cls: "sh-ok", txt: "Forma da sistemare nella serie prima: <b>mantieni</b> il carico e rendi l'esecuzione pulita" };
+    if (rirTooEasy) return { ic: "ti-arrow-up-right", cls: "sh-up", txt: "Eri piu' lontano dal cedimento del RIR scelto: <b>aumenta leggermente</b> il carico per rientrare nel target" };
 
     const r = prev.reps, kg = prev.kg || 0, bw = kg === 0;
     // #C — FATICA ACCUMULATA tra le serie. Se la serie prima era vicina al
@@ -2340,8 +2345,8 @@ const Session = {
   },
 
   feedbackHTML(set) {
-    const scale = (field, label, value) => `<div class="set-score" data-score="${field}"><span>${label}</span><div class="score-pills" role="group" aria-label="${label} della serie">${[1,2,3,4,5].map(n => `<button type="button" class="score-pill${value === n ? " on" : ""}" aria-label="${label} ${n} su 5" aria-pressed="${value === n}" onclick="Session.saveFeedback(${U.arg(set.id)},${U.arg(field)},${n})">${n}</button>`).join("")}</div></div>`;
-    return `<div class="set-feedback">${scale("effort", "Sforzo", set.effort)}${scale("form", "Forma", set.form)}</div>`;
+    const scale = (field, label, value, hint) => `<div class="set-score" data-score="${field}"><span title="${hint}">${label}</span><div class="score-pills" role="group" aria-label="${label} della serie">${[1,2,3,4,5].map(n => `<button type="button" class="score-pill${value === n ? " on" : ""}" aria-label="${label} ${n} su 5" aria-pressed="${value === n}" onclick="Session.saveFeedback(${U.arg(set.id)},${U.arg(field)},${n})">${n}</button>`).join("")}</div></div>`;
+    return `<div class="set-feedback"><span class="rir-score-hint">RIR: 1 lontano · 5 preciso</span>${scale("effort", "Coerenza RIR", set.effort, "1: avevi molto piu' margine del RIR scelto. 5: RIR percepito preciso.")}${scale("form", "Forma", set.form, "1: tecnica da correggere. 5: esecuzione pulita e stabile.")}</div>`;
   },
 
   // ─── AGGIUNGI SERIE ───

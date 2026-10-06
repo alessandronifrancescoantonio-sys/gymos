@@ -396,12 +396,8 @@ input { font-family:inherit; }
 .note-inp { width:100%; background:var(--ink); border:1px solid var(--ink4); border-radius:8px; color:var(--ghost); font-size:12px; padding:8px 10px; outline:none; margin-top:10px; transition:border-color .15s; }
 .note-inp::placeholder { color:var(--muted); font-style:italic; }
 .note-inp:focus { border-color:var(--dim); color:var(--text); }
-.set-feedback { display:flex; gap:8px; margin-top:9px; }
-.set-score { flex:1; display:flex; align-items:center; justify-content:space-between; gap:6px; color:var(--muted); font-size:11px; }
-.score-pills { display:flex; gap:3px; }
-.score-pill { width:24px; height:24px; border-radius:7px; border:1px solid var(--ink4); background:var(--ink2); color:var(--muted); font:inherit; font-weight:700; }
-.score-pill.on { background:var(--accent); border-color:var(--accent); color:#111; }
-.set-feedback { display:flex; gap:8px; margin-top:9px; }
+.set-feedback { display:grid; grid-template-columns:1fr 1fr; gap:6px 8px; margin-top:9px; }
+.rir-score-hint { grid-column:1 / -1; color:var(--muted); font-size:10px; }
 .set-score { flex:1; display:flex; align-items:center; justify-content:space-between; gap:6px; color:var(--muted); font-size:11px; }
 .score-pills { display:flex; gap:3px; }
 .score-pill { width:24px; height:24px; border-radius:7px; border:1px solid var(--ink4); background:var(--ink2); color:var(--muted); font:inherit; font-weight:700; }
