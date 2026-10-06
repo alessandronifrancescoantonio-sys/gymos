@@ -191,8 +191,8 @@ const server=http.createServer((req,res)=>{
  });
  console.log('PASS new session and reconciled sets retain Scheda rep range, rest, RIR and technique metadata');
  await page.evaluate(()=>{
-  // Completare S1/S2 deve aprire S2/S3 della stessa tendina; l'esercizio
-  // seguente rimane chiuso anche dopo l'ultima serie.
+  // Completare S1/S2 deve aprire S2/S3 della stessa tendina; dopo l'ultima
+  // serie deve aprire la prima serie dell'esercizio seguente.
   App.navigate('session');Session.activeId='flow';Session.sessions=[{id:'flow',date:'2026-09-29',name:'Flow',type:'Test'}];Session.viewMode=false;Session.sessionDone=false;
   Session.exercises=[
    {id:'p1',name:'Panca prova – Flow – S1',kg:0,reps:0,rrMin:5,rrMax:7,recupero:150},
@@ -209,9 +209,10 @@ const server=http.createServer((req,res)=>{
  await page.evaluate(()=>Session.completeSet('p2','Panca prova'));
  assert.equal(await page.locator('#setrow-p3').evaluate(el=>el.classList.contains('set-collapsed')),false,'S2 did not open S3 of the current exercise');
  await page.evaluate(()=>Session.completeSet('p3','Panca prova'));
- assert.equal(await page.locator('.ex-block[data-ex="Rematore prova"]').evaluate(el=>el.classList.contains('collapsed')),true,'Last set automatically opened another exercise');
+ assert.equal(await page.locator('.ex-block[data-ex="Rematore prova"]').evaluate(el=>el.classList.contains('collapsed')),false,'Last set did not open the next exercise');
+ assert.equal(await page.locator('#setrow-r1').evaluate(el=>el.classList.contains('set-collapsed')),false,'Next exercise did not open its first incomplete set');
  assert.equal(await page.evaluate(()=>window.flowRest),150,'rest timer ignored planned recovery');
- console.log('PASS completing sets advances only inside the current exercise and uses planned recovery');
+ console.log('PASS completing sets advances through next set, then next exercise, and uses planned recovery');
  // Ripristina il fixture a un solo esercizio per le verifiche visuali e note
  // già presenti nella suite sotto.
  await page.evaluate(()=>{

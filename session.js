@@ -1044,17 +1044,24 @@ const Session = {
     Object.keys(this.groupByExercise(this.exercises)).forEach(n => this.refreshExDone(n));
   },
 
-  // #batch2 — quando l'ULTIMA serie di un esercizio viene segnata fatta, chiudi
-  // la sua tendina e apri automaticamente quella dell'esercizio successivo
-  // (stesso comportamento del tap manuale su un header, ma automatico). Solo
-  // se l'esercizio corrente era quello aperto (focus mode) — non forzare il
-  // focus su chi sta guardando qualcos'altro.
+  // Quando l'ULTIMA serie di un esercizio viene segnata fatta, chiudi la sua
+  // tendina e apri automaticamente la prima serie ancora da fare del prossimo
+  // esercizio. Così il flusso resta S1 → S2 → S3 → esercizio seguente, senza
+  // costringere a un tap aggiuntivo.
   autoAdvanceExercise(exName) {
     const blocks = [...document.querySelectorAll("#exercises-container .ex-block")];
     const block = blocks.find(b => b.dataset.ex === exName);
-    if (!block || block.classList.contains("collapsed")) return;
+    // Il click su "Serie fatta" è l'azione autorevole: durante il refresh il
+    // blocco appena completato può già risultare chiuso, ma questo non deve
+    // impedire il passaggio al lavoro successivo.
+    if (!block) return;
     const idx = this.exOrder.indexOf(exName);
-    const nextName = idx >= 0 ? this.exOrder[idx + 1] : null;
+    const grouped = this.groupByExercise(this.exercises);
+    // Se un esercizio successivo era già stato chiuso manualmente, saltalo:
+    // si apre sempre il prossimo lavoro che resta davvero da completare.
+    const nextName = idx >= 0 ? this.exOrder.slice(idx + 1).find(name =>
+      (grouped[name] || []).some(set => !this._done.has(set.id))
+    ) : null;
     const nextBlock = nextName ? blocks.find(b => b.dataset.ex === nextName) : null;
     if (nextBlock) {
       blocks.forEach(b => {
@@ -1064,6 +1071,14 @@ const Session = {
       });
       nextBlock.classList.remove("collapsed");
       this._openExercise = nextName;
+      const nextCards = [...nextBlock.querySelectorAll(".set-card")];
+      const nextSet = nextCards.find(card => !this._done.has(card.id.replace(/^setrow-/, "")));
+      this._openSetByExercise = this._openSetByExercise || {};
+      nextCards.forEach(card => card.classList.add("set-collapsed"));
+      if (nextSet) {
+        nextSet.classList.remove("set-collapsed");
+        this._openSetByExercise[nextName] = nextSet.id.replace(/^setrow-/, "");
+      }
       this.scrollToBlock(nextBlock);
       // Ri-analizza col cervello IA per l'esercizio in cui stai entrando: ora
       // include quello appena finito nel "fatto oggi" — consiglio aggiornato
@@ -2990,9 +3005,8 @@ const Session = {
 
     if (nowDone) {
       if (navigator.vibrate) navigator.vibrate(20);
-      // Chiudi questa serie e apri sempre la prossima INCOMPLETA dello stesso
-      // esercizio. Non cambiare esercizio automaticamente: la progressione
-      // deve restare sotto il controllo dell'utente.
+      // Chiudi questa serie e apri la successiva incompleta dello stesso
+      // esercizio. Se non ce n'è una, passa direttamente al prossimo.
       card.classList.add("set-collapsed");
       const cards = [...(card.parentElement?.querySelectorAll(".set-card") || [])];
       const cardIndex = cards.indexOf(card);
@@ -3005,6 +3019,7 @@ const Session = {
         this._openSetByExercise[exName] = next.id.replace(/^setrow-/, "");
       } else {
         delete this._openSetByExercise[exName];
+        this.autoAdvanceExercise(exName);
       }
       // avvia il recupero automatico
       const set = this.exercises.find(e => e.id === id);
