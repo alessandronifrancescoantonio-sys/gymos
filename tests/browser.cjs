@@ -261,6 +261,23 @@ const server=http.createServer((req,res)=>{
  });
  console.log('PASS immediate completion and PDF retain exercise note');
  await page.evaluate(()=>{
+  const history=[
+   {id:'push-a',name:'Panca – Push – S1',date:'2026-10-01',kg:60,reps:8,sessionIds:['push-session']},
+   {id:'upper-b',name:'Panca – Upper – S1',date:'2026-10-02',kg:90,reps:5,sessionIds:['upper-session']}
+  ];
+  const sessions=[
+   {id:'push-session',name:'Push',type:'Push'},
+   {id:'upper-session',name:'Upper',type:'Upper'}
+  ];
+  const push=Progression._historyForScheda(history,sessions,'Push');
+  const upper=Progression._historyForScheda(history,sessions,'Upper');
+  const legacy=Progression._historyForScheda(history,[{id:'push-session',name:' Push ',type:''}],'Push');
+  if(push.length!==1||push[0].id!=='push-a')throw Error('Progression mixes same-name exercise from another workout');
+  if(upper.length!==1||upper[0].id!=='upper-b')throw Error('Progression does not isolate the selected workout');
+  if(legacy.length!==1||legacy[0].id!=='push-a')throw Error('Progression does not support legacy workout names');
+ });
+ console.log('PASS progression separates identical exercise names by workout session');
+ await page.evaluate(()=>{
   const attack='<img src=x onerror="window.injected=true">';
   Cardio.sessions=[{id:'cardio',date:'2026-09-26',tipo:attack,note:attack,fatto:true}];Cardio.buildTable();
   App.programmi={[attack]:[{id:'p',nome:attack,colore:'#fff',exercises:[{name:attack}]}]};Schede.render();

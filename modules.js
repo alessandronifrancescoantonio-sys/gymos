@@ -56,7 +56,14 @@ const Progression = {
   async loadHistory() {
     document.getElementById("prog-ex-name").textContent = this.activeEx;
     try {
-      this.history = await API.getExerciseHistory(this.activeEx);
+      // Un esercizio con lo stesso nome può comparire in più schede. Il nome
+      // basta per trovare le righe candidate, ma il grafico deve usare solo
+      // quelle collegate alle sedute della scheda aperta dall'utente.
+      const [history, workoutSessions] = await Promise.all([
+        API.getExerciseHistory(this.activeEx),
+        API.getWorkoutSessions(200)
+      ]);
+      this.history = this._historyForScheda(history, workoutSessions, this.activeScheda);
       this.sessions = this.groupSessions();
       this.buildChart();
       this.buildRecords();
@@ -65,6 +72,19 @@ const Progression = {
   },
 
   _esc(s) { return U.escape(s); },
+
+  _historyForScheda(history, workoutSessions, schedaName) {
+    const key = value => String(value || "").trim().replace(/\s+/g, " ").toLocaleLowerCase("it-IT");
+    const target = key(schedaName);
+    const sessionIds = new Set((workoutSessions || [])
+      // `name` è il fallback per le sedute create dalle versioni precedenti,
+      // nelle quali il campo tipo poteva restare vuoto.
+      .filter(session => [session.type, session.name].some(value => key(value) === target))
+      .map(session => session.id));
+    return (history || []).filter(entry =>
+      (entry.sessionIds || []).some(sessionId => sessionIds.has(sessionId))
+    );
+  },
 
   // Raggruppa le righe (una per serie) in SESSIONI, con tutte le serie ordinate,
   // scartando quelle vuote (rep 0). Calcola top set, volume e record (PR).

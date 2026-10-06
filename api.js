@@ -277,7 +277,16 @@ const API = {
     );
     return pages.map(p => {
       const feedback = Notes.decodeSet(this.read.rich_text(p, CONFIG.PROPS.EL_NOTE));
-      return { id: p.id, name: this.read.title(p, CONFIG.PROPS.EL_NAME), date: this.read.date(p, CONFIG.PROPS.EL_DATE), sets: this.read.number(p, CONFIG.PROPS.EL_SETS), reps: this.read.number(p, CONFIG.PROPS.EL_REPS), kg: this.read.number(p, CONFIG.PROPS.EL_KG), note: feedback.note, effort: feedback.effort, form: feedback.form };
+      return {
+        id: p.id,
+        // Il nome dell'esercizio non identifica una scheda: conserva anche
+        // la relazione alla seduta, così Progressioni può isolare la storia
+        // della scheda selezionata senza contaminazioni da esercizi omonimi.
+        sessionIds: this.read.relation(p, CONFIG.PROPS.EL_SESSION),
+        name: this.read.title(p, CONFIG.PROPS.EL_NAME), date: this.read.date(p, CONFIG.PROPS.EL_DATE),
+        sets: this.read.number(p, CONFIG.PROPS.EL_SETS), reps: this.read.number(p, CONFIG.PROPS.EL_REPS), kg: this.read.number(p, CONFIG.PROPS.EL_KG),
+        note: feedback.note, effort: feedback.effort, form: feedback.form
+      };
     }).filter(e => e.date)
       // "contains" di Notion è un match per sottostringa: "Leg Curl" pescherebbe
       // anche "Leg Curl Seduto". Filtra sul nome-base NORMALIZZATO (robusto al drift).
