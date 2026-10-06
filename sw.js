@@ -1,6 +1,6 @@
 // GymOS — immutable offline shell per build. A new worker installs the whole
 // shell before activation. version.json remains network-first for update alerts.
-const CACHE = "gymos-v120";
+const CACHE = "gymos-v121";
 
 // File essenziali: pre-caricati all'installazione, così la PRIMA apertura
 // offline dopo un aggiornamento funziona già.

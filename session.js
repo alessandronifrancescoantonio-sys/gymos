@@ -2345,8 +2345,28 @@ const Session = {
   },
 
   feedbackHTML(set) {
-    const scale = (field, label, value, hint) => `<div class="set-score" data-score="${field}"><span title="${hint}">${label}</span><div class="score-pills" role="group" aria-label="${label} della serie">${[1,2,3,4,5].map(n => `<button type="button" class="score-pill${value === n ? " on" : ""}" aria-label="${label} ${n} su 5" aria-pressed="${value === n}" onclick="Session.saveFeedback(${U.arg(set.id)},${U.arg(field)},${n})">${n}</button>`).join("")}</div></div>`;
-    return `<div class="set-feedback"><span class="rir-score-hint">RIR: 1 lontano · 5 preciso</span>${scale("effort", "Coerenza RIR", set.effort, "1: avevi molto piu' margine del RIR scelto. 5: RIR percepito preciso.")}${scale("form", "Forma", set.form, "1: tecnica da correggere. 5: esecuzione pulita e stabile.")}</div>`;
+    const scale = (field, icon, label, question, value, ends) => `<section class="set-score" data-score="${field}">
+      <div class="score-head">
+        <div class="score-title"><i class="ti ${icon}" aria-hidden="true"></i><div><strong>${label}</strong><span>${question}</span></div></div>
+        <output class="score-current" id="score-current-${set.id}-${field}">${this._feedbackLabel(field, value)}</output>
+      </div>
+      <div class="score-pills" role="group" aria-label="${label} della serie">
+        ${[1,2,3,4,5].map(n => `<button type="button" class="score-pill${value === n ? " on" : ""}" aria-label="${label}: ${this._feedbackLabel(field, n)} (${n} su 5)" aria-pressed="${value === n}" onclick="Session.saveFeedback(${U.arg(set.id)},${U.arg(field)},${n})">${n}</button>`).join("")}
+      </div>
+      <div class="score-scale-axis" aria-hidden="true"><span>${ends[0]}</span><span>${ends[1]}</span></div>
+    </section>`;
+    return `<div class="set-feedback" aria-label="Valutazione della serie">
+      <div class="feedback-intro"><i class="ti ti-sparkles" aria-hidden="true"></i><span><b>Valutazione rapida</b> · serve a migliorare il suggerimento della prossima volta</span></div>
+      <p class="rir-score-hint"><b>Coerenza RIR</b> misura quanto eri vicino al RIR impostato: non è un voto di fatica.</p>
+      ${scale("effort", "ti-target-arrow", "Coerenza RIR", "Quanto eri vicino al RIR previsto?", set.effort, ["Molto più margine", "RIR centrato"])}
+      ${scale("form", "ti-activity-heartbeat", "Forma", "Quanto erano pulite le ripetizioni?", set.form, ["Da correggere", "Pulita e stabile"])}</div>`;
+  },
+
+  _feedbackLabel(field, value) {
+    const labels = field === "effort"
+      ? ["Molto più margine", "Più margine", "Quasi centrato", "Vicino al target", "RIR centrato"]
+      : ["Da correggere", "Instabile", "Discreta", "Buona", "Pulita e stabile"];
+    return labels[Number(value) - 1] || "Non valutato";
   },
 
   // ─── AGGIUNGI SERIE ───
@@ -3327,6 +3347,8 @@ const Session = {
       const on = Number(b.textContent) === set[field];
       b.classList.toggle("on", on); b.setAttribute("aria-pressed", String(on));
     });
+    const current = document.getElementById(`score-current-${id}-${field}`);
+    if (current) current.textContent = this._feedbackLabel(field, set[field]);
     this.refreshSetHints(U.exBase(set.name), true);
     this.setSyncState("saving");
     try {

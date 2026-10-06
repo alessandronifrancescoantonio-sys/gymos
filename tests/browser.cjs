@@ -261,6 +261,25 @@ const server=http.createServer((req,res)=>{
  });
  console.log('PASS immediate completion and PDF retain exercise note');
  await page.evaluate(()=>{
+  const html=Session.feedbackHTML({id:'feedback-ui',effort:4,form:2});
+  const probe=document.createElement('div');probe.innerHTML=html;
+  if(!probe.innerText.includes('non è un voto di fatica'))throw Error('RIR feedback meaning is not visible');
+  if(probe.querySelectorAll('.score-pill').length!==10)throw Error('Feedback scale is incomplete');
+  if(!probe.querySelector('.score-current')||!probe.innerText.includes('Vicino al target'))throw Error('Selected feedback state is not understandable');
+ });
+ console.log('PASS feedback UI explains RIR coherence and selected state');
+ await page.evaluate(()=>{
+  const fixture=document.createElement('div');
+  fixture.id='feedback-visual-fixture';fixture.style.cssText='position:fixed;inset:0 auto auto 0;z-index:9999;width:320px;max-width:100vw;padding:16px;background:#0d0d0f';
+  fixture.innerHTML=Session.feedbackHTML({id:'feedback-visual',effort:4,form:2});
+  document.body.appendChild(fixture);
+ });
+ await page.setViewportSize({width:320,height:800});
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>document.documentElement.clientWidth),false,'feedback UI overflows on mobile');
+ await page.locator('#feedback-visual-fixture').screenshot({path:path.join(root,'test-results','feedback-320.png')});
+ await page.evaluate(()=>document.getElementById('feedback-visual-fixture').remove());
+ console.log('PASS feedback UI fits mobile and has touch-sized controls');
+ await page.evaluate(()=>{
   const history=[
    {id:'push-a',name:'Panca – Push – S1',date:'2026-10-01',kg:60,reps:8,sessionIds:['push-session']},
    {id:'upper-b',name:'Panca – Upper – S1',date:'2026-10-02',kg:90,reps:5,sessionIds:['upper-session']}
