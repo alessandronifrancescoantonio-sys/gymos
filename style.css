@@ -402,6 +402,10 @@ input { font-family:inherit; }
 .feedback-intro b { color:var(--text); font-size:11px; }
 .rir-score-hint { margin:0; padding:7px 8px; border-left:2px solid var(--accent); border-radius:0 7px 7px 0; background:rgba(255,114,36,.07); color:var(--dim); font-size:10.5px; line-height:1.4; }
 .rir-score-hint b { color:var(--ghost); }
+.feedback-guard:empty { display:none; }
+.feedback-retry-warning { display:flex; align-items:flex-start; gap:7px; padding:8px 9px; border:1px solid rgba(239,68,68,.38); border-radius:9px; background:rgba(239,68,68,.09); color:#ffb4ad; font-size:10.5px; line-height:1.38; }
+.feedback-retry-warning i { color:#ff6b5f; font-size:15px; flex:0 0 auto; margin-top:1px; }
+.feedback-retry-warning b { color:#ffd0cb; }
 .set-score { display:grid; grid-template-columns:1fr; gap:7px; color:var(--muted); }
 .score-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
 .score-title { display:flex; align-items:center; gap:7px; min-width:0; }

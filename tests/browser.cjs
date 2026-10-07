@@ -213,6 +213,40 @@ const server=http.createServer((req,res)=>{
  assert.equal(await page.locator('#setrow-r1').evaluate(el=>el.classList.contains('set-collapsed')),false,'Next exercise did not open its first incomplete set');
  assert.equal(await page.evaluate(()=>window.flowRest),150,'rest timer ignored planned recovery');
  console.log('PASS completing sets advances through next set, then next exercise, and uses planned recovery');
+ await page.evaluate(()=>{
+  App.navigate('session');Session.activeId='rir-guard';Session.sessions=[{id:'rir-guard',date:'2026-10-01',name:'Guard',type:'Test'}];Session.viewMode=false;Session.sessionDone=false;
+  Session.exercises=[
+   {id:'g1',name:'Panca guard – Guard – S1',kg:50,reps:10,rrMin:8,rrMax:12,recupero:120,rir:2,effort:2},
+   {id:'g2',name:'Panca guard – Guard – S2',kg:50,reps:0,rrMin:8,rrMax:12,recupero:120,rir:2}
+  ];Session.exOrder=['Panca guard'];Session.prevExercises=[];Session._done=new Set();Session._prSets=new Set();Session._openExercise='Panca guard';Session._openSetByExercise={'Panca guard':'g1'};
+  window.guardRest=0;RestTimer.start=secs=>{window.guardRest=secs};Session.renderExercises();
+  Session.exercises[0].effort=1;
+  Session.completeSet('g1','Panca guard');
+  if(Session._done.has('g1'))throw Error('RIR coherence 1 incorrectly completed the set');
+  Session.exercises[0].effort=2;
+  Session.completeSet('g1','Panca guard');
+  if(Session._done.has('g1'))throw Error('Low RIR coherence incorrectly completed the set');
+  if(!document.querySelector('#setrow-g1 .feedback-retry-warning'))throw Error('Low RIR coherence does not explain required retry');
+  if(document.querySelector('#setrow-g1').classList.contains('set-collapsed'))throw Error('Blocked set was closed');
+  if(window.guardRest!==0)throw Error('Blocked set started the rest timer');
+  Session.exercises[0].effort=3;Session.exercises[0].form=1;
+  Session.completeSet('g1','Panca guard');
+  if(!Session._done.has('g1'))throw Error('RIR coherence 3 did not allow completion');
+  if(document.querySelector('#setrow-g2').classList.contains('set-collapsed'))throw Error('Allowed set did not advance to next set');
+  if(window.guardRest!==120)throw Error('Allowed set did not start planned rest');
+  Session.exercises[0].effort=1;
+  Session.completeSet('g1','Panca guard');
+  if(Session._done.has('g1'))throw Error('Already completed set could not be undone after low RIR feedback');
+  Session.exercises[1].effort=4;
+  Session.completeSet('g2','Panca guard');
+  if(!Session._done.has('g2'))throw Error('RIR coherence 4 did not allow completion');
+  Session.completeSet('g2','Panca guard');
+  Session.exercises[1].effort=5;
+  Session.completeSet('g2','Panca guard');
+  if(!Session._done.has('g2'))throw Error('RIR coherence 5 did not allow completion');
+  if([null,undefined,0,3,4,5,'invalid',true,false,'1','2'].some(value=>Session._requiresRirRetry({effort:value})))throw Error('RIR completion guard blocks a valid or missing score');
+ });
+ console.log('PASS low RIR coherence blocks completion, timer and advancement until corrected');
  // Ripristina il fixture a un solo esercizio per le verifiche visuali e note
  // già presenti nella suite sotto.
  await page.evaluate(()=>{

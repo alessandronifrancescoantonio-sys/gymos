@@ -2374,6 +2374,7 @@ const Session = {
       <div class="feedback-intro"><i class="ti ti-sparkles" aria-hidden="true"></i><span><b>Valutazione rapida</b> · serve a migliorare il suggerimento della prossima volta</span></div>
       <p class="rir-score-hint"><b>Coerenza RIR</b> misura quanto eri vicino al RIR impostato: non è un voto di fatica.</p>
       ${scale("effort", "ti-target-arrow", "Coerenza RIR", "Quanto eri vicino al RIR previsto?", set.effort, ["Molto più margine", "RIR centrato"])}
+      <div class="feedback-guard" id="feedback-guard-${set.id}">${this._feedbackGuardHTML(set)}</div>
       ${scale("form", "ti-activity-heartbeat", "Forma", "Quanto erano pulite le ripetizioni?", set.form, ["Da correggere", "Pulita e stabile"])}</div>`;
   },
 
@@ -2382,6 +2383,16 @@ const Session = {
       ? ["Molto più margine", "Più margine", "Quasi centrato", "Vicino al target", "RIR centrato"]
       : ["Da correggere", "Instabile", "Discreta", "Buona", "Pulita e stabile"];
     return labels[Number(value) - 1] || "Non valutato";
+  },
+
+  _requiresRirRetry(set) {
+    const effort = set && set.effort;
+    return Number.isInteger(effort) && effort >= 1 && effort <= 2;
+  },
+
+  _feedbackGuardHTML(set) {
+    if (!this._requiresRirRetry(set)) return "";
+    return `<div class="feedback-retry-warning" role="alert"><i class="ti ti-refresh-alert" aria-hidden="true"></i><span><b>Serie da ripetere</b> · eri troppo lontano dal RIR previsto: aumenta leggermente il peso, rifai la serie e rivaluta la coerenza.</span></div>`;
   },
 
   // ─── AGGIUNGI SERIE ───
@@ -2986,6 +2997,15 @@ const Session = {
     const card = document.getElementById(`setrow-${id}`);
     if (!card) return;
     const nowDone = !this._done.has(id);
+    const set = this.exercises.find(e => e.id === id);
+    // Coerenza 1–2 = carico troppo leggero rispetto al RIR pianificato.
+    // Non registrare la serie come valida, non avviare il recupero e non
+    // avanzare: l'utente deve aumentare leggermente il carico e ripeterla.
+    if (nowDone && this._requiresRirRetry(set)) {
+      U.toast("Serie da ripetere: aumenta leggermente il peso e porta la coerenza RIR almeno a 3", "err", 5200);
+      card.querySelector(".set-done-btn")?.focus();
+      return;
+    }
     if (nowDone) this._done.add(id); else this._done.delete(id);
     this.saveDone();
     card.classList.toggle("set-done", nowDone);
@@ -3022,7 +3042,6 @@ const Session = {
         this.autoAdvanceExercise(exName);
       }
       // avvia il recupero automatico
-      const set = this.exercises.find(e => e.id === id);
       const secs = (set && set.recupero) ? set.recupero : 90;
       if (typeof RestTimer !== "undefined") RestTimer.start(secs);
       // ── RECORD PERSONALE? — controlla PRIMA di aggiornare i record ──
@@ -3364,6 +3383,10 @@ const Session = {
     });
     const current = document.getElementById(`score-current-${id}-${field}`);
     if (current) current.textContent = this._feedbackLabel(field, set[field]);
+    if (field === "effort") {
+      const guard = document.getElementById(`feedback-guard-${id}`);
+      if (guard) guard.innerHTML = this._feedbackGuardHTML(set);
+    }
     this.refreshSetHints(U.exBase(set.name), true);
     this.setSyncState("saving");
     try {
