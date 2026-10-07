@@ -1403,9 +1403,23 @@ const Session = {
       let top = real[0];
       real.forEach(s => { if ((s.kg || 0) > (top.kg || 0) || ((s.kg || 0) === (top.kg || 0) && s.reps > top.reps)) top = s; });
       const bw = (top.kg || 0) === 0;
-      if (top.reps >= rrMax) return bw
-        ? goal(`Punta <b>${top.reps + 1}</b> rep`, `Sei al top del range (${top.reps})`, "go")
-        : goal(`Aumenta il peso · riparti da <b>${rrMin}</b> rep${rirStr}`, `La volta scorsa hai chiuso: ${U.fmt(top.kg)}kg × ${top.reps}`, "go");
+      const allAtTop = real.every(s => s.reps >= rrMax);
+      const weakForm = real.some(s => Number(s.form) > 0 && Number(s.form) <= 2);
+      const cautionForm = real.some(s => Number(s.form) === 3);
+      const rirTooEasy = real.some(s => Number(s.effort) > 0 && Number(s.effort) <= 2);
+      const uncertainRir = real.some(s => Number(s.effort) === 3);
+      if (top.reps >= rrMax) {
+        const hold = !allAtTop || weakForm || cautionForm || rirTooEasy || uncertainRir;
+        const why = weakForm ? "Forma da correggere: prima rendi le ripetizioni pulite."
+          : cautionForm ? "Forma discreta: porta la tecnica a 4–5 prima di aumentare."
+          : rirTooEasy ? "RIR fuori dal target: ricontrolla il carico prima di aumentare."
+          : uncertainRir ? "RIR quasi centrato: conferma 4–5 prima di aumentare."
+          : "Porta tutte le serie al top del range prima di aumentare.";
+        if (hold) return goal(bw ? "Mantieni e consolida l'esecuzione" : `Mantieni <b>${U.fmt(top.kg)} kg</b> e consolida`, why, "hold");
+        return bw
+          ? goal(`Punta <b>${top.reps + 1}</b> rep`, `Sei al top del range (${top.reps})`, "go")
+          : goal(`Aumenta il peso · riparti da <b>${rrMin}</b> rep${rirStr}`, `La volta scorsa hai chiuso: ${U.fmt(top.kg)}kg × ${top.reps}`, "go");
+      }
       const tg = Math.min(top.reps + 1, rrMax);
       return bw
         ? goal(`Punta <b>${tg}</b> rep`, `+1 rep verso il top (${rrMax})`, "go")
@@ -1498,9 +1512,11 @@ const Session = {
     const atTopCount = setsArr.filter(s => s.reps >= rrMax).length;
     const allAtTop   = setsArr.length > 0 && atTopCount === setsArr.length;
     const weakForm = setsArr.some(s => Number(s.form) > 0 && Number(s.form) <= 2);
+    const cautionForm = setsArr.some(s => Number(s.form) === 3);
     // 1-2 = eri piu' lontano dal cedimento del RIR scelto; non e' un voto di
     // fatica. Se il range e' chiuso, quel margine e' un segnale per salire.
     const rirTooEasy = setsArr.some(s => Number(s.effort) > 0 && Number(s.effort) <= 2);
+    const uncertainRir = setsArr.some(s => Number(s.effort) === 3);
     const prevSetsArr = (prev && prev.sets) || [];
     const twoForTwo  = allAtTop && prevSetsArr.length > 0 && prevSetsArr.every(s => s.reps >= rrMax);
     const gapDays = Math.round((Date.now() - new Date(last.date).getTime()) / 86400000);
@@ -1742,14 +1758,17 @@ const Session = {
         if (rrMin >= 12) return `passa a <b>6–8 rep</b> con più carico per 3-4 settimane: sei fermo da ${sinceBest} sedute sulle rep alte, un blocco più pesante ti dà uno stimolo nuovo.`;
         return `prova un blocco di <b>5–6 rep</b> più pesanti per 3-4 settimane, poi rientra in ${rrMin}–${rrMax}: sei fermo da ${sinceBest} sedute, e alternare il rep-range sblocca più che insistere.`;
       })();
-      const trick = dropoff >= 4
+      const qualityNeedsWork = weakForm || cautionForm || rirTooEasy || uncertainRir;
+      const trick = qualityNeedsWork
+        ? "prima consolida forma e coerenza RIR a 4–5: il carico resta uguale."
+        : dropoff >= 4
         ? `perdi ${dropoff} rep tra la prima e l'ultima serie: riposa di più tra le serie (2–3 min).`
         : easy
           ? "l'avevi sentito facile: prova ad aumentare un po' il peso."
           : "prova +1 rep con una mini-pausa, oppure togli un 5% e risali.";
       return goal(
         isBW ? `Fermo da ${sinceBest} sedute — punta <b>${target}</b> rep` : `Fermo a <b>${U.fmt(last.topKg)} kg</b> da ${sinceBest} sedute`,
-        strategia
+        strategia && !qualityNeedsWork
           ? `<b>Cambia stimolo</b>: ${strategia}${rirCaution}${junkVolumeNote}`
           : `Per sbloccarti: ${trick}${rirCaution}${junkVolumeNote}`,
         "hold", dataLine);
@@ -1757,14 +1776,23 @@ const Session = {
 
     // 4) TUTTE le serie al top del range → si sale di peso (doppia progressione,
     // incremento ACSM: 2-10%, meno per i muscoli piccoli)
-    if (allAtTop && weakForm) {
+    // Qualità prima del carico: la forma 1–3 o un RIR ancora incerto (3)
+    // non autorizzano aumenti, nemmeno nel caso a una sola serie al top.
+    if (atTop && weakForm) {
       return goal(`Mantieni <b>${U.fmt(last.topKg)} kg</b> e cura la forma${rirStr}`,
         "Hai chiuso il range, ma hai valutato la forma bassa: prima rendi tutte le ripetizioni pulite, poi si aumenta.", "hold", dataLine);
     }
-    if (allAtTop && rirTooEasy) {
-      return isBW
-        ? goal(`Rendi l'esercizio piu' difficile`, "Hai indicato che eri molto piu' lontano dal cedimento del RIR scelto: aumenta la difficolta' per rientrare nel target.", "go", dataLine)
-        : goal(`Aumenta il peso di <b>~${incr}</b> · riparti da <b>${rrMin}</b> rep${rirStr}`, "Hai chiuso il range con molto piu' margine del RIR scelto: aumenta per tornare nel target.", "go", dataLine);
+    if (atTop && cautionForm) {
+      return goal(`Mantieni <b>${U.fmt(last.topKg)} kg</b> e consolida la forma${rirStr}`,
+        "Hai chiuso il range con forma discreta: il carico resta uguale finché la tecnica non arriva a 4–5.", "hold", dataLine);
+    }
+    if (atTop && rirTooEasy) {
+      return goal(`Mantieni <b>${U.fmt(last.topKg)} kg</b> e riallinea il RIR${rirStr}`,
+        "Il RIR era fuori dal target: ripeti con un carico adatto e torna a una coerenza 4–5 prima di aumentare.", "hold", dataLine);
+    }
+    if (atTop && uncertainRir) {
+      return goal(`Mantieni <b>${U.fmt(last.topKg)} kg</b> e conferma il RIR${rirStr}`,
+        "Il RIR era quasi centrato: prima ottieni una coerenza 4–5, poi si aumenta il carico.", "hold", dataLine);
     }
     if (allAtTop) {
       const conf = twoForTwo ? " Confermato per 2 sedute di fila." : "";
@@ -2188,7 +2216,9 @@ const Session = {
     // Stessi pattern del motore principale, per coerenza dell'analisi
     const pain = /(dolor|fastidi|infortun|pizzic|contrattur|strapp|tendinit|acciacc|infiamm)\w*|\bfitt[ae]\b|\bmale\b|\bmal\s+di\b|\btirone\b/.test(note);
     const formUnsafe = Number(prev.form) > 0 && Number(prev.form) <= 2;
+    const formCaution = Number(prev.form) === 3;
     const rirTooEasy = Number(prev.effort) > 0 && Number(prev.effort) <= 2;
+    const rirUncertain = Number(prev.effort) === 3;
     const hard = /(cediment|difficil|duriss|pesant|faticos|soffert|sudat|fallit|grind|tost)\w*|\bdur[ae]\b|\bmort[oa]\b|non ce la|al massimo|al limite/.test(note);
     const easy = /(facil|comod)\w*|\blegger[oa]\b|\bscaric\w*|troppo poco/.test(note);
     if (pain) {
@@ -2196,7 +2226,9 @@ const Session = {
       return { ic: "ti-alert-triangle", cls: "sh-dn", txt: `Nella serie prima hai scritto «${snip}»: <b>vai piano</b>, non forzare` };
     }
     if (formUnsafe) return { ic: "ti-alert-triangle", cls: "sh-ok", txt: "Forma da sistemare nella serie prima: <b>mantieni</b> il carico e rendi l'esecuzione pulita" };
-    if (rirTooEasy) return { ic: "ti-arrow-up-right", cls: "sh-up", txt: "Eri piu' lontano dal cedimento del RIR scelto: <b>aumenta leggermente</b> il carico per rientrare nel target" };
+    if (formCaution) return { ic: "ti-alert-circle", cls: "sh-ok", txt: "Forma discreta nella serie prima: <b>mantieni</b> il carico e consolidala prima di aumentare" };
+    if (rirTooEasy) return { ic: "ti-alert-circle", cls: "sh-ok", txt: "RIR fuori dal target nella serie prima: <b>mantieni</b> il carico e riallinealo prima di aumentare" };
+    if (rirUncertain) return { ic: "ti-alert-circle", cls: "sh-ok", txt: "RIR quasi centrato nella serie prima: <b>mantieni</b> il carico e confermalo prima di aumentare" };
 
     const r = prev.reps, kg = prev.kg || 0, bw = kg === 0;
     // #C — FATICA ACCUMULATA tra le serie. Se la serie prima era vicina al
@@ -2375,6 +2407,7 @@ const Session = {
       <p class="rir-score-hint"><b>Coerenza RIR</b> misura quanto eri vicino al RIR impostato: non è un voto di fatica.</p>
       ${scale("effort", "ti-target-arrow", "Coerenza RIR", "Quanto eri vicino al RIR previsto?", set.effort, ["Molto più margine", "RIR centrato"])}
       <div class="feedback-guard" id="feedback-guard-${set.id}">${this._feedbackGuardHTML(set)}</div>
+      <div class="feedback-caution" id="feedback-caution-${set.id}">${this._feedbackCautionHTML(set)}</div>
       ${scale("form", "ti-activity-heartbeat", "Forma", "Quanto erano pulite le ripetizioni?", set.form, ["Da correggere", "Pulita e stabile"])}</div>`;
   },
 
@@ -2393,6 +2426,14 @@ const Session = {
   _feedbackGuardHTML(set) {
     if (!this._requiresRirRetry(set)) return "";
     return `<div class="feedback-retry-warning" role="alert"><i class="ti ti-refresh-alert" aria-hidden="true"></i><span><b>Serie da ripetere</b> · eri troppo lontano dal RIR previsto: aumenta leggermente il peso, rifai la serie e rivaluta la coerenza.</span></div>`;
+  },
+
+  _feedbackCautionHTML(set) {
+    const cautions = [];
+    if (set && set.effort === 3) cautions.push("RIR quasi centrato: serie valida, ma conferma 4–5 prima di aumentare il peso.");
+    if (set && set.form === 3) cautions.push("Forma discreta: serie valida, ma consolida la tecnica prima di aumentare il peso.");
+    if (!cautions.length) return "";
+    return `<div class="feedback-caution-note"><i class="ti ti-alert-circle" aria-hidden="true"></i><span>${cautions.join(" ")}</span></div>`;
   },
 
   // ─── AGGIUNGI SERIE ───
@@ -3387,6 +3428,8 @@ const Session = {
       const guard = document.getElementById(`feedback-guard-${id}`);
       if (guard) guard.innerHTML = this._feedbackGuardHTML(set);
     }
+    const caution = document.getElementById(`feedback-caution-${id}`);
+    if (caution) caution.innerHTML = this._feedbackCautionHTML(set);
     this.refreshSetHints(U.exBase(set.name), true);
     this.setSyncState("saving");
     try {

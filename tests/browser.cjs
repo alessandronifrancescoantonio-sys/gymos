@@ -412,7 +412,43 @@ const server=http.createServer((req,res)=>{
    if(!advice||!advice.txt.includes('Forma da sistemare'))throw Error('Low form feedback did not hold the next recommendation');
    Session.exercises[0].form=5;Session.exercises[0].effort=1;
    const rirAdvice=Session._setAdvice('Panca',1,6,10);
-   if(!rirAdvice||!rirAdvice.txt.includes('RIR scelto'))throw Error('RIR coherence feedback did not guide the next load');
+   if(!rirAdvice||!rirAdvice.txt.includes('RIR fuori dal target')||!rirAdvice.txt.includes('mantieni'))throw Error('Low RIR feedback did not hold the next load');
+   Session.exercises[0].effort=5;Session.exercises[0].form=3;
+   const formThreeAdvice=Session._setAdvice('Panca',1,6,10);
+   if(!formThreeAdvice||!formThreeAdvice.txt.includes('Forma discreta')||!formThreeAdvice.txt.includes('mantieni'))throw Error('Form score 3 did not hold the next load');
+   Session.exercises[0].form=5;Session.exercises[0].effort=3;
+   const rirThreeAdvice=Session._setAdvice('Panca',1,6,10);
+   if(!rirThreeAdvice||!rirThreeAdvice.txt.includes('RIR quasi centrato')||!rirThreeAdvice.txt.includes('mantieni'))throw Error('RIR score 3 did not hold the next load');
+   const oldStats=Session._exStats;
+   Session._exStats={Panca:[{date:U.today(),topKg:60,topReps:10,notes:[],sessNote:'',sets:[{kg:60,reps:10,form:3,effort:5},{kg:60,reps:10,form:5,effort:5}]}]};
+   const formThreeGoal=Session.progressionGoalHTML('Panca',[],8,10,2,null,null,null);
+   if(!formThreeGoal.includes('consolida la forma')||formThreeGoal.includes('Aumenta il peso'))throw Error('Form score 3 allowed next-session load increase');
+   Session._exStats.Panca[0].sets.forEach(s=>s.form=5);Session._exStats.Panca[0].sets.forEach(s=>s.effort=3);
+   const rirThreeGoal=Session.progressionGoalHTML('Panca',[],8,10,2,null,null,null);
+   if(!rirThreeGoal.includes('conferma il RIR')||rirThreeGoal.includes('Aumenta il peso'))throw Error('RIR score 3 allowed next-session load increase');
+   Session._exStats.Panca[0].sets=[{kg:60,reps:10,form:2,effort:5},{kg:60,reps:8,form:5,effort:5}];
+   const weakFormPartialGoal=Session.progressionGoalHTML('Panca',[],8,10,2,null,null,null);
+   if(!weakFormPartialGoal.includes('cura la forma')||weakFormPartialGoal.includes('Aumenta il peso'))throw Error('Low form with only one top set allowed increase');
+   Session._exStats.Panca[0].sets=[{kg:60,reps:10,form:5,effort:2},{kg:60,reps:10,form:5,effort:5}];
+   const lowRirGoal=Session.progressionGoalHTML('Panca',[],8,10,2,null,null,null);
+   if(!lowRirGoal.includes('riallinea il RIR')||lowRirGoal.includes('Aumenta il peso'))throw Error('Low RIR allowed next-session load increase');
+   Session._exStats.Panca[0].sets=[{kg:60,reps:10,form:4,effort:4},{kg:60,reps:10,form:5,effort:5}];
+   const highScoreGoal=Session.progressionGoalHTML('Panca',[],8,10,2,null,null,null);
+   if(!highScoreGoal.includes('Aumenta il peso'))throw Error('High form/RIR scores no longer allow normal increase');
+   Session._exStats.Panca[0].sets=[{kg:60,reps:10,form:null,effort:null},{kg:60,reps:10,form:null,effort:null}];
+   const legacyGoal=Session.progressionGoalHTML('Panca',[],8,10,2,null,null,null);
+   if(!legacyGoal.includes('Aumenta il peso'))throw Error('Missing legacy scores incorrectly block increase');
+   Session._exStats.Panca=[
+     {date:'2026-10-01',topKg:60,topReps:8,notes:[],sessNote:'facile',sets:[{kg:60,reps:8,form:3,effort:5}]},
+     {date:'2026-10-03',topKg:60,topReps:8,notes:[],sessNote:'facile',sets:[{kg:60,reps:8,form:3,effort:5}]},
+     {date:'2026-10-05',topKg:60,topReps:8,notes:[],sessNote:'facile',sets:[{kg:60,reps:8,form:3,effort:5}]},
+     {date:'2026-10-07',topKg:60,topReps:8,notes:[],sessNote:'facile',sets:[{kg:60,reps:8,form:3,effort:5}]},
+     {date:'2026-10-09',topKg:60,topReps:8,notes:[],sessNote:'facile',sets:[{kg:60,reps:8,form:3,effort:5}]},
+     {date:'2026-10-11',topKg:60,topReps:8,notes:[],sessNote:'facile',sets:[{kg:60,reps:8,form:3,effort:5}]}
+   ];
+   const plateauQualityGoal=Session.progressionGoalHTML('Panca',[],8,10,2,null,null,null);
+   if(!plateauQualityGoal.includes('carico resta uguale')||plateauQualityGoal.includes('aumentare un po')||plateauQualityGoal.includes('più carico')||plateauQualityGoal.includes('più pesanti'))throw Error('Plateau advice allowed increase with quality score 3');
+   Session._exStats=oldStats;
  });
  console.log('PASS effort/form feedback is retained and plan metadata flushes before background loss');
  await page.evaluate(async()=>{
