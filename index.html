@@ -13,10 +13,10 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-<link rel="stylesheet" href="style.css?v=125">
-<link rel="stylesheet" href="quality.css?v=125">
-<link rel="stylesheet" href="apple-theme.css?v=125">
-<link rel="stylesheet" href="hybrid-theme.css?v=125">
+<link rel="stylesheet" href="style.css?v=126">
+<link rel="stylesheet" href="quality.css?v=126">
+<link rel="stylesheet" href="apple-theme.css?v=126">
+<link rel="stylesheet" href="hybrid-theme.css?v=126">
 </head>
 <body>
 
@@ -271,22 +271,27 @@
       </div>
     </div>
 
-    <!-- Stat strip -->
-    <div class="sess-stats" id="sess-stats">
-      <div class="sess-stat"><div class="ss-v" id="ss-vol">—</div><div class="ss-l">Volume</div></div>
-      <div class="sess-stat"><div class="ss-v" id="ss-delta" style="color:var(--green)">—</div><div class="ss-l">Δ vs scorsa</div></div>
-      <div class="sess-stat"><div class="ss-v" id="ss-done">0</div><div class="ss-l">Serie fatte</div></div>
-      <div class="sess-stat"><div class="ss-v" id="ss-up" style="color:var(--green)">0</div><div class="ss-l">In aumento</div></div>
-    </div>
+    <!-- Informazioni di contesto: restano complete, ma non competono con la serie attiva. -->
+    <details class="session-context" id="session-context">
+      <summary><span><i class="ti ti-chart-bar" aria-hidden="true"></i> Riepilogo e note</span><i class="ti ti-chevron-down" aria-hidden="true"></i></summary>
+      <div class="session-context-body">
+        <div class="sess-stats" id="sess-stats">
+          <div class="sess-stat"><div class="ss-v" id="ss-vol">—</div><div class="ss-l">Volume</div></div>
+          <div class="sess-stat"><div class="ss-v" id="ss-delta" style="color:var(--green)">—</div><div class="ss-l">Δ vs scorsa</div></div>
+          <div class="sess-stat"><div class="ss-v" id="ss-done">0</div><div class="ss-l">Serie fatte</div></div>
+          <div class="sess-stat"><div class="ss-v" id="ss-up" style="color:var(--green)">0</div><div class="ss-l">In aumento</div></div>
+        </div>
 
-    <!-- Note della sessione (intera) + nota della sessione precedente corrispondente -->
-    <div class="sess-note-card">
-      <div class="sess-note-prev prev-notes" id="sess-note-prev"></div>
-      <div class="sess-note-head"><i class="ti ti-note"></i> Note della sessione</div>
-      <textarea class="sess-note-input" id="sess-note-input" rows="2"
-        placeholder="Sensazioni, energia, cosa migliorare la prossima volta…"
-        oninput="Session.saveSessionNote(this.value)" aria-label="Sensazioni, energia, cosa migliorare la prossima volta…"></textarea>
-    </div>
+        <!-- Note della sessione (intera) + nota della sessione precedente corrispondente -->
+        <div class="sess-note-card">
+          <div class="sess-note-prev prev-notes" id="sess-note-prev"></div>
+          <div class="sess-note-head"><i class="ti ti-note"></i> Note della sessione</div>
+          <textarea class="sess-note-input" id="sess-note-input" rows="2"
+            placeholder="Sensazioni, energia, cosa migliorare la prossima volta…"
+            oninput="Session.saveSessionNote(this.value)" aria-label="Sensazioni, energia, cosa migliorare la prossima volta…"></textarea>
+        </div>
+      </div>
+    </details>
 
     <!-- Exercises -->
     <div id="exercises-container"></div>
@@ -771,18 +776,18 @@
 
 <dialog class="sync-center" id="sync-center"><div class="sync-head"><div><div class="eyebrow">DATI E CONNESSIONI</div><h2>Sincronizzazione</h2></div><button class="archive-close" type="button" onclick="SyncCenter.close()" aria-label="Chiudi"><i class="ti ti-x"></i></button></div><div id="sync-details"></div><div class="form-actions"><button class="btn-secondary" type="button" onclick="SyncCenter.retry()"><i class="ti ti-refresh"></i>Ricontrolla</button></div></dialog>
 
-<script src="exercise-guide-index.js?v=125"></script>
-<script src="config.js?v=125"></script>
-<script src="notes.js?v=125"></script>
-<script src="ai-client.js?v=125"></script>
-<script src="accessibility.js?v=125"></script>
-<script src="backup.js?v=125"></script>
-<script src="sync-center.js?v=125"></script>
-<script src="api.js?v=125"></script>
-<script src="session.js?v=125"></script>
-<script src="modules.js?v=125"></script>
-<script src="timers.js?v=125"></script>
-<script src="app.js?v=125"></script>
+<script src="exercise-guide-index.js?v=126"></script>
+<script src="config.js?v=126"></script>
+<script src="notes.js?v=126"></script>
+<script src="ai-client.js?v=126"></script>
+<script src="accessibility.js?v=126"></script>
+<script src="backup.js?v=126"></script>
+<script src="sync-center.js?v=126"></script>
+<script src="api.js?v=126"></script>
+<script src="session.js?v=126"></script>
+<script src="modules.js?v=126"></script>
+<script src="timers.js?v=126"></script>
+<script src="app.js?v=126"></script>
 <script>
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(function(){});

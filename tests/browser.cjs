@@ -153,6 +153,7 @@ const server=http.createServer((req,res)=>{
  await page.locator('.ex-note-in').fill('Ricorda la presa');
  assert.equal(await page.evaluate(()=>Notes.pending('test').exercises[`Farmer's walk`]),'Ricorda la presa');
  await page.locator('.add-set-btn').click();assert.equal(await page.evaluate(()=>window.clickedExercise),"Farmer's walk");
+ await page.locator('.exercise-plan-context > summary').click();
  assert.match(await page.locator('.prev-ex-note').innerText(),/Presa stretta/);
  console.log('PASS exercise and sets reliably open, survive re-render, and ignore slow-press drag');
  console.log('PASS exercise note and button with apostrophe');
@@ -400,6 +401,8 @@ const server=http.createServer((req,res)=>{
    const raw=Notes.encodeSet('Controllo lento',{effort:4,form:2});
    const decoded=Notes.decodeSet(raw);
    if(decoded.note!=='Controllo lento'||decoded.effort!==4||decoded.form!==2)throw Error('Set feedback does not round trip');
+   const legacyRow=Session.buildSetRow({id:'serialized-note',name:'Panca – S1',kg:60,reps:8,rrMin:8,rrMax:10,recupero:120,rir:2,note:raw,effort:4,form:2},0,null,'Panca',8,10,0,1,true);
+   if(legacyRow.querySelector('.note-inp')?.value.includes('GYMOS_SET_V1'))throw Error('Serialized set metadata leaked into the session UI');
    Session.activeId='feedback';Session.sessions=[{id:'feedback',name:'Test',type:'Test',date:'2026-09-29',done:false}];
    Session.exercises=[{id:'fb1',name:'Panca – Test – S1',kg:60,reps:10,rrMin:8,rrMax:10,recupero:120,rir:2,note:'',effort:4,form:2},{id:'fb2',name:'Panca – Test – S2',kg:60,reps:0,rrMin:8,rrMax:10,recupero:120,rir:2,note:''}];Session.exOrder=['Panca'];
    let setWrites=0,schedaWrites=0;API.updateExerciseTech=async()=>{setWrites++};API.updateScheda=async()=>{schedaWrites++};

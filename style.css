@@ -1575,6 +1575,130 @@ body::before, body::after { will-change:transform, opacity; }
   outline:none;
 }
 
+/* ════════════════════════════════════════════════════════════════
+   SESSION FOCUS — ridisegno della vista allenamento.
+   Le funzioni esistenti restano tutte disponibili: sono solo ordinate in
+   primario (serie corrente) e dettagli richiudibili.
+   ════════════════════════════════════════════════════════════════ */
+#page-session { padding-bottom:150px; }
+.session-context { margin:0 24px 14px; border:1px solid var(--line-soft); border-radius:12px; background:var(--surf-1); overflow:hidden; }
+.session-context > summary, .set-details > summary { list-style:none; cursor:pointer; touch-action:manipulation; }
+.session-context > summary::-webkit-details-marker, .set-details > summary::-webkit-details-marker { display:none; }
+.session-context > summary { min-height:42px; padding:0 13px; display:flex; align-items:center; justify-content:space-between; color:var(--dim); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.055em; }
+.session-context > summary > span, .set-details > summary > span { display:inline-flex; align-items:center; gap:7px; }
+.session-context > summary > span > i { color:var(--accent); font-size:15px; }
+.session-context > summary > i, .set-details > summary > i { transition:transform .18s ease; }
+.session-context[open] > summary > i, .set-details[open] > summary > i { transform:rotate(180deg); }
+.session-context-body { padding:0 0 2px; }
+.session-context .sess-stats { margin:0 10px 10px; border-radius:10px; }
+.session-context .sess-stat { padding:10px 12px; }
+.session-context .ss-v { font-size:21px; }
+.session-context .sess-note-card { margin:0 10px 10px; }
+
+/* La testata resta utile, ma si comporta come una console compatta. */
+.sess-header { padding-bottom:10px; }
+.sess-title-row { margin-bottom:12px; }
+.sess-title-main .page-title { font-size:30px; }
+.sess-controls { margin-bottom:10px; }
+.sess-timer-bar { margin-bottom:0; border-radius:12px; }
+
+/* Un esercizio aperto non è più una grande cornice: diventa il piano di lavoro. */
+.ex-block.ex-focused { transform:none; border-color:rgba(255,90,47,.52); box-shadow:0 12px 32px -18px rgba(0,0,0,.9), 0 0 0 1px rgba(255,90,47,.08); }
+.ex-block.ex-dimmed { opacity:.5; transform:none; filter:grayscale(.7); }
+.ex-hd { padding:13px 15px; }
+.ex-block.ex-focused .ex-hd { background:linear-gradient(90deg, rgba(255,90,47,.09), transparent 72%); }
+.ex-block.ex-focused .ex-name { font-size:17px; }
+.ex-block.ex-focused .ex-sub { margin-top:4px; }
+.ex-block.ex-focused .ex-setcount { align-self:center; }
+
+/* Piano, riscaldamento e storico sono presenti, ma apribili solo quando servono. */
+.exercise-plan-context { margin:0; border-bottom:1px solid var(--line-soft); }
+.exercise-plan-context > summary { min-height:40px; padding:0 14px; display:flex; align-items:center; justify-content:space-between; list-style:none; color:var(--dim); cursor:pointer; touch-action:manipulation; font-size:11px; font-weight:650; }
+.exercise-plan-context > summary::-webkit-details-marker { display:none; }
+.exercise-plan-context > summary > span { display:inline-flex; gap:7px; align-items:center; }
+.exercise-plan-context > summary > span > i { color:var(--accent); font-size:15px; }
+.exercise-plan-context > summary > i { transition:transform .18s ease; }
+.exercise-plan-context[open] > summary > i { transform:rotate(180deg); }
+.exercise-context-body { padding:0 14px 12px; }
+.exercise-context-body .today-goal { margin-bottom:9px; }
+.exercise-context-body .ai-advice-box { margin-bottom:9px; }
+
+/* Serie: solo una superficie di lavoro prominente, le altre restano righe. */
+.set-hd { padding:10px 14px; }
+.set-card:not(.set-collapsed) { background:linear-gradient(180deg, rgba(255,90,47,.055), rgba(255,255,255,0) 72%); }
+.set-card:not(.set-collapsed) .set-hd { padding-top:12px; padding-bottom:12px; }
+.set-card:not(.set-collapsed) .set-num { width:30px; height:30px; color:var(--accent); border-color:rgba(255,90,47,.38); background:rgba(255,90,47,.1); font-size:12px; }
+.set-body { padding:10px 14px 14px; }
+.set-body-top { justify-content:space-between; margin:0 0 9px; }
+.set-counter { font-size:10px; color:var(--accent); }
+.set-focus-copy { font-size:10px; color:var(--muted); }
+.set-primary { display:grid; gap:10px; }
+.set-inputs { display:grid; gap:7px; padding:9px; border:1px solid var(--line-soft); border-radius:13px; background:rgba(0,0,0,.16); }
+.set-inputs .stepper-row { margin:0; min-height:48px; }
+.set-inputs .stepper-row + .stepper-row { border-top:1px solid var(--line-soft); padding-top:7px; }
+.stepper-lbl { color:var(--ghost); font-weight:700; width:34px; }
+.adj { width:42px; height:42px; border-radius:11px; }
+.stepper-val { font-size:25px; font-weight:600; letter-spacing:-.02em; }
+.prev-use, .prev-none { margin:0; min-height:48px; border-radius:11px; padding:8px 10px; background:rgba(255,255,255,.025); }
+.pu-act { padding:5px 12px; }
+.set-done-btn { margin:0; min-height:54px; border-radius:13px; font-size:16px; }
+
+/* Tutto ciò che serve per annotare o valutare la serie, senza rumore prima. */
+.set-details { margin-top:10px; border-top:1px solid var(--line-soft); }
+.set-details > summary { display:flex; min-height:42px; align-items:center; justify-content:space-between; color:var(--dim); font-size:11px; font-weight:650; }
+.set-details > summary span > i { color:var(--accent); font-size:15px; }
+.set-details-body { padding:0 0 2px; }
+.set-details .note-inp { margin-top:0; }
+.set-details .set-feedback { margin-top:10px; }
+.set-details .rm-set-btn { width:100%; height:38px; margin-top:10px; border-radius:10px; color:var(--dim); font-size:11px; font-weight:650; gap:6px; }
+.set-details .rm-set-btn i { font-size:14px; }
+
+/* Nessun payload interno dev'essere mai leggibile come nota nell'app. */
+.note-inp[value^="GYMOS_SET_V1"] { color:transparent; font-size:0; }
+
+@media (max-width:760px) {
+  #page-session { padding-bottom:176px; }
+  .sess-header { padding:10px 14px 9px; }
+  .sess-header-top { display:none; }
+  .sess-title-row { margin-bottom:8px; }
+  .sess-accent-bar { width:3px; min-height:27px; }
+  .sess-title-main .page-title { font-size:22px; line-height:1.05; }
+  .sess-title-main .page-meta { margin-top:3px; font-size:11px; }
+  .sess-controls { gap:7px; margin-bottom:8px; }
+  .sess-select { height:39px; font-size:13px; border-radius:10px; }
+  .sess-new-btn, .view-toggle { width:39px; min-width:39px; height:39px; min-height:39px; padding:0; justify-content:center; border-radius:10px; }
+  .view-toggle .vt-label { display:none; }
+  .sess-timer-bar { padding:7px 10px; border-radius:11px; }
+  .sess-timer-icon { width:27px; height:27px; }
+  .sess-timer-value { font-size:16px; }
+  .duration-btn { padding:7px 11px; font-size:10px; }
+  .session-context { margin:8px 16px 12px; }
+  .session-context > summary { min-height:38px; font-size:10px; }
+  .session-context .sess-stats { grid-template-columns:repeat(4,1fr); margin:0 7px 7px; }
+  .session-context .sess-stat { padding:8px 5px; }
+  .session-context .ss-v { font-size:17px; }
+  .session-context .ss-l { font-size:7.5px; }
+  #exercises-container { margin-left:16px; margin-right:16px; }
+  .ex-block { margin-bottom:9px; border-radius:15px; }
+  .ex-hd { padding:12px; gap:8px; }
+  .drag-handle { display:none; }
+  .ex-num { font-size:18px; }
+  .ex-block.ex-focused .ex-name { font-size:16px; }
+  .ex-sub { gap:5px; font-size:10px; }
+  .rr-in-sm { width:31px; font-size:10px; }
+  .ex-setcount { font-size:17px; }
+  .exercise-plan-context > summary { min-height:38px; padding:0 11px; font-size:10px; }
+  .exercise-context-body { padding:0 11px 10px; }
+  .set-hd { padding:9px 11px; gap:8px; }
+  .set-body { padding:10px 11px 12px; }
+  .ssum { font-size:16px; }
+  .set-hd-prev { font-size:10px; }
+  .set-inputs { padding:8px; }
+  .stepper-val { font-size:24px; }
+  .set-done-btn { min-height:52px; }
+  .set-details > summary { min-height:40px; }
+}
+
 /* Tabelle: zebra + hover */
 .data-table thead th { color:var(--ghost); border-bottom:1px solid var(--line-strong); }
 .data-table tbody tr:nth-child(even) { background:rgba(255,255,255,.018); }

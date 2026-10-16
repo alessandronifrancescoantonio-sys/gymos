@@ -725,13 +725,18 @@ const Session = {
           <i class="ti ti-chevron-down ex-chevron"></i>
         </div>
         <div class="ex-body">
-          ${(ex.info || "").trim() ? `<div class="ex-info-banner"><i class="ti ti-note"></i><span>${(ex.info || "").trim().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</span></div>` : ""}
           ${(!this.viewMode && !this.sessionDone) ? `<div class="joint-warn-wrap" id="joint-${sid}">${this.jointWarnHTML(exName)}</div>` : ""}
-          ${(!this.viewMode && !this.sessionDone) ? this.progressionGoalHTML(exName, prevSets, rrMin, rrMax, rir, this._orderShift(exName), this._sameMuscleDirect(exName), rest) : ""}
-          ${(!this.viewMode && !this.sessionDone) ? this.warmupRampHTML(exName, prevMax) : ""}
-          ${(!this.viewMode && !this.sessionDone) ? `<div class="ai-advice" id="ai-${sid}"></div>` : ""}
-          ${this.prevNotesHTML(prevSets)}
-          ${this._prevExerciseNotes?.[exName] ? `<div class="prev-ex-note">Nota esercizio della volta scorsa: ${U.escape(this._prevExerciseNotes[exName])}</div>` : ""}
+          <details class="exercise-plan-context">
+            <summary><span><i class="ti ti-bulb" aria-hidden="true"></i> Piano, storico e suggerimenti</span><i class="ti ti-chevron-down" aria-hidden="true"></i></summary>
+            <div class="exercise-context-body">
+              ${(ex.info || "").trim() ? `<div class="ex-info-banner"><i class="ti ti-note"></i><span>${(ex.info || "").trim().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</span></div>` : ""}
+              ${(!this.viewMode && !this.sessionDone) ? this.progressionGoalHTML(exName, prevSets, rrMin, rrMax, rir, this._orderShift(exName), this._sameMuscleDirect(exName), rest) : ""}
+              ${(!this.viewMode && !this.sessionDone) ? this.warmupRampHTML(exName, prevMax) : ""}
+              ${(!this.viewMode && !this.sessionDone) ? `<div class="ai-advice" id="ai-${sid}"></div>` : ""}
+              ${this.prevNotesHTML(prevSets)}
+              ${this._prevExerciseNotes?.[exName] ? `<div class="prev-ex-note">Nota esercizio della volta scorsa: ${U.escape(this._prevExerciseNotes[exName])}</div>` : ""}
+            </div>
+          </details>
           <div id="sets-${sid}"></div>
           <div class="add-set-row">
             <button class="add-set-btn" onclick="Session.addSet(${U.arg(exName)})">
@@ -2317,6 +2322,13 @@ const Session = {
 
   buildSetRow(set, si, prevSet, exName, rrMin, rrMax, prevMax, total, expanded) {
     const done = !!((this._done && this._done.has(set.id)) || (this.sessionDone && (set.reps || 0) > 0));
+    // Protezione di sola visualizzazione: una nota serializzata non deve mai
+    // comparire come testo tecnico nell'interfaccia, anche se arriva da un
+    // dato locale/legacy non ancora normalizzato. Non tocchiamo il dato qui.
+    const rawNote = String(set.note || "");
+    const shownNote = rawNote.startsWith("GYMOS_SET_V1") && typeof Notes !== "undefined"
+      ? (Notes.decodeSet(rawNote).note || "")
+      : rawNote;
     const row = document.createElement("div");
     row.className = "set-card" + (expanded ? "" : " set-collapsed") + (done ? " set-done" : "");
     row.id = `setrow-${set.id}`;
@@ -2357,33 +2369,43 @@ const Session = {
       </div>
       <div class="set-body">
         <div class="set-body-top">
-          <span class="set-counter">Serie ${si + 1}/${total || 1}</span>
-          <button class="rm-set-btn" onclick="Session.removeSet(${U.arg(set.id)},${U.arg(exName)})" aria-label="Rimuovi serie">
-            <i class="ti ti-x"></i>
+          <span class="set-counter">Serie ${si + 1} di ${total || 1}</span>
+          <span class="set-focus-copy">Inserisci e completa</span>
+        </div>
+        <div class="set-primary">
+          ${prevRow}
+          <div class="set-inputs" aria-label="Valori della serie">
+            <div class="stepper-row">
+              <span class="stepper-lbl">Kg</span>
+              <button class="adj" data-id="${set.id}" data-f="k" data-d="-2.5" data-ex="${U.escape(exName)}">−</button>
+              <span class="${repCls}" id="kg-${set.id}" title="Tocca per inserire il valore"
+                onclick="Session.editVal(${U.arg(set.id)},'k',${U.arg(exName)})">${U.fmt(set.kg)}</span>
+              <button class="adj" data-id="${set.id}" data-f="k" data-d="2.5" data-ex="${U.escape(exName)}">+</button>
+            </div>
+            <div class="stepper-row">
+              <span class="stepper-lbl">Rep</span>
+              <button class="adj" data-id="${set.id}" data-f="r" data-d="-1" data-ex="${U.escape(exName)}">−</button>
+              <span class="${repCls}" id="rep-${set.id}" title="Tocca per inserire il valore"
+                onclick="Session.editVal(${U.arg(set.id)},'r',${U.arg(exName)})">${set.reps > 0 ? set.reps : "0"}</span>
+              <button class="adj" data-id="${set.id}" data-f="r" data-d="1" data-ex="${U.escape(exName)}">+</button>
+            </div>
+          </div>
+          <button class="set-done-btn" onclick="Session.completeSet(${U.arg(set.id)},${U.arg(exName)})">
+            ${done ? '<i class="ti ti-rotate-2"></i> Annulla' : '<i class="ti ti-check"></i> Serie fatta'}
           </button>
         </div>
-        ${prevRow}
-        <div class="stepper-row">
-          <span class="stepper-lbl">Kg</span>
-          <button class="adj" data-id="${set.id}" data-f="k" data-d="-2.5" data-ex="${U.escape(exName)}">−</button>
-          <span class="${repCls}" id="kg-${set.id}" title="Tocca per inserire il valore"
-            onclick="Session.editVal(${U.arg(set.id)},'k',${U.arg(exName)})">${U.fmt(set.kg)}</span>
-          <button class="adj" data-id="${set.id}" data-f="k" data-d="2.5" data-ex="${U.escape(exName)}">+</button>
-        </div>
-        <div class="stepper-row">
-          <span class="stepper-lbl">Rep</span>
-          <button class="adj" data-id="${set.id}" data-f="r" data-d="-1" data-ex="${U.escape(exName)}">−</button>
-          <span class="${repCls}" id="rep-${set.id}" title="Tocca per inserire il valore"
-            onclick="Session.editVal(${U.arg(set.id)},'r',${U.arg(exName)})">${set.reps > 0 ? set.reps : "0"}</span>
-          <button class="adj" data-id="${set.id}" data-f="r" data-d="1" data-ex="${U.escape(exName)}">+</button>
-        </div>
-        <input class="note-inp" type="text" aria-label="Nota della serie" value="${U.escape(set.note || "")}"
-          placeholder="Note: forma, sensazione..."
-          onchange="Session.saveNote(${U.arg(set.id)},this.value)">
-        ${this.feedbackHTML(set)}
-        <button class="set-done-btn" onclick="Session.completeSet(${U.arg(set.id)},${U.arg(exName)})">
-          ${done ? '<i class="ti ti-rotate-2"></i> Annulla' : '<i class="ti ti-check"></i> Serie fatta'}
-        </button>
+        <details class="set-details">
+          <summary><span><i class="ti ti-sliders-horizontal" aria-hidden="true"></i> Nota, RIR e forma</span><i class="ti ti-chevron-down" aria-hidden="true"></i></summary>
+          <div class="set-details-body">
+            <input class="note-inp" type="text" aria-label="Nota della serie" value="${U.escape(shownNote)}"
+              placeholder="Note: forma, sensazione..."
+              onchange="Session.saveNote(${U.arg(set.id)},this.value)">
+            ${this.feedbackHTML(set)}
+            <button class="rm-set-btn" onclick="Session.removeSet(${U.arg(set.id)},${U.arg(exName)})" aria-label="Rimuovi serie">
+              <i class="ti ti-trash"></i> Rimuovi questa serie
+            </button>
+          </div>
+        </details>
       </div>
     `;
     // tieni premuto +/− per ripetere
